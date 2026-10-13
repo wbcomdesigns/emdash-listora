@@ -1010,6 +1010,17 @@ describe("owner photos", () => {
 		const left = await rt.inspect.storage.list<{ status: string; member_id: string }>("photos");
 		expect(left.map((row) => [row.data.status, row.data.member_id])).toEqual([["approved", ""]]);
 
+		// Five uploads sent at the same moment with room for three: the limit holds.
+		await route("admin", { type: "form_submit", action_id: "save_photos", page: "/settings", values: { photo_limit: 4 } });
+		await route("submit", { title: "Burst Cafe", listing_type: "restaurant", agree_terms: true }, { method: "POST", user: ben });
+		const burstId = (await rt.inspect.storage.list<{ title: string }>("submissions")).find((row) => row.data.title === "Burst Cafe")!.id;
+		const burst = await Promise.all(Array.from({ length: 6 }, () => send(png, ben, burstId)));
+		const stored = (await rt.inspect.storage.list<{ listingId: string }>("photos")).filter((row) => row.data.listingId === burstId);
+		expect(stored.length).toBeLessThanOrEqual(4);
+		expect(burst.filter((item) => (item as { ok: boolean }).ok)).toHaveLength(stored.length);
+		// The lock is released: a later upload works while there is room.
+		if (stored.length < 4) expect(await send(png, ben, burstId)).toMatchObject({ ok: true });
+
 		// Turned off: no more uploads.
 		await route("admin", { type: "form_submit", action_id: "save_photos", page: "/settings", values: { photo_limit: 0 } });
 		expect(await send(png, ana)).toMatchObject({ ok: false, error: { code: "PHOTOS_OFF" } });

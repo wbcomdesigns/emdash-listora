@@ -266,7 +266,7 @@ export async function uploadPhoto(listingId: string, file: File): Promise<ApiRes
 	if (!PHOTO_TYPES.includes(file.type)) return { ok: false, error: { code: "WRONG_TYPE", message: "Use a JPEG, PNG or WebP photo." } };
 	if (file.size > PHOTO_MAX_BYTES) return { ok: false, error: { code: "TOO_BIG", message: "That photo is larger than 5 MB." } };
 	try {
-		const response = await fetch(`/_emdash/api/plugins/listora/photo?listingId=${encodeURIComponent(listingId)}`, {
+		const response = await fetch(`/_emdash/api/plugins/listora/photo?listingId=${encodeURIComponent(listingId)}&name=${encodeURIComponent(file.name)}`, {
 			method: "POST",
 			credentials: "same-origin",
 			headers: { "Content-Type": "application/octet-stream", "X-EmDash-Request": "1" },

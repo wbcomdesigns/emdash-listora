@@ -28,6 +28,8 @@ Copy `site-kit/` again after you update, including the new `site-kit/layouts/Lis
 - New      - Browse by category and by city on the directory page, with a count on each. A category on a listing page links to its filtered list.
 - New      - The add-a-listing form offers the site's own categories and saves the choice on the listing. Needs one new permission: reading and assigning categories.
 - New      - Owners can edit their own listing from their account. The public listing stays as it is until you approve the change, and you see each changed field, before and after, in the Listings queue.
+- New      - Photos. An owner adds photos to their listing from their account (JPEG, PNG or WebP, 5 MB each, up to the number you set). Each photo waits in the Listings queue, where you see the picture and approve or reject it. The listing page shows the photos as thumbnails that open a large view, with keyboard and swipe. The first approved photo becomes the cover when the listing has none. Needs one new permission: adding files to the media library.
+- New      - You can also add photos yourself: edit the listing and use its Photos field.
 - New      - A listing owner can reply once to each review of their listing. The reply shows under the review, marked "Reply from the owner", after you approve it.
 - New      - Messages tab in the owner's account: the member who added or claimed a listing reads the messages visitors send about it.
 - New      - The owner's Messages tab shows how many are new, marks new ones in words, and lets the owner mark a message as done or as new again.

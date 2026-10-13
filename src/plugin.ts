@@ -781,13 +781,13 @@ const plugin: SandboxedPlugin = {
 				);
 				// Photos this member added, by listing, and whether the site has photos turned on.
 				const limit = (await galleryReady(ctx)) ? await photoLimit(ctx) : 0;
-				const photosBy = new Map<string, Array<{ id: string; url: string; status: string }>>();
+				const photosBy = new Map<string, Array<{ id: string; url: string; status: string; label: string }>>();
 				for (const row of rows(await ctx.storage.photos.query({ where: { member_id: user.id }, orderBy: { createdAt: "asc" }, limit: 200 }))) {
 					if (row.status === "rejected") continue;
 					const key = asString(row.listingId);
 					// An approved photo is public on the listing. A waiting one has no address here.
 					const status = asString(row.status);
-					photosBy.set(key, [...(photosBy.get(key) ?? []), { id: row.id, url: status === "approved" ? asString(row.url) : "", status }]);
+					photosBy.set(key, [...(photosBy.get(key) ?? []), { id: row.id, url: status === "approved" ? asString(row.url) : "", status, label: asString(row.label) }]);
 				}
 				const named = (items: ReturnType<typeof rows>, own = false) =>
 					items.map((row) => {
@@ -873,7 +873,10 @@ const plugin: SandboxedPlugin = {
 			handler: async (routeCtx, ctx) => {
 				const user = routeCtx.user as Member | undefined;
 				if (!user) return SIGN_IN;
-				const listingId = new URL(routeCtx.request.url, "http://x").searchParams.get("listingId") || "";
+				const query = new URL(routeCtx.request.url, "http://x").searchParams;
+				const listingId = query.get("listingId") || "";
+				// The owner's own name for the file, so they can tell their waiting photos apart.
+				const label = clean(query.get("name"), 60).replace(/[^\p{L}\p{N} ._-]/gu, "");
 				const fail = (code: string, message: string) => ({ ok: false, error: { code, message } });
 				if (!listingId || !(await ownsSubmission(ctx, listingId, user.id))) return fail("NOT_FOUND", "That listing is not available.");
 				const limit = await photoLimit(ctx);
@@ -883,9 +886,19 @@ const plugin: SandboxedPlugin = {
 				if (bytes.byteLength > PHOTO_MAX_BYTES) return fail("TOO_BIG", "That photo is larger than 5 MB.");
 				const type = imageType(bytes);
 				if (!type) return fail("WRONG_TYPE", "Use a JPEG, PNG or WebP photo.");
+				if (await rateLimited(ctx, `photo:${user.id}`)) return RATE_LIMITED;
+				// One upload at a time per listing. Without this, uploads sent together would each
+				// see room under the limit. The lock is taken with compare-and-set and expires by
+				// itself after two minutes if a request dies holding it.
+				const lock = `photo-lock:${listingId}`;
+				const held = await ctx.kv.getVersioned<number>(lock);
+				if (held && Date.now() - Number(held.value) < 120_000) return fail("BUSY", "Another photo is still being added to this listing. Try again in a moment.");
+				if (!(await ctx.kv.compareAndSet(lock, held?.revision ?? null, Date.now())).applied) {
+					return fail("BUSY", "Another photo is still being added to this listing. Try again in a moment.");
+				}
+				try {
 				const have = rows(await ctx.storage.photos.query({ where: { listingId }, limit: 50 })).filter((row) => row.status !== "rejected");
 				if (have.length >= limit) return fail("LIMIT", `This listing already has ${limit} photos. Remove one that is waiting, or ask the site to remove one.`);
-				if (await rateLimited(ctx, `photo:${user.id}`)) return RATE_LIMITED;
 
 				const filename = `listing-${listingId.slice(-8).toLowerCase()}-${Date.now()}.${type.ext}`;
 				const uploaded = await ctx.media.upload(filename, type.mime, bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer);
@@ -901,6 +914,7 @@ const plugin: SandboxedPlugin = {
 					url: uploaded.url,
 					mime: type.mime,
 					filename,
+					label,
 					width: media?.width ?? null,
 					height: media?.height ?? null,
 					status: "pending",
@@ -910,6 +924,9 @@ const plugin: SandboxedPlugin = {
 				// The address of the file is not given back: until an admin approves it, nobody but
 				// the admin is told where it is.
 				return { ok: true, id, status: "pending" };
+				} finally {
+					await ctx.kv.delete(lock);
+				}
 			},
 		},
 		// The owner takes back a photo that is still waiting. An approved photo is the admin's to remove.
@@ -924,8 +941,14 @@ const plugin: SandboxedPlugin = {
 				if (row.member_id !== user.id || row.status !== "pending") {
 					return { ok: false, error: { code: "NOT_FOUND", message: "That photo is not available to remove." } };
 				}
-				await ctx.storage.photos.delete(id);
+				// Take the row out of "pending" first, in the database. If an admin is approving it at
+				// this moment, only one of the two can win, and the file is deleted only by the winner.
+				const claimed = await ctx.storage.photos.updateIf(id, { where: { status: "pending" }, set: { status: "removing" } });
+				if (!claimed.applied) {
+					return { ok: false, error: { code: "NOT_FOUND", message: "That photo is not available to remove." } };
+				}
 				await ctx.media?.delete?.(asString(row.mediaId)).catch(() => false);
+				await ctx.storage.photos.delete(id);
 				return { ok: true, id };
 			},
 		},

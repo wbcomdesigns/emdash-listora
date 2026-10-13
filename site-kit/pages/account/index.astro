@@ -165,15 +165,15 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 	function photosHtml(item: Record<string, unknown>): string {
 		const limit = Number(item.photo_limit) || 0;
 		if (!limit) return "";
-		const photos = (item.photos ?? []) as Array<{ id: string; url: string; status: string }>;
+		const photos = (item.photos ?? []) as Array<{ id: string; url: string; status: string; label?: string }>;
 		const id = esc(item.listingId || item.id);
 		const shown = photos
 			.map(
 				(photo, index) =>
 					// A waiting photo has no address to show: only the site's admin can see it until it is approved.
 					photo.status === "approved" && photo.url
-						? `<li class="listora-photos__item"><img src="${esc(photo.url)}" alt="Photo ${index + 1}" width="120" height="88" loading="lazy" /><span>On your listing</span></li>`
-						: `<li class="listora-photos__item"><span class="listora-photos__waiting" aria-hidden="true"></span><span>Photo ${index + 1}: waiting for approval</span><button type="button" class="listora-btn listora-btn--secondary" data-photo-remove="${esc(photo.id)}">Remove</button></li>`,
+						? `<li class="listora-photos__item"><img src="${esc(photo.url)}" alt="${esc(photo.label || `Photo ${index + 1}`)}" width="120" height="88" loading="lazy" /><span>On your listing</span></li>`
+						: `<li class="listora-photos__item"><span class="listora-photos__waiting" aria-hidden="true"></span><span class="listora-photos__name">${esc(photo.label || `Photo ${index + 1}`)}</span><span>Waiting for approval</span><button type="button" class="listora-btn listora-btn--secondary" data-photo-remove="${esc(photo.id)}">Remove</button></li>`,
 			)
 			.join("");
 		const add =

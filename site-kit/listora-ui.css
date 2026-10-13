@@ -616,6 +616,11 @@ ul.listora-chips {
 	background: var(--listora-bg-muted);
 }
 
+.listora-photos__name {
+	font-weight: 600;
+	overflow-wrap: anywhere;
+}
+
 .listora-photos__waiting {
 	display: block;
 	width: 7.5rem;

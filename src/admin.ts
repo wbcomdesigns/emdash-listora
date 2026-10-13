@@ -332,17 +332,32 @@ async function photoBlocks(ctx: PluginContext): Promise<BlockMap[]> {
 	for (const item of found.items) {
 		const photo = asRecord(item.data);
 		const title = titles.get(asString(photo.listingId)) ?? "Listing not yet public";
-		blocks.push(
-			{ type: "section", text: `${title}  ·  added ${day(ctx, photo.createdAt)}` },
-			{ type: "image", url: asString(photo.url), alt: `Photo added to ${title}` },
-			{
-				type: "actions",
-				elements: [
-					{ type: "button", label: "Approve the photo", action_id: "photo_mod", style: "primary", value: stamped("approve", item.id, photo) },
-					{ type: "button", label: "Reject and delete", action_id: "photo_mod", value: stamped("reject", item.id, photo) },
+		// Three columns keep the picture at a size that can be judged without filling the screen.
+		blocks.push({
+			type: "columns",
+			columns: [
+				[{ type: "image", url: asString(photo.url), alt: `Photo added to ${title}` }],
+				[
+					{ type: "section", text: title },
+					{
+						type: "fields",
+						fields: [
+							{ label: "Added", value: day(ctx, photo.createdAt) },
+							{ label: "Owner's file name", value: asString(photo.label) || "(none given)" },
+							{ label: "Size", value: photo.width && photo.height ? `${photo.width} by ${photo.height}` : "Not known" },
+						],
+					},
+					{
+						type: "actions",
+						elements: [
+							{ type: "button", label: "Approve the photo", action_id: "photo_mod", style: "primary", value: stamped("approve", item.id, photo) },
+							{ type: "button", label: "Reject and delete", action_id: "photo_mod", value: stamped("reject", item.id, photo) },
+						],
+					},
 				],
-			},
-		);
+				[],
+			],
+		});
 	}
 	return blocks;
 }
@@ -942,19 +957,31 @@ export async function handleAdmin(
 		const stale = staleRow(photo, stamp);
 		if (stale) return renderQueue(ctx, { toast: { message: stale, type: "error" } });
 		const listingId = asString(photo.listingId);
+		// Claim the row in the database before doing anything with its file. The owner removing
+		// it at this same moment also has to move it out of "pending": only one of us can.
+		const claim = await ctx.storage.photos.updateIf(id, { where: { status: "pending" }, set: { status: action === "approve" ? "approving" : "rejecting" } });
+		if (!claim.applied) return renderQueue(ctx, { toast: { message: "Someone already handled that photo.", type: "error" } });
+		// If the approval cannot finish, the photo goes back to waiting with a new version.
+		const release = (message: string) =>
+			ctx.storage.photos
+				.updateIf(id, { where: { status: "approving" }, set: { status: "pending", rev: crypto.randomUUID() } })
+				.then(() => renderQueue(ctx, { toast: { message, type: "error" } }));
 		if (action !== "approve") {
-			await ctx.storage.photos.delete(id);
 			await ctx.media?.delete?.(asString(photo.mediaId)).catch(() => false);
+			await ctx.storage.photos.delete(id);
 			return renderQueue(ctx, { toast: { message: "Photo rejected and deleted.", type: "success" } });
 		}
 		// The sender must still be the one the listing belongs to.
 		const owner = asRecord(await ctx.storage.submissions.get(listingId));
 		if (owner.member_id !== photo.member_id || owner.status === "rejected") {
-			return renderQueue(ctx, { toast: { message: "The member who added that photo no longer owns the listing. Reject it to clear it.", type: "error" } });
+			return release("The member who added that photo no longer owns the listing. Reject it to clear it.");
 		}
 		const listing = await ctx.content?.get?.(LISTINGS, listingId).catch(() => null);
-		if (!listing) {
-			return renderQueue(ctx, { toast: { message: "That listing no longer exists. Reject the photo to clear it.", type: "error" } });
+		if (!listing) return release("That listing no longer exists. Reject the photo to clear it.");
+		// The file must still be in the media library: a listing must never point at a missing file.
+		if (!(await ctx.media?.get(asString(photo.mediaId)).catch(() => null))) {
+			await ctx.storage.photos.delete(id);
+			return renderQueue(ctx, { toast: { message: "That photo's file is gone, so it was removed from the list.", type: "info" } });
 		}
 		// The value an image field holds: a pointer to the file in the media library.
 		const image = {
@@ -973,11 +1000,9 @@ export async function handleAdmin(
 			...(data.featured_image ? {} : { featured_image: image }),
 		});
 		if (patched.state !== "done") {
-			return renderQueue(ctx, {
-				toast: { message: "That listing has unpublished edits of your own. Publish or discard them, then approve the photo.", type: "error" },
-			});
+			return release("That listing has unpublished edits of your own. Publish or discard them, then approve the photo.");
 		}
-		await ctx.storage.photos.updateIf(id, { where: { status: "pending" }, set: { status: "approved" } });
+		await ctx.storage.photos.updateIf(id, { where: { status: "approving" }, set: { status: "approved" } });
 		return renderQueue(ctx, { toast: { message: "Photo added to the listing.", type: "success" } });
 	}
 

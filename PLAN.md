@@ -57,7 +57,7 @@ Scoped with the owner on 2026-10-13. Every task is a GitHub issue under the `0.5
 | 7 | #42 | Email before expiry. **Done 2026-10-14** |
 | 8 | #40 | Owner edits a listing, with approval. **Done 2026-10-14** |
 | 9 | #41 | Owner reply to a review. **Done 2026-10-14** |
-| 10 | #25 | Photos: uploads with approval, gallery |
+| 10 | #25 | Photos: uploads with approval, gallery. **Done 2026-10-14** |
 | 11 | #46 | Import and export as real files (prove first, park if not reliable) |
 | 12 | #47 | Setup guide and one command |
 | 13 | #48 | Full QA, preview on knowxtheme.com, release |

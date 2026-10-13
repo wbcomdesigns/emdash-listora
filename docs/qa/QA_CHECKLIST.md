@@ -61,6 +61,9 @@ Three roles, always in this order: **guest**, **member** (subscriber role), **ad
 | G-29 | Block the request and type a search | "Search is not available right now", and the busy state clears |
 | G-30 | Search in list view, and inside a category | The view and the category stay |
 | G-31 | Request the `reviews` route for a listing directly | Each review has only: id, author, stars, title, body, date, owner reply and its date. No email, no member id | owner reply to a review |
+| G-32 | A listing with photos | Thumbnails under the cover. A thumbnail opens a large view saying "Photo 1 of N" |
+| G-33 | In the large view: Right and Left arrow keys, Esc, the Close button, a click on the dark area, a sideways swipe on a phone | Arrows and swipe move between photos. Esc, Close and the dark area close it. Focus returns to the thumbnail |
+| G-34 | The same at 390 in dark | The large view fits the screen with no sideways scroll |
 | G-12 | Request `import`, `dashboard`, `favorites`, `privacy` routes directly | 401 each | prove: guests refused |
 
 ## Member (subscriber role)
@@ -98,6 +101,12 @@ Three roles, always in this order: **guest**, **member** (subscriber role), **ad
 | M-30 | Press Reply, write a reply, send | "Waiting for approval" with your text under the review. The button becomes "Change your reply". The public page does not show it yet | owner reply to a review |
 | M-31 | Block the request and send a reply | An error under the form, and the button works again |
 | M-32 | Call `reply` for a review on someone else's listing, a made-up id, or a review that is not published | The same "not available" answer | same test |
+| M-33 | My listings on a site with photos on | Each of your listings shows "Photos: 0 of N" and Add a photo, including a listing still awaiting approval |
+| M-34 | Add a JPEG, then a PNG | "Photo added." Each shows by its file name as "Waiting for approval". No picture and no file address is shown for a waiting photo | owner photos |
+| M-35 | Add a file that is not a picture but is named .jpg | "Use a JPEG, PNG or WebP photo." | same test |
+| M-36 | Reach the limit | Add a photo goes away. The route refuses a further upload | same test |
+| M-37 | Remove a waiting photo | It goes and the count drops. An approved photo has no Remove | same test |
+| M-38 | Call `photo` for someone else's listing or a made-up id | Refused | same test |
 | M-13 | Dashboard at 390 | Tabs are one sideways-scrolling row. Content starts above the fold | |
 
 ## Admin
@@ -140,6 +149,11 @@ Three roles, always in this order: **guest**, **member** (subscriber role), **ad
 | A-35 | Approve the reply | "Reply published." The listing page shows it under the review as "Reply from the owner" with the date |
 | A-36 | The owner rewrites a published reply; reject the rewrite | The earlier reply stays on the page | owner reply to a review |
 | A-37 | A change or reply whose sender no longer owns the listing (a claim was approved since) | A warning on the change, and approving is refused | owner edits a live listing |
+| A-38 | Listings queue with photos waiting | A "Photos waiting" block: the picture at a size you can judge, the listing, the date, the owner's file name, the size, Approve the photo, Reject and delete. The dashboard card counts Photos |
+| A-39 | Approve a photo | "Photo added to the listing." The listing page shows it. The first photo becomes the cover when there was none |
+| A-40 | Reject a photo | "Photo rejected and deleted." The file is gone from the media library |
+| A-41 | Settings, Photos: set the number to 0, then back | 0 turns Add a photo off everywhere. A site with no Photos field shows a notice saying how to add it |
+| A-42 | Edit a listing in EmDash and add rows to its Photos field | They show in the listing's gallery like owner photos |
 | A-12 | Get started on a site with no listings collection | Clear "create the collection first" message, no crash | tells the owner to create the listings collection first |
 
 ## Presentation, every screen
