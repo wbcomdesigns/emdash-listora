@@ -67,6 +67,8 @@ const photo = coverUrl(slug, data.featured_image, String(data.listing_type || ""
 const directions = hasMap ? mapsDirectionsUrl(lat, lng) : "";
 const schema = {
 	"@context": "https://schema.org",
+	// The plugin adds the rating under the same @id, so search engines read one listing.
+	"@id": `${seo.canonical || Astro.url.href}#listing`,
 	"@type": schemaType(data.listing_type),
 	name: data.title,
 	description: data.excerpt || data.description,
@@ -481,6 +483,19 @@ const schema = {
 		});
 	});
 
+	// Left and right arrows move between tabs, as a tab list should.
+	document.querySelector(".listora-tabs, [role=tablist]")?.addEventListener("keydown", (event) => {
+		const key = (event as KeyboardEvent).key;
+		if (key !== "ArrowRight" && key !== "ArrowLeft" && key !== "Home" && key !== "End") return;
+		const tabs = [...document.querySelectorAll<HTMLButtonElement>(".listora-tab")];
+		const at = tabs.indexOf(document.activeElement as HTMLButtonElement);
+		if (at === -1) return;
+		event.preventDefault();
+		const next = key === "Home" ? 0 : key === "End" ? tabs.length - 1 : (at + (key === "ArrowRight" ? 1 : -1) + tabs.length) % tabs.length;
+		tabs[next].focus();
+		tabs[next].click();
+	});
+
 	function setFieldError(id: string, errorId: string, show: boolean) {
 		const input = document.getElementById(id) as HTMLInputElement | null;
 		const error = document.getElementById(errorId);
@@ -494,6 +509,10 @@ const schema = {
 		const box = document.getElementById("listora-reviews");
 		if (!box) return;
 		const data = await api(`reviews?listingId=${encodeURIComponent(listingId)}`);
+		if (!data.ok) {
+			box.innerHTML = `<div class="listora-empty" role="alert"><h2>Reviews could not be loaded</h2><p>${esc(data.error?.message || "Try again in a moment.")}</p></div>`;
+			return;
+		}
 		const items = (data.items ?? []) as Array<Record<string, unknown>>;
 		const summary = document.getElementById("listora-rating");
 		const count = Number(data.count) || 0;

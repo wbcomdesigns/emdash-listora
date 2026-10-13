@@ -66,6 +66,14 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 						</div>
 						<pre id="export-box" hidden></pre>
 					</form>
+					<div class="listora-form-section">
+						<h2>Delete my data</h2>
+						<p class="listora-helper">Removes your reviews, claims and saved listings for good. Listings you added stay on the site.</p>
+						<div class="listora-actions">
+							<button class="listora-btn listora-btn--secondary" type="button" id="erase-btn">Delete my reviews, claims and saved listings</button>
+						</div>
+						<p id="erase-status" class="listora-status" role="status" hidden></p>
+					</div>
 				</section>
 			</div>
 		</div>
@@ -152,6 +160,28 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 			box.hidden = false;
 			box.textContent = JSON.stringify(data, null, 2);
 		}
+	});
+
+	// Two clicks instead of a browser confirm box.
+	const eraseBtn = document.getElementById("erase-btn") as HTMLButtonElement | null;
+	eraseBtn?.addEventListener("click", async () => {
+		if (eraseBtn.dataset.armed !== "1") {
+			eraseBtn.dataset.armed = "1";
+			eraseBtn.textContent = "Click again to delete them for good";
+			return;
+		}
+		eraseBtn.setAttribute("aria-busy", "true");
+		const result = await api("privacy", { action: "erase" });
+		eraseBtn.removeAttribute("aria-busy");
+		eraseBtn.dataset.armed = "";
+		eraseBtn.textContent = "Delete my reviews, claims and saved listings";
+		const status = document.getElementById("erase-status");
+		if (status) {
+			status.hidden = false;
+			status.dataset.tone = result.ok ? "success" : "error";
+			status.textContent = result.ok ? "Your reviews, claims and saved listings were deleted." : result.error?.message || "Could not delete. Try again.";
+		}
+		if (result.ok) load();
 	});
 
 	load();

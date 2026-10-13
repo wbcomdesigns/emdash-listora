@@ -1,7 +1,7 @@
 import type { PluginContext } from "emdash/plugin";
 
 import { haversineKm, listingFromContent, matchesQuery, type ListingCard } from "./catalog";
-import { LISTINGS } from "./types";
+import { LISTINGS, listingTypeBySlug } from "./types";
 import { asNumber, asRecord, asString, rows } from "./util";
 
 export type Rating = { average: number; count: number };
@@ -144,19 +144,22 @@ export async function syncRating(ctx: PluginContext, listingId: string): Promise
 		await ctx.storage.ratings.delete(listingId);
 		return;
 	}
+	// The schema.org type is kept with the rating, so the page metadata hook needs no content read.
+	const listing = await ctx.content?.get?.(LISTINGS, listingId).catch(() => null);
 	await ctx.storage.ratings.put(listingId, {
 		average: Math.round((stars.reduce((sum, value) => sum + value, 0) / stars.length) * 10) / 10,
 		count: stars.length,
+		schema: listingTypeBySlug(asString(asRecord(listing?.data).listing_type)).schemaType,
 	});
 }
 
-/** One-time: build rating rows for sites that kept ratings on the listing before 0.4.0. */
+/** One-time: build rating rows (0.4.0) and add the schema type to them (0.4.1). */
 export async function backfillRatings(ctx: PluginContext): Promise<void> {
-	if ((await ctx.kv.get<string>("ratings_v1")) === "1") return;
+	if ((await ctx.kv.get<string>("ratings_v2")) === "1") return;
 	try {
 		const found = await ctx.storage.reviews.query({ where: { status: "published" }, limit: 500 });
 		for (const id of new Set(rows(found).map((row) => asString(row.listingId)))) await syncRating(ctx, id);
-		await ctx.kv.set("ratings_v1", "1");
+		await ctx.kv.set("ratings_v2", "1");
 	} catch {
 		// Tried again on the next admin page load.
 	}

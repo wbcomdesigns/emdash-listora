@@ -2,7 +2,11 @@
 .listora-block {
 	--listora-primary: var(--color-brand, #2271b1);
 	--listora-primary-hover: var(--color-brand-hover, #135e96);
-	--listora-primary-fg: var(--color-on-brand, #ffffff);
+	/* Filled controls (buttons, active chips). In dark mode a theme's brand colour is usually
+	   a light tint, which white text cannot sit on, so the fill is darkened and the text is white. */
+	--listora-primary-bg: light-dark(var(--listora-primary), color-mix(in srgb, var(--listora-primary) 58%, #000000));
+	--listora-primary-bg-hover: light-dark(var(--listora-primary-hover), color-mix(in srgb, var(--listora-primary) 46%, #000000));
+	--listora-primary-fg: light-dark(var(--color-on-brand, #ffffff), #ffffff);
 	--listora-primary-text-mix: 65%;
 	--listora-primary-text-toward: light-dark(#000000, #ffffff);
 	--listora-primary-text: color-mix(
@@ -20,6 +24,8 @@
 	--listora-danger-bg: light-dark(#fef2f2, #3f0d0d);
 	--listora-danger-fg: light-dark(#b91c1c, #fca5a5);
 	--listora-rating: #f5a623;
+	/* Stars drawn as text need contrast against the page, so they are darker in light mode. */
+	--listora-rating-text: light-dark(#b45309, #f5a623);
 	--listora-on-rating: #2b1a00;
 	--listora-on-media: #ffffff;
 	--listora-bg-base: var(--color-bg, light-dark(#ffffff, #121212));
@@ -117,7 +123,7 @@
 	padding: 0 var(--listora-space-4);
 	border: 0;
 	border-radius: var(--listora-radius-sm);
-	background: var(--listora-primary);
+	background: var(--listora-primary-bg);
 	color: var(--listora-primary-fg);
 	font: inherit;
 	font-weight: var(--listora-weight-semibold);
@@ -133,7 +139,7 @@
 }
 
 .listora-btn:hover:not(.listora-btn--ghost):not(.listora-btn--secondary) {
-	background: var(--listora-primary-hover);
+	background: var(--listora-primary-bg-hover);
 }
 
 .listora-btn--ghost,
@@ -363,7 +369,7 @@
 }
 
 .listora-chip.is-active {
-	background: var(--listora-primary);
+	background: var(--listora-primary-bg);
 	color: var(--listora-primary-fg);
 	border-color: transparent;
 }
@@ -419,7 +425,7 @@
 }
 
 .listora-view-toggle a.is-active {
-	background: var(--listora-primary);
+	background: var(--listora-primary-bg);
 	color: var(--listora-primary-fg);
 }
 
@@ -655,7 +661,7 @@
 }
 
 .listora-stars {
-	color: var(--listora-rating);
+	color: var(--listora-rating-text);
 	letter-spacing: 0.05em;
 }
 
@@ -1195,7 +1201,7 @@
 }
 
 .listora-wizard-steps button[aria-current="step"] {
-	background: var(--listora-primary);
+	background: var(--listora-primary-bg);
 	color: var(--listora-primary-fg);
 }
 

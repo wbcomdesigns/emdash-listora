@@ -19,7 +19,7 @@ let host: PluginTestHost | undefined;
 async function directory() {
 	const rt = await createPluginRuntimeTestHost();
 	await rt.fixtures.collection(listingsCollection as never);
-	const made = await rt.fixtures.content("listings", { data: { title: "Probe Cafe" }, slug: "probe-cafe", status: "published" } as never);
+	const made = await rt.fixtures.content("listings", { data: { title: "Probe Cafe", listing_type: "restaurant" }, slug: "probe-cafe", status: "published" } as never);
 	const site = {
 		rt,
 		a: made.id,
@@ -316,7 +316,11 @@ describe("ratings live in plugin storage", () => {
 		await approve(a, "ana");
 		expect(await rt.transport.invokeHook("page:metadata", page)).toMatchObject({
 			kind: "jsonld",
-			graph: { aggregateRating: { ratingValue: 4, reviewCount: 1 } },
+			graph: {
+				"@id": "https://x.test/listings/probe-cafe#listing",
+				"@type": "Restaurant",
+				aggregateRating: { ratingValue: 4, reviewCount: 1 },
+			},
 		});
 	});
 });
