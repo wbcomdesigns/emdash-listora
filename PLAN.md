@@ -4,6 +4,18 @@
 
 Scoped with the owner on 2026-10-13. Every task is a GitHub issue under the `0.5.0` milestone. Work them in the order below. One rule sits over all of it: **no half-cooked features**. If a site owner with no technical help cannot use a thing from start to finish, it is not built or shipped in that form.
 
+## Corrections after reading EmDash's own guides (2026-10-13)
+
+**This section wins over any older line in this file or on an issue.**
+
+- **Time zone (#39):** no plugin setting. Use the time zone and date format in EmDash's own site settings.
+- **Import and export (#46):** all inside the admin, no kit address. Export is a raw plugin route that returns a real .csv, behind a Download button. Import reads a spreadsheet the admin uploaded to the media library and picked with the media picker (`media:bytes:read`). Prove both on the lab first; park both if not reliable.
+- **Owner alert (#27):** a card on the EmDash dashboard (`admin.widgets`) with what is waiting: listings, reviews, claims, messages. The emails stay as the extra where a site has mail.
+- **Search, comments, categories:** EmDash has them. Listora's directory search stays ours because it filters by type, place and distance, which core search does not. Do not add comments of our own anywhere.
+- **Visitors first:** contact messages and browsing are visitor features and must work on any hosting. Where EmDash gives no trusted visitor address, limit by browser cookie, not by refusing everyone.
+- **Registry install is the whole product.** The in-text block (#50) is an extra for a trusted install.
+- **Load the `emdash-plugin-development` skill** before any task.
+
 ## Decisions
 
 | Question | Decision |
