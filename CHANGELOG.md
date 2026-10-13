@@ -6,6 +6,7 @@ Versions match `package.json` and the EmDash registry release. Newest first.
 
 - Team docs in `docs/website/` in the Wbcom `sections[]` shape: landing README, Getting Started, features, how-to, settings, Pro, developer, What's New, FAQ, troubleshooting.
 - Form presentation guideline (`ux-foundation` for directory forms, `taste-skill` only for marketing) plus kit field, helper, error, checkbox, and wizard-step primitives.
+- Detail chrome: full-width cover, breadcrumb, action bar, hours table, sticky sidebar. The map no longer sits in the hero.
 
 ## [0.1.0] - 2026-10-13
 
