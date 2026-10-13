@@ -1,6 +1,6 @@
 # Team notes (planning)
 
-Long-form research from the first port. The docs the team should read first are in [`docs/website/`](../docs/website/getting-started/intro.md). Keep both. When a decision changes, update the website guide and leave a pointer here.
+Long-form research from the first port. The docs the team should read first are in [`docs/website/`](../docs/website/README.md). Keep both. When a decision changes, update the website guide and leave a pointer here.
 
 | File | Use |
 | --- | --- |

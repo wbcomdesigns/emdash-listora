@@ -1,8 +1,8 @@
 # Parked Pro work
 
-**Free + Pro**
+> **PRO** - Credits, Google Maps, Needs, Compare, and related jobs wait for Listora Pro on EmDash. Do not start them until Free screens pass the chrome bar.
 
-`0.1.0` is Free only. Do not start these until Free screens pass the presentation bar.
+`0.1.0` is Free only.
 
 | Job | Why it waits |
 | --- | --- |

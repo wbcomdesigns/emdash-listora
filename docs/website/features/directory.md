@@ -20,4 +20,4 @@ Visitors open `/listings/`, filter, and open a listing. Data comes from `listing
 
 WordPress search is command-style, with Near Me, advanced facets (category, feature, price, rating), skeletons, and map drag that re-queries. The lab search is a first pass. Cards still miss a full feature chip row and owner treatment. Featured is a static row, not a carousel with arrows.
 
-Treat this page as the job list. Treat [Screen inventory](../ux/screen-inventory.md) as the chrome list.
+Treat this page as the job list. Treat [Directory screens](../how-to/directory-screens.md) as the chrome list.

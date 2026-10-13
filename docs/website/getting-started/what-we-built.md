@@ -35,7 +35,7 @@ Bundle: about 10.5 KB gzip. Under the 256 KB registry cap.
 
 The plugin cannot ship Astro pages. The lab copies `site-kit/listora-ui.css` and owns the pages. Those pages use `--listora-*` tokens and class names (`listora-card`, `listora-grid`, wizard steps). They prove the jobs. They do **not** yet pass a side-by-side against WordPress Listora at 1440 and 390.
 
-That gap is the next work. See [What to improve next](../ux/next-work.md).
+That gap is the next work. See [Improve the screens](../how-to/improve-the-screens.md).
 
 ## What we deliberately did not ship
 

@@ -3,7 +3,7 @@
   "productType": "plugin",
   "shortId": "lstem",
   "slug": "listora-emdash",
-  "tagline": "Directory listings for EmDash. Engine is sandboxed. Screens live on the site kit.",
+  "tagline": "Directory listings for EmDash. The plugin is the engine. Screens live on the site kit.",
   "note": "GitHub-only documentation. Metadata only. No publish or sync target.",
   "images_dir": "images",
   "version": "0.1.0",
@@ -11,60 +11,75 @@
     {
       "name": "Getting Started",
       "folder": "getting-started",
-      "description": "What this plugin is, what we already shipped, and how to run the lab.",
+      "description": "Install the plugin, run the lab, and see what 0.1.0 already ships.",
       "pages": [
-        { "slug": "intro", "title": "What Listora on EmDash is" },
-        { "slug": "what-we-built", "title": "What we built in 0.1.0" },
         { "slug": "install", "title": "Install the plugin" },
-        { "slug": "local-lab", "title": "Run the local lab" }
+        { "slug": "local-lab", "title": "Run the local lab" },
+        { "slug": "what-we-built", "title": "What we built in 0.1.0" }
       ]
     },
     {
-      "name": "Architecture",
-      "folder": "architecture",
-      "description": "Why WordPress PHP cannot run here, and who owns pages versus routes.",
-      "pages": [
-        { "slug": "split", "title": "Plugin, site kit, and host" },
-        { "slug": "wordpress-vs-emdash", "title": "WordPress Listora versus this plugin" }
-      ]
-    },
-    {
-      "name": "Features",
+      "name": "Browse and Submit",
       "folder": "features",
-      "description": "Jobs the Free engine already does for visitors, owners, and admins.",
+      "description": "Search the directory, open a listing, submit one, and manage reviews or claims.",
       "pages": [
         { "slug": "directory", "title": "Browse, search, and maps" },
         { "slug": "submit", "title": "Submit a listing" },
         { "slug": "reviews-claims", "title": "Reviews and claims" },
         { "slug": "owner-dashboard", "title": "Owner dashboard" },
-        { "slug": "admin", "title": "Admin queue" },
-        { "slug": "parked-pro", "title": "Parked Pro work" }
+        { "slug": "admin", "title": "Admin queue" }
       ]
     },
     {
-      "name": "UX and Presentation",
-      "folder": "ux",
-      "description": "The next job. Engine is proven. Screens must match WordPress Listora quality.",
+      "name": "How-To Guides",
+      "folder": "how-to",
+      "description": "Match WordPress Listora chrome, then rebuild the public screens.",
       "pages": [
-        { "slug": "presentation-bar", "title": "The presentation bar" },
-        { "slug": "screen-inventory", "title": "Screen inventory" },
-        { "slug": "next-work", "title": "What to improve next" }
+        { "slug": "match-listora-chrome", "title": "Match Listora chrome" },
+        { "slug": "directory-screens", "title": "Directory screens" },
+        { "slug": "improve-the-screens", "title": "Improve the screens" }
+      ]
+    },
+    {
+      "name": "Settings",
+      "folder": "settings",
+      "description": "Moderation, default listing type, and spam keywords.",
+      "pages": [
+        { "slug": "plugin-settings", "title": "Plugin settings" }
+      ]
+    },
+    {
+      "name": "Pro Features",
+      "folder": "pro-features",
+      "description": "Jobs that wait until Free screens pass the chrome bar.",
+      "pages": [
+        { "slug": "parked-work", "title": "Parked Pro work" }
       ]
     },
     {
       "name": "Developer Guide",
       "folder": "developer-guide",
-      "description": "Routes, site kit, tests, and how to ship a new version.",
+      "description": "Plugin versus site kit, routes, and how to publish a version.",
       "pages": [
+        { "slug": "plugin-and-site-kit", "title": "Plugin, site kit, and host" },
+        { "slug": "wordpress-vs-emdash", "title": "WordPress Listora versus this plugin" },
         { "slug": "routes", "title": "Plugin routes" },
         { "slug": "site-kit", "title": "Site kit" },
         { "slug": "release", "title": "Version and publish" }
       ]
     },
     {
+      "name": "What's New",
+      "folder": "whats-new",
+      "description": "Registry versions, newest first.",
+      "pages": [
+        { "slug": "0-1-0", "title": "0.1.0" }
+      ]
+    },
+    {
       "name": "FAQ",
       "folder": "faq",
-      "description": "Short answers the team asks first.",
+      "description": "Short answers for install, pages, and the collection listing.",
       "pages": [
         { "slug": "faqs", "title": "FAQ" }
       ]
@@ -72,7 +87,7 @@
     {
       "name": "Troubleshooting",
       "folder": "troubleshooting",
-      "description": "Lab and registry problems we already hit.",
+      "description": "Empty listings, stale workerd, and publish errors.",
       "pages": [
         { "slug": "lab", "title": "Lab and publish problems" }
       ]
