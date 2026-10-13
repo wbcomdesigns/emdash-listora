@@ -15,7 +15,7 @@ git clone --depth 1 https://github.com/wbcomdesigns/emdash-listora
 emdash-listora/scripts/add-to-site.sh /path/to/your/site
 ```
 
-It copies the directory pages, styles and scripts into your site, writes a small seed file for the listings collection, and prints what is left. It is safe to run again after every plugin update: it replaces Listora's own files and never touches `src/layouts/ListoraLayout.astro` once that file exists.
+It copies the directory pages, styles and scripts into your site, writes a small seed file for the listings collection, and prints what is left. It is safe to run again after every plugin update: it replaces Listora's own files and never touches `src/layouts/ListoraLayout.astro` once that file exists. If your site already has its own page at one of the kit's addresses (an `/account/` page, for example), the command stops and names it, and copies nothing.
 
 ## 3. Create the listings collection
 

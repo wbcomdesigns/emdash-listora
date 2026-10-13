@@ -23,13 +23,13 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 				<div class="listora-transfer">
 					<section class="listora-panel" aria-labelledby="export-title">
 						<h2 id="export-title">Export</h2>
-						<p>Download every published listing as one spreadsheet. Open it in Excel, Numbers or Google Sheets.</p>
+						<p>Download your published listings (up to 500) as one spreadsheet, with the main details of each. Open it in Excel, Numbers or Google Sheets.</p>
 						<button class="listora-btn" type="button" id="export-btn">Download listings</button>
 					</section>
 					<section class="listora-panel" aria-labelledby="import-title">
 						<h2 id="import-title">Import</h2>
 						<p>
-							Add up to 500 listings from a spreadsheet saved as CSV. Nothing goes live: each row becomes a draft
+							Add up to 100 listings at a time from a spreadsheet saved as CSV. Nothing goes live: each row becomes a draft
 							waiting for your approval. <a href="/vendor/listora-sample.csv" download>Download a sample file</a>
 						</p>
 						<form id="import-form" class="listora-form">
@@ -67,11 +67,20 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 			// A plain link cannot be used: the site only answers signed-in requests that carry this header.
 			const response = await fetch("/_emdash/api/plugins/listora/export", { credentials: "same-origin", headers: { "X-EmDash-Request": "1" } });
 			if (!response.ok) throw new Error();
+			const blob = await response.blob();
+			// The column names alone mean there was nothing to export.
+			if ((await blob.text()).trim().split("\n").length < 2) {
+				notify(exportBtn, { ok: false, error: { message: "There are no published listings to download yet." } }, "");
+				exportBtn.disabled = false;
+				exportBtn.textContent = "Download listings";
+				return;
+			}
 			const link = document.createElement("a");
-			link.href = URL.createObjectURL(await response.blob());
+			link.href = URL.createObjectURL(blob);
 			link.download = /filename="([^"]+)"/.exec(response.headers.get("Content-Disposition") || "")?.[1] || "listings.csv";
 			link.click();
-			URL.revokeObjectURL(link.href);
+			// Not at once: some browsers cancel a download whose address is withdrawn straight away.
+			setTimeout(() => URL.revokeObjectURL(link.href), 2000);
 			notify(exportBtn, { ok: true }, "Your download has started.");
 		} catch {
 			notify(exportBtn, { ok: false, error: { message: "The download could not be prepared. Try again." } }, "");
@@ -106,6 +115,12 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 		if (!file || !checkBtn) return;
 		checkBtn.disabled = true;
 		checkBtn.textContent = "Checking...";
+		// The site takes about 1 MB per request, and a file grows on the way. Say so here, in plain words.
+		if (file.size > 600 * 1024) {
+			checkBtn.disabled = false;
+			checkBtn.textContent = "Check file";
+			return failed("That file is too large. Split it into files of up to 100 listings.");
+		}
 		csv = await file.text();
 		const result = await api("import", { csv, mode: "check" });
 		checkBtn.disabled = false;

@@ -299,6 +299,12 @@ export function esc(value: unknown): string {
 }
 
 export function signInUrl(): string {
+	// About to sign in: forget that this browser was last seen as a guest.
+	try {
+		localStorage.removeItem("listora-guest");
+	} catch {
+		// Storage can be blocked.
+	}
 	return `/_emdash/admin/login?redirect=${encodeURIComponent(location.pathname + location.search)}`;
 }
 
@@ -332,22 +338,22 @@ export async function uploadPhoto(listingId: string, file: File): Promise<ApiRes
 	}
 }
 
-// Pages are the same for every visitor, so the browser keeps a note of whether this visitor
-// has used a member feature here. It only saves guests a request that would be refused.
-const MEMBER_ROUTES = /^(favorites|dashboard|submit|review|claims|privacy|edit|photo|reply|renew)\b/;
-function remember(member: boolean): void {
+// Pages are the same for every visitor, so the browser keeps a note when a member request was
+// refused. It saves a guest from repeating a request that would be refused on every page. With
+// no note, the page asks: a member on a new device sees their saved listings straight away.
+function remember(guest: boolean): void {
 	try {
-		if (member) localStorage.setItem("listora-member", "1");
-		else localStorage.removeItem("listora-member");
+		if (guest) localStorage.setItem("listora-guest", "1");
+		else localStorage.removeItem("listora-guest");
 	} catch {
 		// Storage can be blocked. The only cost is one extra request.
 	}
 }
-function seemsMember(): boolean {
+function knownGuest(): boolean {
 	try {
-		return localStorage.getItem("listora-member") === "1";
+		return localStorage.getItem("listora-guest") === "1";
 	} catch {
-		return true;
+		return false;
 	}
 }
 
@@ -361,10 +367,10 @@ export async function api(path: string, body?: unknown, method = body ? "POST" :
 			body: body ? JSON.stringify(body) : undefined,
 		});
 		if (response.status === 401) {
-			remember(false);
+			remember(true);
 			return { ok: false, error: { code: "SIGN_IN_REQUIRED", message: "Sign in to continue." } };
 		}
-		if (response.ok && MEMBER_ROUTES.test(path)) remember(true);
+		remember(false);
 		const json = await response.json().catch(() => null);
 		if (!response.ok || !json) {
 			return { ok: false, error: { code: "FAILED", message: json?.error?.message || "Something went wrong. Try again." } };
@@ -391,9 +397,9 @@ export function day(value: unknown): string {
 	}
 }
 
-/** The listings this member has saved. Empty for a guest or when the request fails. A visitor who has never used a member feature in this browser is not asked. */
+/** The listings this member has saved. Empty for a guest or when the request fails. A browser last seen as a guest is not asked again until it signs in. */
 export async function savedIds(): Promise<Set<string>> {
-	if (!seemsMember()) return new Set();
+	if (knownGuest()) return new Set();
 	const result = await api("favorites");
 	const items = result.ok && Array.isArray(result.items) ? (result.items as Array<{ data?: { listingId?: string }; listingId?: string }>) : [];
 	return new Set(items.map((item) => String(item.data?.listingId ?? item.listingId ?? "")).filter(Boolean));

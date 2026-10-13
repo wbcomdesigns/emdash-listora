@@ -20,4 +20,4 @@ No. Everything here is free.
 Yes, with one extra step. The kit includes a Listings block for post and page text that you switch on in `astro.config.mjs`. The install guide has the lines to add.
 
 **Can I move listings in from a spreadsheet?**
-Yes. A site admin can import a CSV file at `/listings/import/`. Rows are checked first and arrive as drafts.
+Yes. A site admin can import a CSV file at `/listings/import/`. Rows are checked first and arrive as drafts, up to 100 per file.

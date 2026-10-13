@@ -1079,6 +1079,10 @@ describe("spreadsheet import and export", () => {
 		expect(checked.bad.map((row) => row.line)).toEqual([4, 5, 6]);
 		// Checking writes nothing.
 		expect(await rt.inspect.storage.list("submissions")).toHaveLength(0);
+		// More rows than one request can safely create is refused whole, before anything is written.
+		const big = ["title", ...Array.from({ length: 101 }, (_, index) => `Shop ${index}`)].join("\n");
+		expect(await route("import", { csv: big, mode: "import" }, { method: "POST" })).toMatchObject({ ok: false, error: { code: "TOO_BIG" } });
+		expect(await rt.inspect.storage.list("submissions")).toHaveLength(0);
 		// A file with no title column gets one plain message, not a list of rows.
 		expect(await route("import", { csv: "name,city\nCafe,Lyon", mode: "check" }, { method: "POST" })).toMatchObject({ ok: false, error: { code: "VALIDATION_ERROR" } });
 

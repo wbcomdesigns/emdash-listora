@@ -4,13 +4,9 @@ Versions match `package.json`, the git tag, and the EmDash registry release. New
 
 ## [Unreleased]
 
-## [0.5.0] - 2026-10-14
-
-Owner tools, photos, expiry, import and export, and a one-command setup. New permissions: sending email, reading and assigning categories, and adding files to the media library. Run `scripts/add-to-site.sh` again after you update.
-
-- New      - Optional Listings block for post and page text: a row of listing cards filtered by type, category or city. It is site code you switch on in `astro.config.mjs`; the registry plugin is unchanged.
+## [0.5.0] - New      - Optional Listings block for post and page text: a row of listing cards filtered by type, category or city. It is site code you switch on in `astro.config.mjs`; the registry plugin is unchanged.
 - New      - One setup command (`scripts/add-to-site.sh`) adds the directory pages to a site and writes a seed for the listings collection, with a one-page install guide.
-- New      - Import and export at `/listings/import/` for site admins: download every listing as a spreadsheet, or add up to 500 from a CSV. The file is checked first, bad rows and duplicates are listed, and imported listings wait in the queue as drafts.
+- New      - Import and export at `/listings/import/` for site admins: download your listings as a spreadsheet, or add up to 100 at a time from a CSV. The file is checked first, bad rows and duplicates are listed, and imported listings wait in the queue as drafts.
 - New      - Settings has its own page, in groups, with a line saying what each option does. The Listings queue page shows only what is waiting.
 - New      - A card on the EmDash dashboard shows how many listings, reviews, claims and messages are waiting, with a link to each.
 - New      - Browse by category and by city on the directory page, with a count on each. A category on a listing page links to its filtered list.
@@ -40,6 +36,7 @@ Owner tools, photos, expiry, import and export, and a one-command setup. New per
 - Improve  - Dates in the account read in the site's time zone, the same as everywhere else.
 - Improve  - The account Overview counts are links to their tabs.
 - Improve  - Keyboard and screen reader use: the listing tabs are one tab stop, each form step announces itself, and side panels use proper heading levels.
+- Improve  - The setup command never replaces a page that is your own: it names the file and stops.
 - Fix      - A listing's own photo is now the image used when its page is shared and in its search engine data. Before, a stock photo was used.
 - Fix      - An event time entered without a zone is shown as entered, not shifted.
 - Fix      - A wrong number of days for expiry is refused with a message. Before, it was quietly saved as 0, which switched expiry off.

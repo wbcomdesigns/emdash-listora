@@ -696,7 +696,7 @@ export async function renderSettings(
 			{ type: "header", text: "Import and export" },
 			{
 				type: "section",
-				text: "Download every listing as a spreadsheet, or add listings from one. Imported listings arrive in the Listings queue as drafts. This runs on the site kit's page at /listings/import/.",
+				text: "Download your published listings as a spreadsheet, or add listings from one, 100 at a time. Imported listings arrive in the Listings queue as drafts. This runs on the site kit's page at /listings/import/.",
 			},
 			// A link out of the admin needs a full address, which only a configured site has.
 			...(/^https?:\/\//.test(asString(ctx.site?.url))

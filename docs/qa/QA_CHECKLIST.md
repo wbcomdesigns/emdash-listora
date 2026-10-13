@@ -172,7 +172,7 @@ Three roles, always in this order: **guest**, **member** (subscriber role), **ad
 | A-51 | Insert it mid-article with type Restaurant and 3, save, publish | The post shows the heading and three restaurant cards at that spot, linking to each listing. Looks right at 1440 and 390, light and dark. The article's contents list gains the heading only |
 | A-52 | A block whose filters match nothing | Nothing is drawn on the page |
 | A-53 | A site without the block switched on | `/listings` offers no Listings block, and nothing else changes |
-| A-48 | A file over 500 rows, an empty file, a file with no title column | A plain message, nothing imported |
+| A-48 | A file over 100 rows, an empty file, a file with no title column | A plain message, nothing imported |
 | A-12 | Get started on a site with no listings collection | Clear "create the collection first" message, no crash | tells the owner to create the listings collection first |
 
 ## Presentation, every screen

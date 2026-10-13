@@ -8,7 +8,7 @@ Listora turns an EmDash site into a local directory. Visitors search and browse 
 - **Reviews and claims.** One review per member per listing, and an owner can claim their business. Both wait for approval.
 - **Owner tools.** Owners edit their listing, add photos, read visitors' messages, reply to reviews and renew an expiring listing. Edits, photos and replies wait for your approval.
 - **Photos and expiry.** A gallery on each listing, and an optional number of days a listing stays live.
-- **Import and export.** Download listings as a spreadsheet, or add up to 500 from a CSV file as drafts.
+- **Import and export.** Download listings as a spreadsheet, or add them from a CSV file as drafts, 100 at a time.
 - **Moderation in admin.** Queues for everything that waits, a dashboard card that counts it, and a Settings page.
 
 ## How it fits together

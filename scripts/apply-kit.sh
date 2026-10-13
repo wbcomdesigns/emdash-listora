@@ -9,6 +9,21 @@ if [[ ! -d "$LAB/src" ]]; then
 	exit 1
 fi
 
+# A site may already have its own page at one of these addresses (an /account/ page is common).
+# A file that is not Listora's is never replaced: say which ones are in the way and stop.
+FORCE="${2:-}"
+blocked=()
+for target in src/styles/listora-ui.css src/lib/listora.ts src/pages/listings/index.astro "src/pages/listings/[slug].astro" \
+	src/pages/listings/submit.astro src/pages/listings/calendar.astro src/pages/listings/import.astro src/pages/account/index.astro; do
+	if [[ -f "$LAB/$target" ]] && ! grep -qi "listora" "$LAB/$target"; then blocked+=("$target"); fi
+done
+if (( ${#blocked[@]} )) && [[ "$FORCE" != "--force" ]]; then
+	echo "These files already exist in $LAB and are not Listora's, so nothing was copied:" >&2
+	printf '  %s\n' "${blocked[@]}" >&2
+	echo "Move or rename them, or run again with --force to replace them." >&2
+	exit 1
+fi
+
 mkdir -p "$LAB/src/layouts" "$LAB/src/styles" "$LAB/src/lib" "$LAB/src/pages/listings" "$LAB/src/pages/account"
 
 # The owner edits this file to point at their own layout, so never overwrite it.

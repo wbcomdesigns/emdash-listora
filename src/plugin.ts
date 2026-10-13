@@ -122,8 +122,9 @@ const RATE_MAX = 8;
 // Short enough that the moderation table can show every character an admin approves.
 const REVIEW_TITLE_MAX = 120;
 const REVIEW_BODY_MAX = 1000;
-// One import: a file of up to 500 listings and about 900 thousand characters (the request limit is 1 MB).
-const IMPORT_MAX_ROWS = 500;
+// One import: a file of up to 100 listings. Each row is two writes to the site, and a plugin
+// has a time limit per request, so a larger file is split by the admin, not risked half done.
+const IMPORT_MAX_ROWS = 100;
 const IMPORT_MAX_CHARS = 900_000;
 
 type Member = { id: string; name: string | null; email?: string | null; role: number };
@@ -1138,7 +1139,7 @@ const plugin: SandboxedPlugin = {
 				const raw = asRecord(routeCtx.input);
 				const text = asString(raw.csv);
 				if (!text.trim()) return { ok: false, error: { code: "VALIDATION_ERROR", message: "Choose a file first." } };
-				if (text.length > IMPORT_MAX_CHARS) return { ok: false, error: { code: "TOO_BIG", message: "That file is too large. Split it into files of up to 500 listings." } };
+				if (text.length > IMPORT_MAX_CHARS) return { ok: false, error: { code: "TOO_BIG", message: `That file is too large. Split it into files of up to ${IMPORT_MAX_ROWS} listings.` } };
 				const parsed = parseCsv(text);
 				if (parsed.length === 0) {
 					return { ok: false, error: { code: "VALIDATION_ERROR", message: 'No listings found. The first row must be column names, and one of them must be "title".' } };

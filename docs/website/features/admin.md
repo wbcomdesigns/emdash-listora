@@ -15,7 +15,7 @@ Get started shows whether the listings collection exists, whether sample data is
 
 Settings live on the queue page for now: require moderation, default type, spam keywords.
 
-Import and export live on the site kit page `/listings/import/`, for site admins only. Export downloads every published listing as a CSV spreadsheet. Import checks a CSV first (bad rows with the reason, duplicates by title and city), then adds the good rows as drafts in the Listings queue, up to 500 at a time. Nothing is published by an import. Settings links to the page. It is a site page, not an admin screen, because EmDash admin screens cannot take a file or start a download.
+Import and export live on the site kit page `/listings/import/`, for site admins only. Export downloads your published listings (up to 500) as a CSV spreadsheet with the main details of each. Import checks a CSV first (bad rows with the reason, duplicates by title and city), then adds the good rows as drafts in the Listings queue, up to 100 at a time. Nothing is published by an import. Settings links to the page. It is a site page, not an admin screen, because EmDash admin screens cannot take a file or start a download.
 
 ## Not built
 

@@ -8,14 +8,14 @@ SITE="$(cd "${1:-.}" && pwd)"
 
 if ! ls "$SITE"/astro.config.* >/dev/null 2>&1 || ! grep -q "emdash" "$SITE"/astro.config.*; then
 	echo "$SITE is not an EmDash site (no astro.config that loads emdash)." >&2
-	echo "Usage: $0 /path/to/your/site" >&2
+	echo "Usage: $0 /path/to/your/site [--force]" >&2
 	exit 1
 fi
 
 first_run=1
 [[ -f "$SITE/src/layouts/ListoraLayout.astro" ]] && first_run=0
 
-"$PLUGIN/scripts/apply-kit.sh" "$SITE" >/dev/null
+"$PLUGIN/scripts/apply-kit.sh" "$SITE" "${2:-}" >/dev/null
 seed="$(node "$PLUGIN/scripts/site-seed.mjs" "$SITE")"
 
 cat <<DONE
