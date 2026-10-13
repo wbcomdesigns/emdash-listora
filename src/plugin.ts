@@ -8,6 +8,7 @@ import {
 	expiryDays,
 	expiryFrom,
 	isPublicListing,
+	listingOwner,
 	listPublished,
 	paginate,
 	listingRefs,
@@ -15,6 +16,7 @@ import {
 	syncRating,
 	publishNow,
 } from "./lib/listings-query";
+import { clean, EDITABLE, editPatch, filled } from "./lib/edits";
 import { LISTING_TYPES, LISTINGS, NOTIFY_CRON, listingTypeBySlug } from "./lib/types";
 import {
 	asBoolean,
@@ -96,49 +98,6 @@ function parseSubmit(input: unknown): { ok: true; data: SubmitInput } | { ok: fa
 	};
 }
 
-/** What an owner may change on their own listing. Type, featured, claimed and dates are not theirs. */
-export const EDITABLE = [
-	"title",
-	"excerpt",
-	"description",
-	"phone",
-	"email",
-	"website",
-	"address",
-	"city",
-	"state",
-	"country",
-	"owner_name",
-	"amenities",
-	"price_range",
-	"cuisine",
-	"event_start",
-	"event_end",
-	"type_fields",
-] as const;
-
-const EDIT_CAPS: Record<string, number> = { title: 200, excerpt: 280, description: 5000, type_fields: 2000 };
-
-/** The extra per-type details with the empty ones left out, in a stable order. */
-export function filled(value: unknown): Record<string, string> {
-	return Object.fromEntries(
-		Object.entries(asRecord(value))
-			.map(([key, text]) => [key, asString(text).trim().slice(0, 200)] as const)
-			.filter(([, text]) => text !== "")
-			.sort(([x], [y]) => x.localeCompare(y)),
-	);
-}
-
-/** The editable fields from a parsed form, each capped, as they are stored on a listing. */
-function editFields(data: SubmitInput): Record<string, string> {
-	const out: Record<string, string> = {};
-	for (const key of EDITABLE) {
-		const value = key === "type_fields" ? JSON.stringify(filled(data.type_fields)) : asString((data as Record<string, unknown>)[key]);
-		out[key] = value.slice(0, EDIT_CAPS[key] ?? 200);
-	}
-	return out;
-}
-
 function spamBlocked(title: string, description: string, keywords: string[]): boolean {
 	const hay = `${title} ${description}`.toLowerCase();
 	return keywords.some((word) => word && hay.includes(word.toLowerCase()));
@@ -168,16 +127,6 @@ function renewable(ref: { expires_at: string; expired: boolean }): boolean {
 }
 
 type Ctx = Parameters<typeof expireDue>[0];
-
-/**
- * The one rule for who answers for a listing, read fresh every time it matters: the member
- * on its approved submission row. Approving a claim moves that row to the claimant, so
- * there is never more than one owner. A pending or rejected row gives nothing.
- */
-async function listingOwner(ctx: Ctx, listingId: string): Promise<string> {
-	const row = asRecord(await ctx.storage.submissions.get(listingId));
-	return row.status === "approved" ? asString(row.member_id) : "";
-}
 
 // A member's current account address, kept in one place: refreshed whenever they use
 // a member route, removed when they erase their data. Never copied onto other rows.
@@ -588,10 +537,20 @@ const plugin: SandboxedPlugin = {
 					orderBy: { createdAt: "desc" },
 					limit: 100,
 				});
-				// member_id stays server-side; the public list only needs what the page prints.
+				// Named fields only. A review row also holds the member's id and email, version
+				// tokens and an owner reply still waiting for approval: none of that is public.
 				const items = rows(found)
 					.filter((row) => row.status === "published")
-					.map(({ member_id: _member, rev: _rev, ...row }) => row);
+					.map((row) => ({
+						id: row.id,
+						author: asString(row.author),
+						stars: asNumber(row.stars) ?? 0,
+						title: asString(row.title),
+						body: asString(row.body),
+						createdAt: asString(row.createdAt),
+						owner_reply: asString(row.owner_reply),
+						owner_reply_at: asString(row.owner_reply_at),
+					}));
 				const avg =
 					items.length === 0
 						? 0
@@ -719,8 +678,20 @@ const plugin: SandboxedPlugin = {
 						)
 					).flatMap((found) => found.items),
 				};
+				// Published reviews of the listings this member answers for, so they can reply.
+				const received = {
+					items: (
+						await Promise.all(
+							owned.map((listingId) =>
+								ctx.storage.reviews.query({ where: { listingId }, orderBy: { createdAt: "desc" }, limit: 10 }),
+							),
+						)
+					)
+						.flatMap((found) => found.items)
+						.filter((item) => asRecord(item.data).status === "published"),
+				};
 				// Names and links for every row, so the member never sees a bare id.
-				const all = [listings, reviews, claims, favorites, inbox].map(rows);
+				const all = [listings, reviews, claims, favorites, inbox, received].map(rows);
 				const refs = await listingRefs(ctx, all.flat().map((row) => asString(row.listingId)));
 				const days = await expiryDays(ctx);
 				// Which of this member's listings have a change waiting.
@@ -761,6 +732,22 @@ const plugin: SandboxedPlugin = {
 					reviews: named(all[1]),
 					claims: named(all[2]),
 					favorites: named(all[3]),
+					// Reviews of the member's listings: the reviewer's name, never their id or email.
+					received: named(all[5]).map((row) => {
+						const item = row as Record<string, unknown>;
+						return {
+							id: item.id,
+							listing_title: item.listing_title,
+							listing_url: item.listing_url,
+							author: asString(item.author),
+							stars: asNumber(item.stars) ?? 0,
+							title: asString(item.title),
+							body: asString(item.body),
+							createdAt: asString(item.createdAt),
+							reply: asString(item.owner_reply),
+							reply_waiting: item.reply_status === "pending" ? asString(item.reply_draft) : "",
+						};
+					}),
 					// New ones first. "Done" is the owner's own mark, separate from the admin's handled flag.
 					messages: named(all[4])
 						.map((row) => {
@@ -769,6 +756,31 @@ const plugin: SandboxedPlugin = {
 						})
 						.sort((x, y) => Number(x.done) - Number(y.done)),
 				};
+			},
+		},
+		// The listing owner answers a review. The reply waits for approval; a reply already
+		// public stays public while a rewrite waits.
+		reply: {
+			permission: MEMBER,
+			methods: ["POST"],
+			handler: async (routeCtx, ctx) => {
+				const user = routeCtx.user as Member | undefined;
+				if (!user) return SIGN_IN;
+				const raw = asRecord(routeCtx.input);
+				const id = asString(raw.reviewId);
+				const text = clean(raw.text, REVIEW_BODY_MAX);
+				const review = asRecord(await ctx.storage.reviews.get(id));
+				const NOT_YOURS = { ok: false, error: { code: "NOT_FOUND", message: "That review is not available." } };
+				if (!review.listingId || review.status !== "published") return NOT_YOURS;
+				if ((await listingOwner(ctx, asString(review.listingId))) !== user.id) return NOT_YOURS;
+				if (!text) return { ok: false, error: { code: "VALIDATION_ERROR", message: "Write your reply first." } };
+				if (await rateLimited(ctx, `reply:${user.id}`)) return RATE_LIMITED;
+				// Guarded: only the reply fields, and only while the review is still public.
+				await ctx.storage.reviews.updateIf(id, {
+					where: { status: "published" },
+					set: { reply_draft: text, reply_status: "pending", reply_by: user.id, reply_rev: crypto.randomUUID(), reply_sent: nowIso() },
+				});
+				return { ok: true, id, status: "pending" };
 			},
 		},
 		// The owner changes their own listing. The change waits in plugin storage: a member route
@@ -792,7 +804,7 @@ const plugin: SandboxedPlugin = {
 					// What the form opens with: the waiting change if there is one, else the live values.
 					const source = waiting.status === "pending" ? { ...current, ...asRecord(waiting.fields) } : current;
 					const values: Record<string, unknown> = {};
-					for (const key of EDITABLE) values[key] = key === "type_fields" ? parseJson(source[key], {}) : asString(source[key]);
+					for (const key of EDITABLE) values[key] = key === "type_fields" ? filled(source[key]) : asString(source[key]);
 					return { ok: true, listingId, listing_type: asString(current.listing_type), pending: waiting.status === "pending", values };
 				}
 
@@ -803,18 +815,10 @@ const plugin: SandboxedPlugin = {
 				if (spamBlocked(parsed.data.title, parsed.data.description, keywords.length ? keywords : ["viagra", "crypto pump"])) {
 					return { ok: false, error: { code: "SPAM", message: "Those changes were rejected." } };
 				}
-				const fields = editFields(parsed.data);
-				// Only what actually differs is kept, so the admin sees the change and nothing else.
-				const changed = Object.fromEntries(
-					Object.entries(fields).filter(([key, value]) =>
-						// A field the form did not send is left alone, never blanked.
-						!(key in raw)
-							? false
-							: key === "type_fields"
-							? JSON.stringify(filled(parseJson(current[key], {}))) !== value
-							: asString(current[key]) !== value,
-					),
-				);
+				// Only the fields the form sent, cleaned, and only where they differ from the live listing.
+				const sent: Record<string, unknown> = {};
+				for (const key of EDITABLE) if (key in raw) sent[key] = (parsed.data as Record<string, unknown>)[key];
+				const changed = editPatch(current, sent).patch;
 				if (Object.keys(changed).length === 0) {
 					await ctx.storage.edits.delete(listingId);
 					return { ok: true, listingId, pending: false, unchanged: true };

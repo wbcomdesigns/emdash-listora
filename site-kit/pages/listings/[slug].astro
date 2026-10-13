@@ -513,6 +513,12 @@ const schema = {
 		if (show) input?.focus();
 	}
 
+	// A date a person reads, in the visitor's own language: "13 Oct 2026".
+	function day(value: unknown): string {
+		const date = new Date(String(value || ""));
+		return Number.isNaN(date.getTime()) ? "" : date.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
+	}
+
 	async function loadReviews() {
 		const box = document.getElementById("listora-reviews");
 		if (!box) return;
@@ -535,7 +541,7 @@ const schema = {
 				: items
 						.map(
 							(item) =>
-								`<article class="listora-review"><strong>${esc(item.author || "Member")}</strong> <span class="listora-stars" aria-label="${Number(item.stars) || 0} out of 5">${"★".repeat(Number(item.stars) || 0)}</span><h3>${esc(item.title)}</h3><p>${esc(item.body)}</p>${item.owner_reply ? `<p>Owner: ${esc(item.owner_reply)}</p>` : ""}</article>`,
+								`<article class="listora-review"><strong>${esc(item.author || "Member")}</strong> <span class="listora-stars" aria-label="${Number(item.stars) || 0} out of 5">${"★".repeat(Number(item.stars) || 0)}</span><h3>${esc(item.title)}</h3><p>${esc(item.body)}</p>${item.owner_reply ? `<div class="listora-reply"><p class="listora-reply__label">Reply from the owner${item.owner_reply_at ? ` · ${esc(day(item.owner_reply_at))}` : ""}</p><p>${esc(item.owner_reply)}</p></div>` : ""}</article>`,
 						)
 						.join("");
 	}

@@ -511,6 +511,56 @@ ul.listora-chips {
 	display: block;
 }
 
+/* A second heading inside one account tab needs room above it. */
+#dash-main section > * + h2 {
+	margin-block-start: var(--listora-space-6);
+}
+
+/* An owner's reply, set apart from the review it answers. */
+.listora-reply {
+	margin-block-start: var(--listora-space-2);
+	padding: var(--listora-space-3);
+	border-inline-start: 3px solid var(--listora-primary);
+	background: var(--listora-bg-muted);
+	border-radius: var(--listora-radius-md, 8px);
+	justify-self: stretch;
+}
+
+.listora-reply p {
+	margin: 0;
+}
+
+.listora-reply__label {
+	font-size: var(--listora-text-size-sm);
+	font-weight: 600;
+	margin-block-end: var(--listora-space-1, 0.25rem);
+}
+
+.listora-reply-form {
+	justify-self: stretch;
+}
+
+.listora-reply-form > summary {
+	display: inline-flex;
+	list-style: none;
+	cursor: pointer;
+}
+
+.listora-reply-form > summary::-webkit-details-marker {
+	display: none;
+}
+
+.listora-reply-form > form {
+	display: grid;
+	gap: var(--listora-space-2);
+	margin-block-start: var(--listora-space-3);
+	justify-items: start;
+}
+
+.listora-reply-form textarea {
+	width: 100%;
+}
+
 /* A dashboard row: what it is on the left, what you can do on the right. Stacks on a phone. */
 .listora-row {
 	display: flex;

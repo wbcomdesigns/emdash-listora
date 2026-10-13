@@ -19,11 +19,14 @@ Copy `site-kit/` again after you update, including the new `site-kit/layouts/Lis
 - Improve  - Opening hours, "Open now" and event times use your site's own time zone from EmDash's settings. Before, every site was treated as New York.
 - Improve  - The event start and end fields are proper date-and-time pickers.
 - Fix      - An event time entered without a zone is shown as entered, not shifted.
+- Security - The public list of reviews now returns named fields only. Before, it also carried the reviewer's email when one was given.
+- Security - An owner's change is shown to you as exact text and applied from the same source, hidden characters are removed, and a change or reply cannot be approved once its sender no longer owns the listing.
 - Security - Listing text written into a page's search engine data can no longer break out of it, and an image address that is not a normal web address or a path on the site is dropped.
 - Fix      - A wrong number of days for expiry is refused with a message. Before, it was quietly saved as 0, which switched expiry off.
 - New      - Browse by category and by city on the directory page, with a count on each. A category on a listing page links to its filtered list.
 - New      - The add-a-listing form offers the site's own categories and saves the choice on the listing. Needs one new permission: reading and assigning categories.
 - New      - Owners can edit their own listing from their account. The public listing stays as it is until you approve the change, and you see each changed field, before and after, in the Listings queue.
+- New      - A listing owner can reply once to each review of their listing. The reply shows under the review, marked "Reply from the owner", after you approve it.
 - New      - Messages tab in the owner's account: the member who added or claimed a listing reads the messages visitors send about it.
 - New      - The owner's Messages tab shows how many are new, marks new ones in words, and lets the owner mark a message as done or as new again.
 - New      - Once an hour the owner gets a short email saying messages are waiting. It goes to their account email and carries no visitor text. Needs a mail provider on the site and one new permission: sending email. A setting turns it off.

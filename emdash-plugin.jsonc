@@ -41,7 +41,7 @@
 			"indexes": ["savedAt", "contentId", "collection"]
 		},
 		"reviews": {
-			"indexes": ["status", "listingId", "member_id", "createdAt"]
+			"indexes": ["status", "listingId", "member_id", "createdAt", "reply_status"]
 		},
 		"claims": {
 			"indexes": ["status", "listingId", "member_id", "createdAt"]

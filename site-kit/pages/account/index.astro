@@ -47,7 +47,10 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 					<div id="dash-listings"></div>
 				</section>
 				<section id="reviews-panel" hidden>
-					<h2>Reviews</h2>
+					<h2>Reviews of your listings</h2>
+					<p class="listora-helper">Reply once to each review. Your reply shows under it after it is approved.</p>
+					<div id="dash-received"></div>
+					<h2>Reviews you wrote</h2>
 					<div id="dash-reviews"></div>
 				</section>
 				<section id="messages-panel" hidden>
@@ -161,6 +164,22 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 		if (node) node.innerHTML = html;
 	}
 
+	document.addEventListener("submit", async (event) => {
+		const form = (event.target as HTMLElement).closest<HTMLFormElement>("form[data-reply]");
+		if (!form) return;
+		event.preventDefault();
+		const button = form.querySelector("button") as HTMLButtonElement;
+		form.querySelector("[role=alert]")?.remove();
+		button.disabled = true;
+		const data = await api("reply", { reviewId: form.dataset.reply, text: new FormData(form).get("text") });
+		if (data.ok) return load();
+		button.disabled = false;
+		form.insertAdjacentHTML(
+			"beforeend",
+			`<p class="listora-status" data-tone="error" role="alert">${esc(data.error?.message || "Could not send your reply.")}</p>`,
+		);
+	});
+
 	document.addEventListener("click", async (event) => {
 		const button = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-message]");
 		if (!button) return;
@@ -217,6 +236,40 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 		type Rows = Array<Record<string, unknown>>;
 		fill("dash-listings", list(data.listings as Rows, ["city", "status"]));
 		fill("dash-reviews", list(data.reviews as Rows, ["body", "status"]));
+		const received = (data.received ?? []) as Rows;
+		fill(
+			"dash-received",
+			received.length
+				? `<ul class="listora-dash-list">${received
+						.map((item) => {
+							const stars = Number(item.stars) || 0;
+							const text = [item.title, item.body].filter(Boolean).join(": ");
+							const shown = item.reply
+								? `<div class="listora-reply"><p class="listora-reply__label">Your reply</p><p>${esc(item.reply)}</p></div>`
+								: "";
+							const waiting = item.reply_waiting
+								? `<div class="listora-reply"><p class="listora-reply__label"><span class="listora-tag">Waiting for approval</span></p><p>${esc(item.reply_waiting)}</p></div>`
+								: "";
+							const id = esc(item.id);
+							const label = item.reply || item.reply_waiting ? "Change your reply" : "Reply";
+							return `<li class="listora-review listora-message">
+								<p class="listora-message__head"><strong>${esc(item.listing_title || "Listing")}</strong></p>
+								<p class="listora-meta">${esc(item.author || "A member")} · <span aria-label="${stars} out of 5">${"★".repeat(stars)}</span> · ${esc(day(item.createdAt))}</p>
+								${text ? `<p class="listora-message__body">${esc(text)}</p>` : ""}
+								${shown}${waiting}
+								<details class="listora-reply-form">
+									<summary class="listora-btn listora-btn--secondary">${label}</summary>
+									<form data-reply="${id}" class="listora-form">
+										<label class="listora-label" for="reply-${id}">Your reply (public, up to 1000 characters)</label>
+										<textarea id="reply-${id}" class="listora-input" name="text" rows="3" maxlength="1000" required>${esc(item.reply_waiting || item.reply || "")}</textarea>
+										<button type="submit" class="listora-btn">Send for approval</button>
+									</form>
+								</details>
+							</li>`;
+						})
+						.join("")}</ul>`
+				: `<div class="listora-empty"><h2>No reviews yet</h2><p>Reviews of your listings show here once they are published.</p></div>`,
+		);
 		fill("dash-claims", list(data.claims as Rows, ["status"]));
 		// Visitors wrote these: every value goes through esc, and the address is only ever a mailto.
 		const messages = (data.messages ?? []) as Rows;

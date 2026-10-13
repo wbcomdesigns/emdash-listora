@@ -4,12 +4,14 @@ import {
 	backfillRatings,
 	expiryDays,
 	expiryFrom,
+	listingOwner,
 	listingRefs,
 	patchListing,
 	publishNow,
 	syncRating,
 } from "./lib/listings-query";
 import { getOnboardState, loadSampleDirectory } from "./lib/onboard";
+import { editPatch } from "./lib/edits";
 import { LISTING_TYPES, LISTINGS, NOTIFY_CRON } from "./lib/types";
 import { asBoolean, asRecord, asString } from "./lib/util";
 
@@ -98,28 +100,6 @@ function findBlocks(list: string, view: View, shown: number, total: number, wait
 
 const lowerText = (...parts: unknown[]) => parts.map((part) => asString(part)).join(" ");
 
-const FIELD_LABELS: Record<string, string> = {
-	title: "Listing title",
-	excerpt: "Short summary",
-	description: "Description",
-	phone: "Phone",
-	email: "Email",
-	website: "Website",
-	address: "Address",
-	city: "City",
-	state: "State",
-	country: "Country",
-	owner_name: "Owner name",
-	amenities: "Features",
-	price_range: "Price range",
-	cuisine: "Cuisine",
-	event_start: "Starts",
-	event_end: "Ends",
-	type_fields: "Other details",
-};
-
-const words = (key: string) => key.replace(/[-_]/g, " ").replace(/^\w/, (char) => char.toUpperCase());
-
 /** A date an admin reads, in the admin's own language: "13 Oct 2026". */
 function day(ctx: PluginContext, value: unknown): string {
 	const date = new Date(asString(value));
@@ -132,39 +112,6 @@ function day(ctx: PluginContext, value: unknown): string {
 }
 
 const typeName = (slug: unknown) => LISTING_TYPES.find((type) => type.slug === asString(slug))?.name ?? "Business";
-
-/** One line per field that changes: what it is now and what it becomes. Plain text. */
-function changeLines(live: Record<string, unknown>, fields: Record<string, unknown>): Array<{ label: string; value: string }> {
-	const show = (text: unknown) => asString(text) || "(empty)";
-	const lines: Array<{ label: string; value: string }> = [];
-	for (const key of Object.keys(FIELD_LABELS)) {
-		if (!(key in fields)) continue;
-		if (key !== "type_fields") {
-			lines.push({ label: FIELD_LABELS[key], value: `${show(live[key])}  →  ${show(fields[key])}` });
-			continue;
-		}
-		// The extra per-type details, one line for each that differs.
-		const was = asRecord(parseDetails(live[key]));
-		const next = asRecord(parseDetails(fields[key]));
-		for (const inner of new Set([...Object.keys(was), ...Object.keys(next)])) {
-			// Cuisine and the like are also listing fields of their own, shown above. Once is enough.
-			if (inner in FIELD_LABELS) continue;
-			if (asString(was[inner]) !== asString(next[inner])) {
-				lines.push({ label: words(inner), value: `${show(was[inner])}  →  ${show(next[inner])}` });
-			}
-		}
-	}
-	return lines;
-}
-
-function parseDetails(value: unknown): unknown {
-	if (typeof value !== "string") return value ?? {};
-	try {
-		return JSON.parse(value);
-	} catch {
-		return {};
-	}
-}
 
 /**
  * Changes owners sent for listings that are already live. One block per listing: its name,
@@ -184,28 +131,21 @@ async function editBlocks(ctx: PluginContext): Promise<BlockMap[]> {
 		// Each one isolated: a removed listing must not stop the page.
 		const listing = await ctx.content?.get?.(LISTINGS, listingId).catch(() => null);
 		const live = asRecord(listing?.data);
-		const lines = changeLines(live, asRecord(edit.fields));
-		// The same change can sit in two places (cuisine is also an extra detail): say it once.
-		const seen = new Set<string>();
-		const unique = lines.filter((line) => !seen.has(`${line.label}|${line.value}`) && seen.add(`${line.label}|${line.value}`));
-		// A short change fits a field. A long one is written out in full: the admin must be able
-		// to read every word of what goes live.
-		const short = unique.filter((line) => line.value.length <= 90);
-		const long = unique.filter((line) => line.value.length > 90);
+		// The same function the approval uses, so this screen cannot show one thing and apply another.
+		const { changes } = editPatch(live, asRecord(edit.fields));
+		const stillOwner = (await listingOwner(ctx, listingId)) === asString(edit.member_id);
 		blocks.push(
 			{ type: "section", text: `${asString(live.title) || "Removed listing"}  ·  sent ${day(ctx, edit.createdAt)}` },
-			...(short.length || !long.length
-				? [{ type: "fields", fields: short.length ? short : [{ label: "Changes", value: "Nothing differs from the live listing any more." }] }]
-				: []),
-			...long.flatMap((line) => {
-				const [was, next] = line.value.split("  →  ");
-				return [
-					{ type: "context", text: `${line.label}, now:` },
-					{ type: "section", text: was },
-					{ type: "context", text: `${line.label}, after approval:` },
-					{ type: "section", text: next },
-				];
-			}),
+			...(stillOwner
+				? []
+				: [{ type: "banner", title: "The sender no longer owns this listing", description: "It cannot be approved. Reject it to clear it.", variant: "alert" }]),
+			...(changes.length === 0
+				? [{ type: "context", text: "Nothing differs from the live listing any more." }]
+				: changes.flatMap((change) => [
+						{ type: "context", text: change.label },
+						// Literal text, every character, never shortened and never read as formatting.
+						{ type: "code", language: "bash", code: `Now:\n${change.was || "(empty)"}\n\nAfter approval:\n${change.next || "(empty)"}` },
+					])),
 			{
 				type: "actions",
 				elements: [
@@ -373,6 +313,38 @@ async function reviewListing(
 	return renderQueue(ctx, { toast: { message: "Listing published.", type: "success" } });
 }
 
+/** Owner replies waiting. One block each: the review it answers and the reply, both in full. */
+async function replyBlocks(ctx: PluginContext): Promise<BlockMap[]> {
+	const found = await ctx.storage.reviews.query({ where: { reply_status: "pending" }, orderBy: { createdAt: "desc" }, limit: 20 });
+	if (found.items.length === 0) return [];
+	const titles = await listingTitles(ctx, found.items);
+	const blocks: BlockMap[] = [
+		{ type: "divider" },
+		{ type: "header", text: "Owner replies waiting" },
+		{ type: "context", text: "A listing owner answered a review. The reply shows under the review once you approve it." },
+	];
+	for (const item of found.items) {
+		const review = asRecord(item.data);
+		blocks.push(
+			{ type: "section", text: `${titles.get(asString(review.listingId)) ?? "Removed listing"}  ·  reply sent ${day(ctx, review.reply_sent)}` },
+			{ type: "context", text: `Review by ${asString(review.author) || "a member"}, ${asNumberText(review.stars)} of 5:` },
+			{ type: "section", text: [asString(review.title), asString(review.body)].filter(Boolean).join(": ") || "(stars only)" },
+			{ type: "context", text: asString(review.owner_reply) ? "Owner's new reply (replaces the one showing now):" : "Owner's reply:" },
+			{ type: "code", language: "bash", code: asString(review.reply_draft) },
+			{
+				type: "actions",
+				elements: [
+					{ type: "button", label: "Approve the reply", action_id: "reply_mod", style: "primary", value: `approve|${asString(review.reply_rev)}|${item.id}` },
+					{ type: "button", label: "Reject the reply", action_id: "reply_mod", value: `reject|${asString(review.reply_rev)}|${item.id}` },
+				],
+			},
+		);
+	}
+	return blocks;
+}
+
+const asNumberText = (value: unknown) => String(Number(value) || 0);
+
 async function renderReviewQueue(
 	ctx: PluginContext,
 	extra?: Pick<BlockResponse, "toast">,
@@ -429,6 +401,7 @@ async function renderReviewQueue(
 						],
 						rows,
 					},
+			...(await replyBlocks(ctx)),
 		],
 		toast: extra?.toast,
 	};
@@ -645,14 +618,15 @@ export async function renderSettings(
 
 /** The card on the EmDash dashboard: what is waiting, with a way to each list. */
 export async function renderWaiting(ctx: PluginContext): Promise<BlockResponse> {
-	const [edits, listings, reviews, claims, messages] = await Promise.all([
+	const [replies, edits, listings, reviews, claims, messages] = await Promise.all([
+		ctx.storage.reviews.count({ reply_status: "pending" }),
 		ctx.storage.edits.count({ status: "pending" }),
 		ctx.storage.submissions.count({ status: "pending" }),
 		ctx.storage.reviews.count({ status: "pending" }),
 		ctx.storage.claims.count({ status: "pending" }),
 		ctx.storage.contacts.count({ status: "new" }),
 	]);
-	const total = listings + edits + reviews + claims + messages;
+	const total = listings + edits + reviews + replies + claims + messages;
 	const link = (label: string, path: string) => ({
 		type: "link",
 		label,
@@ -668,6 +642,7 @@ export async function renderWaiting(ctx: PluginContext): Promise<BlockResponse> 
 							{ label: "Listings", value: listings },
 							{ label: "Changes", value: edits },
 							{ label: "Reviews", value: reviews },
+							{ label: "Replies", value: replies },
 							{ label: "Claims", value: claims },
 							{ label: "Messages", value: messages },
 						],
@@ -886,24 +861,56 @@ export async function handleAdmin(
 		return reviewListing(ctx, action, listingId);
 	}
 
+	if (type === "block_action" && asString(raw.action_id) === "reply_mod") {
+		const { action, id, stamp } = parseStamped(raw.value);
+		const review = asRecord(await ctx.storage.reviews.get(id));
+		const refuse = (message: string) => renderReviewQueue(ctx, { toast: { message, type: "error" } });
+		if (!review.listingId) return refuse("That review no longer exists.");
+		if (review.reply_status !== "pending") return refuse("Someone already handled that reply.");
+		if (asString(review.reply_rev) !== stamp) return refuse("That reply changed after this page loaded. Check it again.");
+		if (action === "approve" && (await listingOwner(ctx, asString(review.listingId))) !== asString(review.reply_by)) {
+			return refuse("The member who wrote that reply no longer owns the listing. Reject it to clear it.");
+		}
+		// Guarded in the database: it only lands if this exact version is still waiting.
+		await ctx.storage.reviews.updateIf(id, {
+			where: { reply_status: "pending", reply_rev: stamp },
+			set:
+				action === "approve"
+					? { owner_reply: asString(review.reply_draft), owner_reply_at: new Date().toISOString(), reply_draft: "", reply_status: "published" }
+					: { reply_draft: "", reply_status: asString(review.owner_reply) ? "published" : "none" },
+		});
+		return renderReviewQueue(ctx, {
+			toast: { message: action === "approve" ? "Reply published." : "Reply rejected. Nothing changed on the listing.", type: "success" },
+		});
+	}
+
 	if (type === "block_action" && asString(raw.action_id) === "edit_mod") {
 		const { action, id, stamp } = parseStamped(raw.value);
 		const edit = asRecord(await ctx.storage.edits.get(id));
 		const stale = staleRow(edit, stamp);
 		if (stale) return renderQueue(ctx, { toast: { message: stale, type: "error" } });
 		if (action === "approve") {
-			// Only the fields the owner may change, whatever the stored row holds.
-			const fields = asRecord(edit.fields);
-			const patch = Object.fromEntries(Object.keys(FIELD_LABELS).filter((key) => key in fields).map((key) => [key, asString(fields[key])]));
-			const patched = await patchListing(ctx, asString(edit.listingId), patch);
-			if (patched.state === "busy") {
+			const listingId = asString(edit.listingId);
+			// Ownership can move (an approved claim) between sending and approving.
+			if ((await listingOwner(ctx, listingId)) !== asString(edit.member_id)) {
 				return renderQueue(ctx, {
-					toast: { message: "That listing has unpublished edits of your own. Publish or discard them, then approve the change.", type: "error" },
+					toast: { message: "The member who sent that change no longer owns the listing. Reject it to clear it.", type: "error" },
 				});
 			}
-			if (patched.state === "missing") {
+			const listing = await ctx.content?.get?.(LISTINGS, listingId).catch(() => null);
+			if (!listing) {
 				await ctx.storage.edits.delete(id);
 				return renderQueue(ctx, { toast: { message: "That listing no longer exists. The change was removed.", type: "info" } });
+			}
+			// Built by the same function that drew the screen, from the same stored row.
+			const { patch } = editPatch(asRecord(listing.data), asRecord(edit.fields));
+			if (Object.keys(patch).length > 0) {
+				const patched = await patchListing(ctx, listingId, patch);
+				if (patched.state === "busy") {
+					return renderQueue(ctx, {
+						toast: { message: "That listing has unpublished edits of your own. Publish or discard them, then approve the change.", type: "error" },
+					});
+				}
 			}
 		}
 		await ctx.storage.edits.delete(id);

@@ -72,6 +72,8 @@ Every case in `docs/qa/QA_CHECKLIST.md` is run in a browser as guest, subscriber
 | Permissions | The next release adds `email:send`, `taxonomies:read`, `taxonomies:write`. That widens what the plugin may do, so decide the version number with the owner |
 | Categories | Filtering by category is done by the kit page, not the search route, so a search inside a category reloads the page |
 | Expiry | Off by default (0 days). The daily task is scheduled when the owner saves a number above 0. 50 listings per run |
+| Owner replies | `reply` route writes `reply_draft` on the review with a guarded update; the admin approves from the Reviews page; `owner_reply` is what the public sees. A reviewer rewriting their review clears the reply |
+| Showing member text to the admin | Use a `code` block (exact text, never shortened, never read as formatting). `src/lib/edits.ts` is the one place that decides what an edit changes: the screen and the approval both call `editPatch` |
 | Owner edits | `edit` route stores only the fields that differ in `edits` (one per listing). The admin applies them from the Listings queue with `patchListing`. `EDITABLE` in `plugin.ts` is the list an owner may change. The category is not editable by the owner |
 | Banner | `images/banner.png` is the dark-text lockup on a transparent ground. Check it on the registry page |
 | No-photo listings | `placeholderHtml(type)` in the kit lib: a panel with a type icon. No stock photos. The owner-chosen default image is not built: EmDash's media picker cannot be used in a plugin admin form. It moves to the photos task (#25) |

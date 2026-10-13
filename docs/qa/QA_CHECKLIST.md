@@ -60,6 +60,7 @@ Three roles, always in this order: **guest**, **member** (subscriber role), **ad
 | G-28 | Sort by Rating | Highest rated first, across pages |
 | G-29 | Block the request and type a search | "Search is not available right now", and the busy state clears |
 | G-30 | Search in list view, and inside a category | The view and the category stay |
+| G-31 | Request the `reviews` route for a listing directly | Each review has only: id, author, stars, title, body, date, owner reply and its date. No email, no member id | owner reply to a review |
 | G-12 | Request `import`, `dashboard`, `favorites`, `privacy` routes directly | 401 each | prove: guests refused |
 
 ## Member (subscriber role)
@@ -93,6 +94,10 @@ Three roles, always in this order: **guest**, **member** (subscriber role), **ad
 | M-26 | Change the title and phone, send | "Your changes are waiting for approval." My listings shows "Changes waiting for approval" and "Edit again". The public page is unchanged | owner edits a live listing |
 | M-27 | Send the form without changing anything | "Nothing was different, so there is nothing to approve." | same test |
 | M-28 | Open `/listings/submit/?edit=` with someone else's listing or a made-up id | No form. "That listing is not available to edit." | same test |
+| M-29 | Reviews tab as a listing owner | "Reviews of your listings" lists published reviews of your listings with the reviewer's name, stars and date. "Reviews you wrote" sits below |
+| M-30 | Press Reply, write a reply, send | "Waiting for approval" with your text under the review. The button becomes "Change your reply". The public page does not show it yet | owner reply to a review |
+| M-31 | Block the request and send a reply | An error under the form, and the button works again |
+| M-32 | Call `reply` for a review on someone else's listing, a made-up id, or a review that is not published | The same "not available" answer | same test |
 | M-13 | Dashboard at 390 | Tabs are one sideways-scrolling row. Content starts above the fold | |
 
 ## Admin
@@ -131,6 +136,10 @@ Three roles, always in this order: **guest**, **member** (subscriber role), **ad
 | A-31 | Approve a change | "Change published." The public page shows the new values. The block goes |
 | A-32 | Reject a change | "Change rejected." The public page is unchanged |
 | A-33 | The owner sends a newer change after you opened the page, then you approve the old one | Refused: "That item changed after this page loaded." | owner edits a live listing |
+| A-34 | Reviews page with an owner reply waiting | An "Owner replies waiting" block: the listing, the review in full, the reply in full as exact text, Approve the reply, Reject the reply. The dashboard card counts it under Replies |
+| A-35 | Approve the reply | "Reply published." The listing page shows it under the review as "Reply from the owner" with the date |
+| A-36 | The owner rewrites a published reply; reject the rewrite | The earlier reply stays on the page | owner reply to a review |
+| A-37 | A change or reply whose sender no longer owns the listing (a claim was approved since) | A warning on the change, and approving is refused | owner edits a live listing |
 | A-12 | Get started on a site with no listings collection | Clear "create the collection first" message, no crash | tells the owner to create the listings collection first |
 
 ## Presentation, every screen

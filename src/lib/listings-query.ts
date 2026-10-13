@@ -229,3 +229,13 @@ export async function listingRefs(ctx: PluginContext, ids: string[]): Promise<Ma
 export async function isPublicListing(ctx: PluginContext, id: string): Promise<boolean> {
 	return (await listingRefs(ctx, [id])).get(id)?.published === true;
 }
+
+/**
+ * The one rule for who answers for a listing, read fresh every time it matters: the member
+ * on its approved submission row. Approving a claim moves that row to the claimant, so
+ * there is never more than one owner. A pending or rejected row gives nothing.
+ */
+export async function listingOwner(ctx: PluginContext, listingId: string): Promise<string> {
+	const row = asRecord(await ctx.storage.submissions.get(listingId));
+	return row.status === "approved" ? asString(row.member_id) : "";
+}

@@ -815,6 +815,42 @@ describe("owner edits a live listing", () => {
 		expect(await liveTitle()).toEqual(["Edit Cafe Supreme"]);
 		expect(await rt.inspect.storage.get("edits", id)).toBeNull();
 
+		// Hidden characters and unknown extra details never reach the stored change.
+		await route(
+			"edit",
+			{ listingId: id, title: "Edit Cafe\u200B\u202E Supreme!", type_fields: { year_founded: "1999", secret_key: "hidden", cuisine: "smuggled" } },
+			{ method: "POST", user: ana },
+		);
+		const cleaned = (await rt.inspect.storage.get<{ fields: Record<string, string>; rev: string }>("edits", id))!;
+		expect(cleaned.fields.title).toBe("Edit Cafe Supreme!");
+		expect(JSON.parse(cleaned.fields.type_fields)).toEqual({ year_founded: "1999" });
+		// The approval screen shows every changed value, literally.
+		const screen = JSON.stringify(await route("admin", { type: "page_load", page: "/queue" }));
+		expect(screen).toContain("Edit Cafe Supreme!");
+		expect(screen).toContain("Year founded");
+		expect(screen).not.toContain("smuggled");
+
+		// Ownership moves to Ben through an approved claim: Ana's waiting change can no longer be approved.
+		await route("claims", { listingId: id, name: "Ben", email: "b@x.test", message: "Mine" }, { method: "POST", user: ben });
+		const claim = (await rt.inspect.storage.list<{ rev: string }>("claims"))[0];
+		await route("admin", { type: "block_action", action_id: "claim_mod", value: `approve|${claim.data.rev}|${claim.id}`, page: "/claims" });
+		expect((await admin("edit_mod", `approve|${cleaned.rev}|${id}`)).toast?.type).toBe("error");
+		expect(await liveTitle()).toEqual(["Edit Cafe Supreme"]);
+		await admin("edit_mod", `reject|${cleaned.rev}|${id}`);
+		expect(await rt.inspect.storage.get("edits", id)).toBeNull();
+	});
+
+	it("leaves a rejected change with no trace and stores nothing for an unchanged form", async () => {
+		const rt = await createPluginRuntimeTestHost();
+		await rt.fixtures.collection(listingsCollection as never);
+		host = { dispose: () => rt.dispose() } as unknown as PluginTestHost;
+		const route = rt.transport.invokeRoute.bind(rt.transport);
+		const admin = (action_id: string, value: string) => route("admin", { type: "block_action", action_id, value, page: "/queue" }) as Promise<{ toast?: { type: string; message: string } }>;
+		const liveTitle = async () => ((await route("search", { q: "cafe" })) as { items: Array<{ title: string }> }).items.map((item) => item.title);
+		await route("submit", { title: "Edit Cafe Supreme", listing_type: "restaurant", phone: "222", agree_terms: true }, { method: "POST", user: ana });
+		const id = (await rt.inspect.storage.list("submissions"))[0].id;
+		await admin("review", `approve:${id}`);
+
 		// A rejected change leaves no trace.
 		await route("edit", { listingId: id, title: "Bad Name" }, { method: "POST", user: ana });
 		const again = (await rt.inspect.storage.get<{ rev: string }>("edits", id))!;
@@ -823,5 +859,63 @@ describe("owner edits a live listing", () => {
 		// Sending the same values as the live listing stores nothing.
 		expect(await route("edit", { listingId: id, title: "Edit Cafe Supreme", phone: "222" }, { method: "POST", user: ana })).toMatchObject({ unchanged: true });
 		expect(await rt.inspect.storage.get("edits", id)).toBeNull();
+	});
+});
+
+describe("owner reply to a review", () => {
+	it("shows a reply only after approval, only from the listing's owner, and leaks nothing private", async () => {
+		const rt = await createPluginRuntimeTestHost();
+		await rt.fixtures.collection(listingsCollection as never);
+		host = { dispose: () => rt.dispose() } as unknown as PluginTestHost;
+		const route = rt.transport.invokeRoute.bind(rt.transport);
+		const admin = (action_id: string, value: string, page = "/reviews") =>
+			route("admin", { type: "block_action", action_id, value, page }) as Promise<{ toast?: { type: string } }>;
+		type Public = { items: Array<Record<string, unknown>> };
+		const publicReviews = async (listingId: string) => ((await route("reviews", { listingId }, { method: "GET" })) as Public).items;
+
+		await route("submit", { title: "Reply Cafe", listing_type: "restaurant", agree_terms: true }, { method: "POST", user: ana });
+		const listingId = (await rt.inspect.storage.list("submissions"))[0].id;
+		await admin("review", `approve:${listingId}`, "/queue");
+		await route("review", { listingId, stars: 4, title: "Good", body: "Nice place.", email: "ben@private.test" }, { method: "POST", user: ben });
+		const review = (await rt.inspect.storage.list<{ rev: string }>("reviews"))[0];
+
+		// Not public yet: nothing to reply to.
+		expect(await route("reply", { reviewId: review.id, text: "Thanks" }, { method: "POST", user: ana })).toMatchObject({ ok: false, error: { code: "NOT_FOUND" } });
+		await admin("review_mod", `approve|${review.data.rev}|${review.id}`);
+
+		// Only the owner of that listing. The reviewer, a guest and a made-up id all get the same refusal.
+		expect(await route("reply", { reviewId: review.id, text: "Mine" }, { method: "POST", user: ben })).toMatchObject({ ok: false, error: { code: "NOT_FOUND" } });
+		expect(await route("reply", { reviewId: "nope", text: "x" }, { method: "POST", user: ana })).toMatchObject({ ok: false, error: { code: "NOT_FOUND" } });
+		expect(await route("reply", { reviewId: review.id, text: "x" }, { method: "POST" })).not.toMatchObject({ ok: true });
+		expect(await route("reply", { reviewId: review.id, text: "   " }, { method: "POST", user: ana })).toMatchObject({ ok: false, error: { code: "VALIDATION_ERROR" } });
+
+		expect(await route("reply", { reviewId: review.id, text: "Thank you <b>Ben</b>" }, { method: "POST", user: ana })).toMatchObject({ ok: true, status: "pending" });
+		// Waiting: nothing public, and the public answer carries only named fields.
+		let seen = await publicReviews(listingId);
+		expect(seen[0].owner_reply).toBe("");
+		expect(Object.keys(seen[0]).sort()).toEqual(["author", "body", "createdAt", "id", "owner_reply", "owner_reply_at", "stars", "title"]);
+		expect(JSON.stringify(seen)).not.toContain("Thank you");
+
+		// The owner sees it as waiting; the admin approves it with the version they were shown.
+		const mine = (await route("dashboard", {}, { user: ana })) as { received: Array<{ reply: string; reply_waiting: string }> };
+		expect(mine.received[0]).toMatchObject({ reply: "", reply_waiting: "Thank you <b>Ben</b>" });
+		const waiting = (await rt.inspect.storage.get<{ reply_rev: string }>("reviews", review.id))!;
+		// A rewrite after the admin loaded the page: the old click is refused.
+		await route("reply", { reviewId: review.id, text: "Thank you, Ben." }, { method: "POST", user: ana });
+		expect((await admin("reply_mod", `approve|${waiting.reply_rev}|${review.id}`)).toast?.type).toBe("error");
+		expect((await publicReviews(listingId))[0].owner_reply).toBe("");
+		const fresh = (await rt.inspect.storage.get<{ reply_rev: string }>("reviews", review.id))!;
+		expect((await admin("reply_mod", `approve|${fresh.reply_rev}|${review.id}`)).toast?.type).toBe("success");
+		seen = await publicReviews(listingId);
+		expect(seen[0].owner_reply).toBe("Thank you, Ben.");
+		expect(String(seen[0].owner_reply_at)).toMatch(/^20/);
+
+		// A rejected rewrite leaves the public reply in place.
+		await route("reply", { reviewId: review.id, text: "Rude words" }, { method: "POST", user: ana });
+		const again = (await rt.inspect.storage.get<{ reply_rev: string }>("reviews", review.id))!;
+		await admin("reply_mod", `reject|${again.reply_rev}|${review.id}`);
+		expect((await publicReviews(listingId))[0].owner_reply).toBe("Thank you, Ben.");
+		// The review itself was never changed by any of this.
+		expect(await rt.inspect.storage.get("reviews", review.id)).toMatchObject({ status: "published", body: "Nice place.", stars: 4 });
 	});
 });
