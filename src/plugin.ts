@@ -202,6 +202,48 @@ async function notifyOwners(ctx: Ctx): Promise<void> {
 	}
 }
 
+/**
+ * Daily task: tell owners a listing of theirs expires within seven days. Same rules as the
+ * message notice: the owner's account address only, no link, nothing anyone typed, one
+ * email per owner per run. A listing is warned once per expiry date, so renewing it makes
+ * it eligible again for its next date.
+ */
+async function warnExpiring(ctx: Ctx, now = Date.now()): Promise<number> {
+	if (!ctx.email || (await ctx.settings.get<boolean>("email_expiry")) === false) return 0;
+	const soon = (await listPublished(ctx))
+		.filter((item) => {
+			if (item.listing_status === "expired" || !item.expires_at) return false;
+			const left = Date.parse(item.expires_at) - now;
+			return left > 0 && left < 7 * 86_400_000;
+		})
+		.slice(0, 50);
+	const site = asString(ctx.site?.name).replace(/\s+/g, " ").trim().slice(0, 80);
+	const byOwner = new Map<string, Array<{ id: string; expires_at: string }>>();
+	for (const item of soon) {
+		// Already warned for this date.
+		if ((await ctx.kv.get<string>(`warned:${item.id}`)) === item.expires_at) continue;
+		const owner = await listingOwner(ctx, item.id);
+		if (owner) byOwner.set(owner, [...(byOwner.get(owner) ?? []), { id: item.id, expires_at: item.expires_at }]);
+	}
+	let sent = 0;
+	for (const [owner, listings] of byOwner) {
+		const to = asString(await ctx.kv.get<string>(emailKey(owner)));
+		if (!EMAIL_RE.test(to)) continue;
+		try {
+			await ctx.email.send({
+				to,
+				subject: "A listing of yours expires soon",
+				text: `${listings.length === 1 ? "One of your listings" : `${listings.length} of your listings`}${site ? ` on ${site}` : ""} will expire within seven days.\n\nSign in to your account on the site, open My listings and press Renew to keep ${listings.length === 1 ? "it" : "them"} in the directory.`,
+			});
+			sent += 1;
+			for (const listing of listings) await ctx.kv.set(`warned:${listing.id}`, listing.expires_at);
+		} catch {
+			// Not marked, so tomorrow's run tries again. The seven-day window bounds the retries.
+		}
+	}
+	return sent;
+}
+
 const NO_LISTING = { ok: false, error: { code: "NOT_FOUND", message: "That listing is not available." } };
 
 const SIGN_IN = { ok: false, error: { code: "SIGN_IN_REQUIRED", message: "Sign in to continue." } };
@@ -232,7 +274,10 @@ const plugin: SandboxedPlugin = {
 		// The daily task set up when the owner saves an expiry period.
 		cron: {
 			handler: async (event, ctx) => {
-				if (event.name === "expire") await expireDue(ctx);
+				if (event.name === "expire") {
+					await expireDue(ctx);
+					await warnExpiring(ctx);
+				}
 				if (event.name === "notify") await notifyOwners(ctx);
 			},
 		},

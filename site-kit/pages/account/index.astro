@@ -100,6 +100,8 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 		favorites: "fav-panel",
 		profile: "profile-panel",
 	};
+	// On a phone the tabs scroll sideways: bring the open one into view.
+	document.querySelector(".listora-chip.is-active")?.scrollIntoView({ block: "nearest", inline: "center" });
 	Object.entries(panels).forEach(([key, id]) => {
 		const node = document.getElementById(id);
 		if (node) node.hidden = key !== tab;
@@ -129,7 +131,7 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 						const when = item.expired
 							? "Expired"
 							: item.expires_at
-								? `Expires ${new Date(String(item.expires_at)).toLocaleDateString()}`
+								? `Expires ${day(item.expires_at)}`
 								: "";
 						if (when) rest.push(esc(when));
 						const renew = item.can_renew
@@ -139,6 +141,14 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 					})
 					.join("")}</ul>`
 			: `<div class="listora-empty"><h2>Nothing here yet</h2><p>This tab fills as you use the directory.</p></div>`;
+	}
+
+	// A date a person reads, in the visitor's own language: "13 Oct 2026".
+	function day(value: unknown): string {
+		const date = new Date(String(value || ""));
+		return Number.isNaN(date.getTime())
+			? ""
+			: date.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
 	}
 
 	function fill(id: string, html: string) {
@@ -166,7 +176,7 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 		const data = await api("renew", { listingId: button.dataset.renew });
 		if (data.ok) {
 			await load();
-			const until = new Date(String(data.expires_at)).toLocaleDateString();
+			const until = day(data.expires_at);
 			document
 				.getElementById("dash-listings")
 				?.insertAdjacentHTML("afterbegin", `<p class="listora-status" data-tone="success" role="status">Renewed until ${esc(until)}.</p>`);
@@ -212,11 +222,15 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 						.map((item) => {
 							const from = esc(item.name || "No name given");
 							const mail = item.email ? ` · <a href="mailto:${esc(item.email)}">${esc(item.email)}</a>` : "";
-							const day = esc(String(item.createdAt || "").slice(0, 10));
 							// "New" is said in words, not by colour alone.
-							const state = item.done ? "" : '<span class="listora-badge listora-badge--new">New</span> ';
+							const state = item.done ? "" : '<span class="listora-tag">New</span> ';
 							const button = `<button type="button" class="listora-btn listora-btn--secondary" data-message="${esc(item.id)}" data-done="${item.done ? "0" : "1"}">${item.done ? "Mark as new" : "Mark as done"}</button>`;
-							return `<li class="listora-review${item.done ? " is-done" : ""}">${state}<strong>${esc(item.listing_title || "Listing")}</strong> · ${from}${mail} · ${day}<p>${esc(item.message)}</p>${button}</li>`;
+							return `<li class="listora-review listora-message${item.done ? " is-done" : ""}">
+								<p class="listora-message__head">${state}<strong>${esc(item.listing_title || "Listing")}</strong></p>
+								<p class="listora-meta">From ${from}${mail} · ${esc(day(item.createdAt))}</p>
+								<p class="listora-message__body">${esc(item.message)}</p>
+								${button}
+							</li>`;
 						})
 						.join("")}</ul>`
 				: `<div class="listora-empty"><h2>No messages yet</h2><p>Messages from your listing pages show here.</p></div>`,

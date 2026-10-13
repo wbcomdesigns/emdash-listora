@@ -26,6 +26,7 @@ Copy `site-kit/` again after you update, including the new `site-kit/layouts/Lis
 - New      - The owner's Messages tab shows how many are new, marks new ones in words, and lets the owner mark a message as done or as new again.
 - New      - Once an hour the owner gets a short email saying messages are waiting. It goes to their account email and carries no visitor text. Needs a mail provider on the site and one new permission: sending email. A setting turns it off.
 - New      - Listing expiry. Set how many days a listing stays live (0 means never). A daily check takes expired listings out of the directory, and the owner can renew from their account.
+- New      - Seven days before a listing expires, its owner gets one short email telling them to sign in and renew. A setting turns it off.
 - Fix      - Renew now works and has a button. Before, it saved a change that never went live.
 - Fix      - The category picked on the form was never sent. The form listed five fixed categories that may not exist on the site.
 - Fix      - The hourly limits on messages, claims and reviews hold when requests arrive at the same moment.

@@ -511,9 +511,34 @@ ul.listora-chips {
 	display: block;
 }
 
-.listora-badge--new {
+/* A small inline label. (.listora-badge sits on top of a photo, so it cannot be used in text.) */
+.listora-tag {
+	display: inline-block;
+	padding: 0.1rem 0.5rem;
+	border-radius: var(--listora-radius-full, 999px);
 	background: var(--listora-primary-bg, var(--listora-primary));
 	color: var(--listora-primary-fg);
+	font-size: var(--listora-text-size-sm);
+	font-weight: 600;
+	line-height: 1.5;
+	vertical-align: middle;
+}
+
+.listora-message__head,
+.listora-message .listora-meta,
+.listora-message__body {
+	margin: 0;
+}
+
+/* One run of text, so the spacing around the email link is even. */
+.listora-message .listora-meta {
+	display: block;
+}
+
+.listora-message {
+	display: grid;
+	gap: var(--listora-space-2);
+	justify-items: start;
 }
 
 .listora-review.is-done {

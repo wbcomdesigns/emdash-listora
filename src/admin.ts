@@ -38,6 +38,7 @@ async function loadSettings(ctx: PluginContext): Promise<{
 	defaultListingType: string;
 	emailMessages: boolean;
 	expiryDays: number;
+	emailExpiry: boolean;
 	spamKeywords: string;
 }> {
 	return {
@@ -45,6 +46,7 @@ async function loadSettings(ctx: PluginContext): Promise<{
 		requireModeration: (await ctx.settings.get<boolean>("require_moderation")) !== false,
 		emailMessages: (await ctx.settings.get<boolean>("email_messages")) !== false,
 		expiryDays: await expiryDays(ctx),
+		emailExpiry: (await ctx.settings.get<boolean>("email_expiry")) !== false,
 		defaultListingType: (await ctx.settings.get<string>("default_listing_type")) || "business",
 	};
 }
@@ -428,6 +430,7 @@ const HELP = {
 	],
 	lifetime: [
 		"Listings expire after this many days: 0 means listings never expire. Above 0, a listing leaves the directory after that many days, its page says it has expired, and its owner can renew it from their account.",
+		"Email the owner 7 days before: one short notice to the owner's account email, telling them to sign in and renew. Needs email set up on your site.",
 	],
 	messages: [
 		"Email the listing owner when a message arrives: one short notice an hour to the owner's account email. The message itself stays on the site. Needs email set up on your site.",
@@ -487,6 +490,12 @@ export async function renderSettings(
 						min: 0,
 						max: 3650,
 						initial_value: settings.expiryDays,
+					},
+					{
+						type: "toggle",
+						action_id: "email_expiry",
+						label: "Email the owner 7 days before their listing expires",
+						initial_value: settings.emailExpiry,
 					},
 				],
 				submit: { label: "Save lifetime", action_id: "save_lifetime" },
@@ -733,6 +742,7 @@ export async function handleAdmin(
 					});
 				}
 				await ctx.settings.set("expiry_days", days);
+				await ctx.settings.set("email_expiry", asBoolean(values.email_expiry));
 				// The daily check only exists while expiry is on.
 				if (days) await ctx.cron?.schedule("expire", { schedule: "0 3 * * *" });
 				else await ctx.cron?.cancel("expire").catch(() => undefined);

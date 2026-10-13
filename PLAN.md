@@ -54,7 +54,7 @@ Scoped with the owner on 2026-10-13. Every task is a GitHub issue under the `0.5
 | 4 | #44 | Featured listings shown once. **Done 2026-10-14** |
 | 5 | #45 | Admin tables: Load more and find. **Done 2026-10-14** |
 | 6 | #43 | Owner inbox: count and mark as done. **Done 2026-10-14** |
-| 7 | #42 | Email before expiry |
+| 7 | #42 | Email before expiry. **Done 2026-10-14** |
 | 8 | #40 | Owner edits a listing, with approval |
 | 9 | #41 | Owner reply to a review |
 | 10 | #25 | Photos: uploads with approval, gallery |

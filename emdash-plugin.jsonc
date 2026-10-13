@@ -138,6 +138,12 @@
 				"type": "number",
 				"default": 0
 			},
+			"email_expiry": {
+				"label": "Email the owner 7 days before their listing expires",
+				"description": "One short notice to the owner's account email. Needs a mail provider.",
+				"type": "boolean",
+				"default": true
+			},
 			"spam_keywords": {
 				"label": "Spam keywords",
 				"description": "Comma-separated words that reject a public submit.",

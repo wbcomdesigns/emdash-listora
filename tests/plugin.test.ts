@@ -579,6 +579,42 @@ describe("listing expiry", () => {
 		expect((await dash()).can_renew).toBeUndefined();
 	});
 
+	it("warns the owner once per expiry date, again after a renewal, and not when switched off", async () => {
+		const rt = await createPluginRuntimeTestHost();
+		await rt.fixtures.collection(listingsCollection as never);
+		host = { dispose: () => rt.dispose() } as unknown as PluginTestHost;
+		const admin = (input: Record<string, unknown>) => rt.transport.invokeRoute("admin", { page: "/settings", ...input });
+		const daily = () => rt.transport.invokeHook("cron", { name: "expire", scheduledAt: new Date().toISOString() });
+		// Five days: inside the seven-day warning window from the start.
+		await admin({ type: "form_submit", action_id: "save_lifetime", values: { expiry_days: 5, email_expiry: true } });
+		await rt.transport.invokeRoute("submit", { title: "Soon Cafe <b>x</b>", listing_type: "restaurant", agree_terms: true }, { method: "POST", user: ana });
+		const id = (await rt.inspect.storage.list("submissions"))[0].id;
+		await rt.transport.invokeRoute("admin", { type: "block_action", action_id: "review", value: `approve:${id}`, page: "/queue" });
+
+		await daily();
+		await daily();
+		let mail = await rt.inspect.email();
+		expect(mail).toHaveLength(1);
+		expect(mail[0].to).toBe("ana@example.com");
+		// Nothing a member typed, and no link.
+		for (const leak of ["Soon Cafe", "<b>", "http"]) expect(JSON.stringify(mail)).not.toContain(leak);
+
+		// Renewing gives a new date, so the next run warns for that date. Once.
+		await new Promise((resolve) => setTimeout(resolve, 5));
+		expect(await rt.transport.invokeRoute("renew", { listingId: id }, { method: "POST", user: ana })).toMatchObject({ ok: true });
+		await daily();
+		await daily();
+		expect(await rt.inspect.email()).toHaveLength(2);
+
+		// Switched off: a further renewal sends nothing.
+		await admin({ type: "form_submit", action_id: "save_lifetime", values: { expiry_days: 5, email_expiry: false } });
+		await new Promise((resolve) => setTimeout(resolve, 5));
+		await rt.transport.invokeRoute("renew", { listingId: id }, { method: "POST", user: ana });
+		await daily();
+		mail = await rt.inspect.email();
+		expect(mail).toHaveLength(2);
+	});
+
 	it("marks a listing past its date as expired and hides it from search", async () => {
 		const rt = await createPluginRuntimeTestHost();
 		await rt.fixtures.collection(listingsCollection as never);
