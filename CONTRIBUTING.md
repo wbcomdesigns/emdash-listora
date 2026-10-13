@@ -68,7 +68,7 @@ After the bump, add a `CHANGELOG.md` entry under `[Unreleased]`, then move it un
 Do this from `main` after the PR is merged.
 
 1. Confirm `package.json` version is new.
-2. Confirm `CHANGELOG.md` has that version.
+2. Confirm `CHANGELOG.md` has that version, and put its short form at the top of `docs/registry/changelog.md` (the registry caps that section at 2000 characters).
 3. `npm run validate && npm run test && npm run build`
 4. Tag: `git tag v0.2.1 && git push origin main --tags`
 5. Session: `npx emdash-plugin whoami`  

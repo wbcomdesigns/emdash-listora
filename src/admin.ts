@@ -218,7 +218,8 @@ async function renderReviewQueue(
 	const rows = pending.items.map((row) => {
 		const data = asRecord(row.data);
 		return {
-			title: [asString(data.title), asString(data.body)].filter(Boolean).join(": ").slice(0, 160),
+			// Shown in full: what the admin reads is exactly what goes live.
+			title: [asString(data.title), asString(data.body)].filter(Boolean).join(": "),
 			listing: titles.get(asString(data.listingId)) ?? "Removed listing",
 			stars: data.stars ? `${data.stars} of 5` : "-",
 			author: asString(data.author),
@@ -273,7 +274,7 @@ async function renderClaimQueue(
 		const data = asRecord(row.data);
 		return {
 			listing: titles.get(asString(data.listingId)) ?? "Removed listing",
-			message: asString(data.message).slice(0, 160),
+			message: asString(data.message),
 			name: asString(data.name),
 			email: asString(data.email),
 			action: {
@@ -403,8 +404,16 @@ async function listingTitles(
 
 // A member can rewrite their own pending review or claim. The stamp ties an admin's
 // click to the exact version they were shown, so a rewrite cannot ride an approval.
+// ponytail: check-then-write is not atomic. A rewrite landing in the few milliseconds
+// between the check and the write would still be approved; needs compare-and-set in
+// plugin storage to close fully.
 function stamped(action: string, id: string, data: Record<string, unknown>): string {
-	return `${action}|${asString(data.createdAt)}|${id}`;
+	return `${action}|${versionOf(data)}|${id}`;
+}
+
+/** Random per-write token. Rows written before 0.3.0 fall back to their timestamp. */
+function versionOf(row: Record<string, unknown>): string {
+	return asString(row.rev) || asString(row.createdAt);
 }
 
 function parseStamped(value: unknown): { action: string; stamp: string; id: string } {
@@ -415,7 +424,7 @@ function parseStamped(value: unknown): { action: string; stamp: string; id: stri
 function staleRow(row: Record<string, unknown>, stamp: string): string | null {
 	if (!row.listingId) return "That item no longer exists.";
 	if (row.status !== "pending") return "Someone already handled that item.";
-	if (asString(row.createdAt) !== stamp) return "That item changed after this page loaded. Check it again.";
+	if (versionOf(row) !== stamp) return "That item changed after this page loaded. Check it again.";
 	return null;
 }
 

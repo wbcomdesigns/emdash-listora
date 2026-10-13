@@ -624,6 +624,14 @@
 	font-size: var(--listora-text-size-sm);
 }
 
+.listora-dash-list {
+	display: grid;
+	gap: var(--listora-space-2);
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
 .listora-stars__value {
 	color: var(--listora-fg-default);
 	letter-spacing: normal;

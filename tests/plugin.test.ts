@@ -192,8 +192,7 @@ describe("moderation uses the version the admin saw", () => {
 		host = await createPluginTestHost();
 		const post = { method: "POST", user: ana };
 		await host.invokeRoute("review", { listingId: "a", body: "Polite first draft." }, post);
-		const seen = (await host.storage<{ createdAt: string }>("reviews").get("rev-a-ana"))!.createdAt;
-		await new Promise((resolve) => setTimeout(resolve, 5));
+		const seen = (await host.storage<{ rev: string }>("reviews").get("rev-a-ana"))!.rev;
 		await host.invokeRoute("review", { listingId: "a", body: "Swapped after the admin looked." }, post);
 		const result = await host.invokeRoute("admin", {
 			type: "block_action",
@@ -205,10 +204,17 @@ describe("moderation uses the version the admin saw", () => {
 		expect(await host.storage("reviews").get("rev-a-ana")).toMatchObject({ status: "pending" });
 	});
 
+	it("caps a review at what the moderation table shows in full", async () => {
+		host = await createPluginTestHost();
+		await host.invokeRoute("review", { listingId: "a", body: "x".repeat(5000) }, { method: "POST", user: ana });
+		const saved = await host.storage<{ body: string }>("reviews").get("rev-a-ana");
+		expect(saved!.body).toHaveLength(1000);
+	});
+
 	it("refuses a second decision on a claim that is already handled", async () => {
 		host = await createPluginTestHost();
 		await host.invokeRoute("claims", { listingId: "a", name: "Ana" }, { method: "POST", user: ana });
-		const seen = (await host.storage<{ createdAt: string }>("claims").get("claim-a-ana"))!.createdAt;
+		const seen = (await host.storage<{ rev: string }>("claims").get("claim-a-ana"))!.rev;
 		const act = (action: string) =>
 			host!.invokeRoute("admin", {
 				type: "block_action",

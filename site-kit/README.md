@@ -32,6 +32,10 @@ Add four menu links: `/listings/`, `/listings/submit/`, `/listings/calendar/`, `
 
 `astro.config.mjs` must load the sandbox runner and the plugin. See [Install](../docs/website/getting-started/install.md).
 
+## Who can do what
+
+Guests browse, search and message a listing. Adding a listing, reviewing, saving, claiming and `/account/` need a signed-in EmDash account. Guests get a sign-in link that returns them to the page they were on.
+
 ## What you should see
 
 - `/listings/` command search, sideways type chips, featured track, cards

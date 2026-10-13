@@ -34,7 +34,7 @@ WordPress Listora does steps 5-7 after activate plus a setup wizard. EmDash cann
 | Menu links | Host | Lab only | Lab nav has Listings, Submit, Calendar, Account. A new site does not |
 | First listing public | Engine + admin | Pass in lab | Submit → queue approve → archive. Needs pages and collection first |
 | Demo data | Plugin + kit | Thin | Admin → Get started → Load sample (12 listings). Lab seed still has 33. Collection must exist first |
-| Real member login | Host | Missing | Dashboard uses `demo-member` or `routeCtx.user`. Owner identity is not proven |
+| Real member login | Host | Pass | Member routes use the signed-in EmDash user since 0.3.0 |
 | Mail to listing owner | Host | Thin | Contact writes `contacts` and `email_log`. Host mail may be off |
 
 ## What install alone gives the owner

@@ -2,7 +2,7 @@ import type { SandboxedPlugin } from "emdash/plugin";
 
 import { handleAdmin } from "./admin";
 import { maybeSeedDemo } from "./lib/onboard";
-import { filterListings, listPublished, publishNow, syncRating } from "./lib/listings-query";
+import { filterListings, listPublished, publishNow } from "./lib/listings-query";
 import { LISTING_TYPES, LISTINGS, listingTypeBySlug } from "./lib/types";
 import {
 	asBoolean,
@@ -94,6 +94,9 @@ const MEMBER = "content:read";
 const ADMIN_ROLE = 50;
 const RATE_WINDOW_MS = 60 * 60 * 1000;
 const RATE_MAX = 8;
+// Short enough that the moderation table can show every character an admin approves.
+const REVIEW_TITLE_MAX = 120;
+const REVIEW_BODY_MAX = 1000;
 
 type Member = { id: string; name: string | null; role: number };
 
@@ -322,7 +325,7 @@ const plugin: SandboxedPlugin = {
 				// member_id stays server-side; the public list only needs what the page prints.
 				const items = rows(found)
 					.filter((row) => row.status === "published")
-					.map(({ member_id: _member, ...row }) => row);
+					.map(({ member_id: _member, rev: _rev, ...row }) => row);
 				const avg =
 					items.length === 0
 						? 0
@@ -347,21 +350,22 @@ const plugin: SandboxedPlugin = {
 				}
 				if (await rateLimited(ctx, `review:${user.id}`)) return RATE_LIMITED;
 				// One review per member per listing. Writing again replaces it and sends it back to moderation.
+				// The listing rating is only ever recalculated by an admin decision: a member route must
+				// not write to or publish a listing.
 				const id = `rev-${listingId}-${user.id}`;
-				const replacedLive = asRecord(await ctx.storage.reviews.get(id)).status === "published";
 				await ctx.storage.reviews.put(id, {
 					listingId,
 					member_id: user.id,
 					author: user.name || "Member",
 					stars: Math.min(Math.max(asNumber(raw.stars) ?? 5, 1), 5),
-					title: asString(raw.title),
-					body,
+					title: asString(raw.title).slice(0, REVIEW_TITLE_MAX),
+					body: body.slice(0, REVIEW_BODY_MAX),
 					status: "pending",
+					rev: crypto.randomUUID(),
 					helpful: 0,
 					owner_reply: "",
 					createdAt: nowIso(),
 				});
-				if (replacedLive) await syncRating(ctx, listingId);
 				return { ok: true, review: { id, status: "pending" } };
 			},
 		},
@@ -381,10 +385,11 @@ const plugin: SandboxedPlugin = {
 				await ctx.storage.claims.put(id, {
 					listingId,
 					member_id: user.id,
-					name: asString(raw.name) || user.name || "",
-					email: asString(raw.email),
-					message: asString(raw.message),
+					name: (asString(raw.name) || user.name || "").slice(0, REVIEW_TITLE_MAX),
+					email: asString(raw.email).slice(0, REVIEW_TITLE_MAX),
+					message: asString(raw.message).slice(0, REVIEW_BODY_MAX),
 					status: "pending",
+					rev: crypto.randomUUID(),
 					createdAt: nowIso(),
 				});
 				return { ok: true, claim: { id, status: "pending" } };

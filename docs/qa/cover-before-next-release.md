@@ -16,7 +16,7 @@ Do not overwrite `0.1.0`. Do not start Pro.
 | 4 | Listing has no icon or screenshots | Labeler and catalog page look unfinished | Still open |
 | 5 | Bundle README overclaims | Root README talks about lab pages as if they ship with install | Still open |
 | 6 | Registry `0.1.0` still in queue | Anyone who finds that release is testing the old bundle | Point testers at `0.2.1` |
-| 7 | Host member auth | Account uses `demo-member` | Thin. Accept for `0.2.0` |
+| 7 | Host member auth | Account used `demo-member` | Covered in `0.3.0` |
 | 8 | Chrome vs WordPress Free | No gallery, category grid, paging, map-drag. Featured is a horizontal track now | Thin. Do not block `0.2.1` |
 | 9 | No first-run sample load | Testers open an empty directory and think the plugin is broken | Covering now. Admin → Get started → Load sample directory |
 
