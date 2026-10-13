@@ -4,7 +4,11 @@ Versions match `package.json`, the git tag, and the EmDash registry release. New
 
 ## [Unreleased]
 
-## [0.5.0] - New      - Optional Listings block for post and page text: a row of listing cards filtered by type, category or city. It is site code you switch on in `astro.config.mjs`; the registry plugin is unchanged.
+## [0.5.0] - 2026-10-14
+
+Owner tools, photos, expiry, import and export, and a one-command setup. New permissions: sending email, reading and assigning categories, and adding files to the media library. Run `scripts/add-to-site.sh` again after you update.
+
+- New      - Optional Listings block for post and page text: a row of listing cards filtered by type, category or city. It is site code you switch on in `astro.config.mjs`; the registry plugin is unchanged.
 - New      - One setup command (`scripts/add-to-site.sh`) adds the directory pages to a site and writes a seed for the listings collection, with a one-page install guide.
 - New      - Import and export at `/listings/import/` for site admins: download your listings as a spreadsheet, or add up to 100 at a time from a CSV. The file is checked first, bad rows and duplicates are listed, and imported listings wait in the queue as drafts.
 - New      - Settings has its own page, in groups, with a line saying what each option does. The Listings queue page shows only what is waiting.
