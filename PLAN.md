@@ -6,6 +6,8 @@ Scoped with the owner on 2026-10-13. Every task is a GitHub issue under the `0.5
 
 ## Corrections after reading EmDash's own guides (2026-10-13)
 
+- **#50 in-text block (2026-10-14):** proven and built as site code, not inside the plugin package. `site-kit/blocks/` holds a small native plugin (`descriptor.mjs`, `plugin.ts`, `components.ts`, `ListingsBlock.astro`) that the setup command copies to `src/listora-block/`; the owner switches it on with `plugins: [listoraBlock()]`. A descriptor may point at site files (`/src/...`), so no second package is needed.
+
 - **#46 import and export (2026-10-14):** built on the kit page `/listings/import/` (admins only), not inside the admin. EmDash cannot do it there: an admin screen cannot take a file or start a download, the media library refuses CSV, and admin-only routes refuse a plain browser link (they require the `X-EmDash-Request` header, which only page script can send). Settings links to the page.
 
 **This section wins over any older line in this file or on an issue.**

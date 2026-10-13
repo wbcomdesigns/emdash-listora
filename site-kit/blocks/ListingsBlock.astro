@@ -1,0 +1,58 @@
+---
+import { getEmDashCollection, getTermsForEntries } from "emdash";
+import { Image } from "emdash/ui";
+import { matchesPlace, placeOf, placeholderHtml, sortListings, typeName } from "../lib/listora";
+import "../styles/listora-ui.css";
+
+const node = (Astro.props.node ?? {}) as { heading?: string; listingType?: string; category?: string; city?: string; count?: number | string };
+const type = node.listingType && node.listingType !== "any" ? node.listingType : "";
+const category = String(node.category || "").trim().toLowerCase();
+const count = Math.min(Math.max(Math.round(Number(node.count)) || 3, 1), 12);
+
+const { entries, cacheHint } = await getEmDashCollection("listings", { orderBy: { published_at: "desc" }, limit: 500 });
+if (Astro.cache?.enabled) Astro.cache.set(cacheHint);
+
+let matching = entries.filter(
+	(entry) => entry.data.listing_status !== "expired" && (!type || entry.data.listing_type === type) && matchesPlace(entry.data, String(node.city || "")),
+);
+if (category && matching.length) {
+	// The editor types the category as people know it: its name. The address form works too.
+	const terms: Map<string, Array<{ slug: string; label: string }>> = await getTermsForEntries(
+		"listings",
+		matching.map((entry) => entry.data.id),
+		"listing_category",
+	).catch(() => new Map());
+	matching = matching.filter((entry) => (terms.get(entry.data.id) ?? []).some((term) => term.label.toLowerCase() === category || term.slug === category));
+}
+const shown = sortListings(matching, "featured").slice(0, count);
+---
+
+{
+	// Nothing to show means nothing on the page: an article never carries an empty box.
+	shown.length ? (
+		<section class="listora-block listora-inline" aria-label={node.heading || "Listings"}>
+			{node.heading ? <h2>{node.heading}</h2> : null}
+			<div class="listora-featured__track">
+				{shown.map((listing) => (
+					<article class="listora-card">
+						<div class="listora-card-media">
+							{listing.data.featured_image ? (
+								<Image image={listing.data.featured_image} alt="" />
+							) : (
+								<Fragment set:html={placeholderHtml(String(listing.data.listing_type || ""))} />
+							)}
+							<span class="listora-badge">{typeName(listing.data.listing_type)}</span>
+						</div>
+						<div class="listora-card-body">
+							{/* Not a heading: an article's own contents list should not fill up with listing names. */}
+							<p class="listora-inline__title">
+								<a href={`/listings/${listing.id}/`}>{listing.data.title}</a>
+							</p>
+							<p class="listora-meta">{placeOf(listing.data)}</p>
+						</div>
+					</article>
+				))}
+			</div>
+		</section>
+	) : null
+}

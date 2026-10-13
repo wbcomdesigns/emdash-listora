@@ -21,6 +21,9 @@ cp "$PLUGIN/site-kit/pages/listings/submit.astro" "$LAB/src/pages/listings/submi
 cp "$PLUGIN/site-kit/pages/listings/calendar.astro" "$LAB/src/pages/listings/calendar.astro"
 cp "$PLUGIN/site-kit/pages/listings/import.astro" "$LAB/src/pages/listings/import.astro"
 cp "$PLUGIN/site-kit/pages/account/index.astro" "$LAB/src/pages/account/index.astro"
+# The optional in-text Listings block. It does nothing until astro.config.mjs lists it (see the install guide).
+mkdir -p "$LAB/src/listora-block"
+cp "$PLUGIN"/site-kit/blocks/* "$LAB/src/listora-block/"
 
 mkdir -p "$LAB/public/vendor"
 cp -R "$PLUGIN/site-kit/public/vendor/." "$LAB/public/vendor/"

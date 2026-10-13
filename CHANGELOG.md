@@ -6,6 +6,7 @@ Versions match `package.json`, the git tag, and the EmDash registry release. New
 
 Copy `site-kit/` again after you update, including the new `site-kit/layouts/ListoraLayout.astro`.
 
+- New      - Optional Listings block for post and page text: a row of listing cards filtered by type, category or city. It is site code you switch on in `astro.config.mjs`; the registry plugin is unchanged.
 - New      - One setup command (`scripts/add-to-site.sh`) adds the directory pages to a site and writes a seed for the listings collection, with a one-page install guide.
 - New      - Import and export at `/listings/import/` for site admins: download every listing as a spreadsheet, or add up to 500 from a CSV. The file is checked first, bad rows and duplicates are listed, and imported listings wait in the queue as drafts.
 - New      - Settings has its own page, in three groups, with a line saying what each option does. The Listings queue page shows only what is waiting.

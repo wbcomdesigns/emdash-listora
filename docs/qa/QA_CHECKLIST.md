@@ -161,6 +161,10 @@ Three roles, always in this order: **guest**, **member** (subscriber role), **ad
 | A-46 | Import N listings as drafts | "N listings added as drafts". They are in the Listings queue, not on the site |
 | A-47 | Check the same file again | The imported rows are listed as already in the directory and skipped |
 | A-49 | On a new template site, follow `docs/website/getting-started/install.md` and nothing else | `/listings/`, `/listings/submit/`, `/listings/calendar/` and `/account/` all open. Running the command again leaves `ListoraLayout.astro` as it was |
+| A-50 | With the block switched on: in a post, type `/listings`, choose Listings | A form with Heading, Listing type (Any type chosen), Category name, City, How many. Insert works straight away |
+| A-51 | Insert it mid-article with type Restaurant and 3, save, publish | The post shows the heading and three restaurant cards at that spot, linking to each listing. Looks right at 1440 and 390, light and dark. The article's contents list gains the heading only |
+| A-52 | A block whose filters match nothing | Nothing is drawn on the page |
+| A-53 | A site without the block switched on | `/listings` offers no Listings block, and nothing else changes |
 | A-48 | A file over 500 rows, an empty file, a file with no title column | A plain message, nothing imported |
 | A-12 | Get started on a site with no listings collection | Clear "create the collection first" message, no crash | tells the owner to create the listings collection first |
 

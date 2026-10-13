@@ -51,6 +51,23 @@ Start the site and open each one:
 
 To see it full first, open the admin, Listora, Listings queue, and choose **Load sample directory** (12 sample listings with reviews). Then set your options under Listora, Settings. Import and export is at `/listings/import/` for site admins.
 
+## Optional: a Listings block inside post and page text
+
+The setup command also copies a small block into `src/listora-block/`. It does nothing until you switch it on in `astro.config.mjs`:
+
+```js
+import { listoraBlock } from "./src/listora-block/descriptor.mjs";
+
+emdash({
+	plugins: [listoraBlock()],
+	// ...the rest of your options
+});
+```
+
+Restart the site. In any post or page, type `/listings` in the text, choose **Listings**, and fill in the form: a heading, a listing type, a category name, a city and how many to show (all optional). The block draws that many listing cards at that spot. If nothing matches, the block shows nothing.
+
+This part runs as trusted site code, not inside the plugin sandbox, which is why it lives in your site and is switched on by hand. EmDash does not let a registry plugin add blocks to text. The plugin works the same with or without it.
+
 ## Good to know
 
 - **Email.** Notices to owners need email set up on your site. Without it, messages still arrive in the owner's account.

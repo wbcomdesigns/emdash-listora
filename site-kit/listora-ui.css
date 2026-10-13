@@ -1716,6 +1716,48 @@ textarea.listora-input {
 	margin-bottom: var(--listora-space-4);
 }
 
+/* The Listings block inside article text. An article styles its own links, images and
+   headings, so every property that matters here is set again, with enough weight to win. */
+.listora-block.listora-inline {
+	padding: 0;
+	margin-block: var(--listora-space-8);
+}
+
+.listora-block.listora-inline > h2 {
+	margin: 0 0 var(--listora-space-4);
+}
+
+.listora-block.listora-inline .listora-card-media img {
+	width: 100%;
+	height: 100%;
+	margin: 0;
+	border-radius: 0;
+	object-fit: cover;
+}
+
+.listora-block.listora-inline .listora-inline__title {
+	margin: 0;
+	font-size: var(--listora-text-size-lg);
+	font-weight: 600;
+	line-height: 1.3;
+}
+
+.listora-block.listora-inline .listora-inline__title a {
+	color: inherit;
+	text-decoration: none;
+}
+
+.listora-block.listora-inline .listora-inline__title a:hover {
+	color: var(--listora-primary-text);
+	text-decoration: underline;
+}
+
+.listora-block.listora-inline .listora-meta {
+	margin: var(--listora-space-1) 0 0;
+	font-size: var(--listora-text-size-sm);
+	line-height: 1.4;
+}
+
 .listora-transfer {
 	display: grid;
 	grid-template-columns: repeat(2, minmax(0, 1fr));
