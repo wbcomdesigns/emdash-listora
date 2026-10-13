@@ -69,6 +69,11 @@ function parseSubmit(input: unknown): { ok: true; data: SubmitInput } | { ok: fa
 	if (asString(raw.company_website) || asString(raw.honeypot)) {
 		return { ok: false, error: "Submission rejected." };
 	}
+	// The form checks these too. The route is the real gate, because a request need not come from the form.
+	const wantedType = asString(raw.listing_type);
+	if (wantedType && !LISTING_TYPES.some((item) => item.slug === wantedType)) return { ok: false, error: "Choose a listing type from the list." };
+	const site = asString(raw.website);
+	if (site && !/^https?:\/\/\S+\.\S+/i.test(site)) return { ok: false, error: "Website must be a full address starting with http:// or https://." };
 
 	return {
 		ok: true,
@@ -489,6 +494,10 @@ const plugin: SandboxedPlugin = {
 				if (!parsed.ok) {
 					return { ok: false, error: { code: "VALIDATION_ERROR", message: parsed.error } };
 				}
+				// Only a new listing needs the tick. An owner's later edit goes through the same parser without it.
+				if (!parsed.data.agree_terms) {
+					return { ok: false, error: { code: "VALIDATION_ERROR", message: "Confirm that you may publish this listing." } };
+				}
 				if (await rateLimited(ctx, `submit:${user.id}`)) return RATE_LIMITED;
 
 				const keywords = asStringArray(await ctx.settings.get<string>("spam_keywords"));
@@ -660,6 +669,10 @@ const plugin: SandboxedPlugin = {
 				if (!(await isPublicListing(ctx, listingId))) return NO_LISTING;
 				if (await ctx.storage.blocked.exists(user.id)) {
 					return { ok: false, error: { code: "BLOCKED", message: "This member cannot review." } };
+				}
+				// A rating an owner gives their own listing would not be a review.
+				if ((await listingOwner(ctx, listingId)) === user.id) {
+					return { ok: false, error: { code: "OWN_LISTING", message: "You cannot review your own listing." } };
 				}
 				if (await rateLimited(ctx, `review:${user.id}`)) return RATE_LIMITED;
 				// One review per member per listing. Writing again replaces it and sends it back to moderation.
@@ -1129,6 +1142,9 @@ const plugin: SandboxedPlugin = {
 				const parsed = parseCsv(text);
 				if (parsed.length === 0) {
 					return { ok: false, error: { code: "VALIDATION_ERROR", message: 'No listings found. The first row must be column names, and one of them must be "title".' } };
+				}
+				if (!parsed.some((row) => "title" in row)) {
+					return { ok: false, error: { code: "VALIDATION_ERROR", message: 'This file has no "title" column. The first row must be the column names. Download the sample file to see them.' } };
 				}
 				if (parsed.length > IMPORT_MAX_ROWS) {
 					return { ok: false, error: { code: "TOO_BIG", message: `That file has ${parsed.length} rows. Import up to ${IMPORT_MAX_ROWS} at a time.` } };

@@ -160,11 +160,11 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 				<div class="listora-form-grid">
 					<div class="listora-field">
 						<label class="listora-label" for="country">Country</label>
-						<input id="country" class="listora-input" name="country" value="US" autocomplete="country" />
+						<input id="country" class="listora-input" name="country" autocomplete="country" />
 					</div>
 					<div class="listora-field">
 						<label class="listora-label" for="state">State</label>
-						<input id="state" class="listora-input" name="state" value="NY" autocomplete="address-level1" />
+						<input id="state" class="listora-input" name="state" autocomplete="address-level1" />
 					</div>
 				</div>
 			</section>
@@ -194,7 +194,7 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 </Layout>
 
 <script>
-	import { api, esc } from "../../lib/listora";
+	import { api, esc, TYPE_FIELDS, typeName } from "../../lib/listora";
 
 	const form = document.getElementById("listora-submit") as HTMLFormElement | null;
 	if (form) wizard(form);
@@ -203,32 +203,6 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 	let step = 1;
 	// /listings/submit/?edit=<listing> opens the same form for a listing the member already owns.
 	const editId = new URLSearchParams(location.search).get("edit") || "";
-	const typeFields: Record<string, Array<{ key: string; label: string; help: string }>> = {
-		restaurant: [
-			{ key: "cuisine", label: "Cuisine", help: "Italian, Korean, and so on." },
-			{ key: "price_range", label: "Price range", help: "Use $ to $$$." },
-		],
-		hotel: [{ key: "star_rating", label: "Stars", help: "1 to 5." }],
-		"real-estate": [
-			{ key: "beds", label: "Bedrooms", help: "Whole number." },
-			{ key: "baths", label: "Bathrooms", help: "Whole number." },
-			{ key: "price", label: "Price", help: "Asking or nightly rate." },
-		],
-		event: [
-			{ key: "event_start", label: "Starts", help: "Date and time, in this site's time zone.", type: "datetime-local" },
-			{ key: "event_end", label: "Ends", help: "Date and time, in this site's time zone.", type: "datetime-local" },
-		],
-		job: [
-			{ key: "salary", label: "Salary", help: "Range is fine." },
-			{ key: "job_type", label: "Job type", help: "Full-time, contract, or intern." },
-		],
-		healthcare: [{ key: "specialty", label: "Specialty", help: "What the practice treats." }],
-		education: [{ key: "program", label: "Program", help: "Course or school name." }],
-		classified: [{ key: "asking_price", label: "Asking price", help: "What you want for the item." }],
-		place: [{ key: "place_kind", label: "Kind of place", help: "Park, museum, or trail." }],
-		business: [{ key: "year_founded", label: "Year founded", help: "Four digits if you know it." }],
-	};
-
 	function setFieldError(id: string, errorId: string, show: boolean) {
 		const input = document.getElementById(id) as HTMLInputElement | null;
 		const error = document.getElementById(errorId);
@@ -247,6 +221,12 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 			if (Number(node.dataset.step) === step) node.setAttribute("aria-current", "step");
 			else node.removeAttribute("aria-current");
 		});
+		// Say where we are: focus lands on the new step's heading, which a screen reader then reads.
+		const heading = form.querySelector<HTMLElement>(`[data-panel="${step}"] h2`);
+		if (heading) {
+			heading.tabIndex = -1;
+			heading.focus();
+		}
 		(document.getElementById("back-btn") as HTMLButtonElement).hidden = step === 1;
 		(document.getElementById("next-btn") as HTMLButtonElement).hidden = step === 5;
 		(document.getElementById("submit-btn") as HTMLButtonElement).hidden = step !== 5;
@@ -257,7 +237,7 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 		const type = String(new FormData(form).get("listing_type") || "business");
 		const box = document.getElementById("type-fields");
 		if (!box) return;
-		box.innerHTML = (typeFields[type] ?? [])
+		box.innerHTML = (TYPE_FIELDS[type] ?? [])
 			.map(
 				(field) =>
 					`<div class="listora-field"><label class="listora-label" for="${field.key}">${field.label}</label><input id="${field.key}" class="listora-input" name="${field.key}" type="${field.type || "text"}" aria-describedby="${field.key}-help" /><p class="listora-helper" id="${field.key}-help">${field.help}</p></div>`,
@@ -270,7 +250,7 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 		const preview = document.getElementById("preview");
 		const type = String(data.listing_type || "business");
 		if (preview) {
-			preview.innerHTML = `<article class="listora-card"><div class="listora-card-body"><p class="listora-meta"><span class="listora-badge listora-badge--type">${esc(type)}</span></p><h2>${esc(data.title || "Untitled")}</h2><p class="listora-meta">${esc(data.city || "City not set")}</p><p>${esc(data.excerpt || "No summary yet.")}</p></div></article>`;
+			preview.innerHTML = `<article class="listora-card"><div class="listora-card-body"><p class="listora-meta"><span class="listora-badge listora-badge--type">${esc(typeName(type))}</span></p><h2>${esc(data.title || "Untitled")}</h2><p class="listora-meta">${esc(data.city || "City not set")}</p><p>${esc(data.excerpt || "No summary yet.")}</p></div></article>`;
 		}
 	}
 
@@ -310,6 +290,13 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 			return;
 		}
 		setFieldError("title", "title-error", false);
+		// A field the browser can check (an email, a web address) is checked on its own step,
+		// with the browser's own message next to it, not at the very end.
+		const wrong = [...form.querySelectorAll<HTMLInputElement>(`[data-panel="${step}"] input`)].find((input) => !input.checkValidity());
+		if (wrong) {
+			wrong.reportValidity();
+			return;
+		}
 		showStep(Math.min(5, step + 1));
 	});
 	document.getElementById("back-btn")?.addEventListener("click", () => showStep(Math.max(1, step - 1)));
@@ -334,6 +321,7 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 		const title = document.getElementById("wizard-title");
 		const intro = document.getElementById("wizard-intro");
 		if (title) title.textContent = "Edit your listing";
+		document.title = document.title.replace("Add a listing", "Edit your listing");
 		const back = document.getElementById("wizard-back") as HTMLAnchorElement | null;
 		if (back) {
 			back.textContent = "Back to my listings";

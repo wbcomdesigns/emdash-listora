@@ -71,7 +71,8 @@ export function parseCsv(text: string): Array<Record<string, string>> {
  */
 function cell(value: unknown): string {
 	let text = value === null || value === undefined ? "" : String(value);
-	if (/^[=+\-@\t\r]/.test(text)) text = `'${text}`;
+	// A plain number such as a longitude of -74.002 is safe and must stay a number.
+	if (/^[=+\-@\t\r]/.test(text) && !/^-?\d+(\.\d+)?$/.test(text)) text = `'${text}`;
 	return `"${text.replaceAll('"', '""')}"`;
 }
 

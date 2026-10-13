@@ -4,13 +4,13 @@
 
 One living list of flow-level cases for Listora on EmDash. Walk all of it before every release. When you add or fix behaviour, add or change its case in the same pull request. There are no per-release QA files.
 
-Last walk: 2026-10-13, version 0.4.1, on the lab, as guest, subscriber and admin. Every case below was run.
+Last walk: 2026-10-14, version 0.5.0, as guest, subscriber and admin.
 
-In the browser, on the rendered pages: G-1 to G-17, M-1 to M-9, M-13, M-15, P-1 to P-8 (five pages at 1440, 768 and 390 for sideways scroll, raw ids and tap targets; contrast at 1440 and 390 in light and dark). From the signed-in browser session against the real routes, then checked on the public page: M-10 to M-12, M-14, A-1 to A-11, A-13 to A-16. The Reviews and Messages admin pages were also clicked through in the EmDash admin itself. Covered by an automated test only, because the lab cannot remove its collection: A-12.
+How it was walked: an independent pass (not the person who built it) ran the cases in a browser on the starter-template lab and the portfolio-template lab and looked at a screenshot of every screen, at 1440, 768 and 390 in light and dark, plus keyboard, right-to-left and the accessibility tree. It found 22 points. Each real one was fixed and re-checked in the browser, and the cases it did not reach were then walked by the builder: G-23, M-6, A-16, A-41, A-49, A-52, A-53, and the new cases G-35 to G-37, M-40 to M-43.
 
-Second site, 2026-10-13 (after 0.4.1): the kit was applied to a clean `portfolio` template site and walked there. P-9 passed: all five pages render inside that site's own header, colours and fonts with no sideways scroll at 1440 and 390 in light and dark; a subscriber added a listing, a review and a favourite; an admin approved both and they showed on the public pages.
+Covered by an automated test only, because the lab cannot produce the state by hand: A-12 (no collection), A-17, A-20 and A-29 (scheduled tasks and mail), A-13, A-14, A-32, A-33, A-36 and A-37 (stale or rejected items). A-42 was walked when photos were built and not again in this pass.
 
-Not done by hand: a screen reader pass, right-to-left layout, and a preview deploy of a live site.
+Not done: a pass with a real screen reader, swipe on a real phone, a measured contrast figure for every text and background pair (judged by eye in both themes), and a preview on a live site (see Known gaps).
 
 ## Setup
 
@@ -35,7 +35,7 @@ Three roles, always in this order: **guest**, **member** (subscriber role), **ad
 | G-2 | Type in Search listings and in City | Icons sit left of the text and do not overlap the placeholder. Results update | prove: search |
 | G-3 | Click a type chip, then Grid / List, then the sort menu | Results filter and reorder. The active control is clearly marked | |
 | G-4 | Open a listing | Cover, badges, rating with review count, hours, map, tabs. Published reviews only | prove: detail, reviews |
-| G-5 | View page source of a listing | One `application/ld+json` block. `@type` matches the listing type (Hotel, Event, JobPosting and so on) | prove: detail JSON-LD |
+| G-5 | View page source of a listing | The site's own block, plus the listing block and the rating block, which share one `@id` so they read as one listing. `@type` matches the listing type (Hotel, Event, JobPosting and so on). No value is `null` | prove: detail JSON-LD |
 | G-6 | Open `/listings/does-not-exist/` | The site's 404 page with a 404 status, not a redirect | |
 | G-7 | Open `/listings/calendar/` | Upcoming events only, soonest first. Past events are absent | prove: calendar |
 | G-8 | Click Save on a listing | "Sign in to continue" with a sign-in link. Nothing is saved | refuses guests on every member route |
@@ -43,7 +43,7 @@ Three roles, always in this order: **guest**, **member** (subscriber role), **ad
 | G-10 | Open `/account/` | Sign-in prompt. No dashboard data in the page | prove: guests refused |
 | G-11 | Send a contact message from a listing | "Message sent." A ninth message inside an hour is refused | |
 | G-13 | Open `/listings/` on a directory with more than 24 listings | 24 cards, "Page 1 of N", Next works, the filters stay applied on page 2 |
-| G-14 | Type a search that matches more than 24 listings | First 24 show with a "See all N results" link that opens the full paged list |
+| G-14 | Type a search that matches more than 24 listings | The first 24 show with "Page 1 of N" and Next, which keeps the search |
 | G-15 | Watch the network panel on the archive and a listing page | The map script and style load from `/vendor/leaflet/` on the site. Nothing from unpkg |
 | G-16 | Check response headers of `/account/` and `/listings/submit/` | `Cache-Control: private, no-store` |
 | G-17 | Open the archive | Rated listings show stars and a number on the card after load. Unrated ones show nothing |
@@ -58,12 +58,15 @@ Three roles, always in this order: **guest**, **member** (subscriber role), **ad
 | G-26 | Type in the search box | Results change without a reload and keep each listing's real photo. The address bar shows the search. The map shows only the listings in the results |
 | G-27 | Open the plain directory | No listing in the Featured row appears again in the list below. The count still says how many listings there are in all, and the last page is reachable |
 | G-28 | Sort by Rating | Highest rated first, across pages |
-| G-29 | Block the request and type a search | "Search is not available right now", and the busy state clears |
+| G-29 | Block the page request (go offline) and type a search | "Search is not available right now", and the busy state clears |
 | G-30 | Search in list view, and inside a category | The view and the category stay |
 | G-31 | Request the `reviews` route for a listing directly | Each review has only: id, author, stars, title, body, date, owner reply and its date. No email, no member id | owner reply to a review |
 | G-32 | A listing with photos | Thumbnails under the cover. A thumbnail opens a large view saying "Photo 1 of N" |
 | G-33 | In the large view: Right and Left arrow keys, Esc, the Close button, a click on the dark area, a sideways swipe on a phone | Arrows and swipe move between photos. Esc, Close and the dark area close it. Focus returns to the thumbnail |
 | G-34 | The same at 390 in dark | The large view fits the screen with no sideways scroll |
+| G-35 | Open an event, a home, a restaurant and a job listing | The extra details of that type show under the summary with plain labels: Starts and Ends as a date and time in the site's zone, Bedrooms, Bathrooms, Price, Cuisine, Salary and so on. A listing with none shows nothing there |
+| G-36 | View source of an event listing | The Event block has `startDate`, `endDate` when set, and `location` with the address |
+| G-37 | A listing with a street address and no map position | A Location card with the address, and no empty map |
 | G-12 | Request `import`, `dashboard`, `favorites`, `privacy` routes directly | 401 each | prove: guests refused |
 
 ## Member (subscriber role)
@@ -108,6 +111,10 @@ Three roles, always in this order: **guest**, **member** (subscriber role), **ad
 | M-37 | Remove a waiting photo | It goes and the count drops. An approved photo has no Remove | same test |
 | M-38 | Call `photo` for someone else's listing or a made-up id | Refused | same test |
 | M-39 | Open `/listings/import/` as a member, and call `import`, `export` and `admin` | The page says it is for site admins. All three routes answer 403 | `prove-lab.sh` |
+| M-40 | Save a listing, reload its page, then open `/listings/` | The button still reads Saved and is pressed, and the heart on its card is on. A guest who never signed in makes no request for this | |
+| M-41 | Send `submit` without the confirm tick, with a listing type that does not exist, or with a website that is not a web address | Each is refused with a plain reason. On the form, a bad web address is caught on the Details step | owner reply to a review |
+| M-42 | Review a listing you own | Refused: "You cannot review your own listing." | owner reply to a review |
+| M-43 | Open the add-a-listing form | Country and State start empty. The preview shows the type by name. After Continue, focus is on the new step's heading |
 | M-13 | Dashboard at 390 | Tabs are one sideways-scrolling row. Content starts above the fold | |
 
 ## Admin
@@ -150,7 +157,7 @@ Three roles, always in this order: **guest**, **member** (subscriber role), **ad
 | A-35 | Approve the reply | "Reply published." The listing page shows it under the review as "Reply from the owner" with the date |
 | A-36 | The owner rewrites a published reply; reject the rewrite | The earlier reply stays on the page | owner reply to a review |
 | A-37 | A change or reply whose sender no longer owns the listing (a claim was approved since) | A warning on the change, and approving is refused | owner edits a live listing |
-| A-38 | Listings queue with photos waiting | A "Photos waiting" block: the picture at a size you can judge, the listing, the date, the owner's file name, the size, Approve the photo, Reject and delete. The dashboard card counts Photos |
+| A-38 | Listings queue with photos waiting | A "Photos waiting" block: the picture at a size you can judge, the listing, the date, the owner's file name, Approve the photo, Reject and delete. The picture's size shows when EmDash reports it. The dashboard card counts Photos |
 | A-39 | Approve a photo | "Photo added to the listing." The listing page shows it. The first photo becomes the cover when there was none |
 | A-40 | Reject a photo | "Photo rejected and deleted." The file is gone from the media library |
 | A-41 | Settings, Photos: set the number to 0, then back | 0 turns Add a photo off everywhere. A site with no Photos field shows a notice saying how to add it |
@@ -186,11 +193,16 @@ Screens: archive, detail, submit, calendar, account, and the three admin pages. 
 
 ## Known gaps (do not fail a release on these, do not hide them)
 
-- Contact messages are shown in admin but not emailed to anyone
 - The directory reads at most 500 listings. Public reads are cached for 30 seconds, so a change can take that long to show
-- The featured row's listings repeat at the top of the grid
-- Primary button text in dark mode follows the site theme's own colours
-- Not yet walked: right-to-left layout, a screen reader pass, a clean second-site install
+- The scheduled tasks (hourly owner notice, daily expiry and warning) are proven by automated tests, not by waiting for a real schedule. No real mail provider has been tested: the lab prints mail
+- Owner photos are proven on local storage only, not on Cloudflare R2
+- A photo waiting for approval sits in the media library. Its address is never shown to anyone, but the file can be fetched by someone who has that address
+- EmDash's own admin tables do not fit a phone: at 390 the Decision column is off screen and has to be scrolled to. A plugin cannot change that screen
+- The fields in the "Insert Listings" dialog are drawn by EmDash's editor and have no accessible names. A plugin cannot change that dialog
 - The contact limit is per visitor IP. On a host that passes no IP, every visitor shares one limit of 8 messages an hour
-- Admin tables show 50 rows. With more than 50 waiting, the rest appear as the first ones are handled
-- `import` and `renew` have a route and no screen yet
+- Rewriting a published review takes it off the page until it is approved again
+- The spreadsheet export carries the main details of each listing (14 columns). Categories, hours, photos and the extra fields of each type are not in it, so it is not a full backup
+- An admin list holds up to 300 waiting items, 25 at a time with Load more
+- Categories on the add-a-listing form are not narrowed by listing type
+- Primary button text in dark mode follows the site theme's own colours
+- Not checked on a live site. Our live sites run EmDash 1.1 and this plugin needs 1.2, and a preview copy shares the live database, so it was proven on three local template sites (starter, portfolio, blog) and no live site was touched

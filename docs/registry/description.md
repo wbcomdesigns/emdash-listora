@@ -1,17 +1,25 @@
-Listora turns an EmDash site into a local directory. Visitors search and browse listings on a map. Members add their own listings, write reviews, save favourites and claim a business. You approve everything from the admin before it goes live.
+Listora turns an EmDash site into a local directory. Visitors search and browse listings on a map. Members add listings, write reviews, save favourites and claim a business. You approve everything in the admin before it goes live.
 
 ## What you get
 
-- **Directory and search.** Keyword and location search, type filters, grid and list views, a featured row and an OpenStreetMap view.
-- **10 listing types.** Business, restaurant, real estate, hotel, event, job, healthcare, education, place and classified. Each has its own fields and its own schema.org type.
-- **Member submissions.** A five-step form with a duplicate check, a spam keyword list and an hourly limit per member.
-- **Reviews.** One review per member per listing. Reviews wait for your approval, and the listing rating updates when you approve or reject one.
-- **Claims.** A business owner can claim a listing. Approving the claim marks the listing as claimed and makes them its owner.
-- **Member dashboard.** Each member sees their own listings, reviews, claims and favourites, and can download or erase their data.
-- **Moderation in admin.** Queues for listings, reviews and claims, plus settings for moderation, the default listing type and spam keywords.
+- **Directory and search.** Keyword and location search, filters by type, category and city, grid and list views, a featured row and a map.
+- **10 listing types.** From business and restaurant to event, job and real estate, each with its own fields and schema.org type.
+- **Member submissions.** A five-step form with a duplicate check, a blocked-word list and an hourly limit.
+- **Reviews and claims.** One review per member per listing, and an owner can claim their business. Both wait for approval.
+- **Owner tools.** Owners edit their listing, add photos, read visitors' messages, reply to reviews and renew an expiring listing. Edits, photos and replies wait for your approval.
+- **Photos and expiry.** A gallery on each listing, and an optional number of days a listing stays live.
+- **Import and export.** Download listings as a spreadsheet, or add up to 500 from a CSV file as drafts.
+- **Moderation in admin.** Queues for everything that waits, a dashboard card that counts it, and a Settings page.
 
 ## How it fits together
 
-Listora is the engine: routes, storage and the admin screens. An EmDash plugin cannot add pages to your site, so the public pages ship as a site kit you copy in once. See Installation.
+Listora is the engine: routes, storage and the admin screens. An EmDash plugin cannot add pages to a site, so the public pages ship as a kit that one command copies in. Allow a developer ten minutes. See Installation.
 
-Guests can browse and send a message to a listing. Adding a listing, reviewing, saving and claiming need a signed-in account.
+Guests browse and message a listing. Adding, reviewing, saving and claiming need an account.
+
+## Permissions it asks for
+
+- Content (read, write, publish) and content types (read): listings are content on your site.
+- Categories (read, assign): the form offers your own categories.
+- Media (add): owner photos.
+- Email (send): a short notice to an owner when messages wait or a listing is about to expire. No visitor text is emailed, and each notice can be turned off.

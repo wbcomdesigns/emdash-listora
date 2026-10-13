@@ -1,8 +1,12 @@
 ---
+import { getSiteSettings } from "emdash";
 import Layout from "../../layouts/ListoraLayout.astro";
+import { siteZone } from "../../lib/listora";
 import "../../styles/listora-ui.css";
 
 const tab = Astro.url.searchParams.get("tab") || "overview";
+// Dates on this page are shown in the site's own time zone, like everywhere else.
+const zone = siteZone((await getSiteSettings())?.timezone);
 // This page differs per visitor. Sites cache pages without regard to cookies, so say so.
 Astro.response.headers.set("Cache-Control", "private, no-store");
 const user = Astro.locals.user as { name?: string | null; email?: string } | undefined;
@@ -38,8 +42,9 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 				<a class:list={{ "listora-chip": true, "is-active": tab === "favorites" }} href="/account/?tab=favorites">Favorites</a>
 				<a class:list={{ "listora-chip": true, "is-active": tab === "profile" }} href="/account/?tab=profile">Profile</a>
 			</nav>
-			<div id="dash-main" data-tab={tab}>
+			<div id="dash-main" data-tab={tab} data-zone={zone}>
 				<section id="overview-panel">
+					<p class="listora-helper">What you have in the directory. Choose one to open it.</p>
 					<div class="listora-chips" id="dash-counts"></div>
 				</section>
 				<section id="list-panel" hidden>
@@ -92,7 +97,7 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 </Layout>
 
 <script>
-	import { api, esc, uploadPhoto } from "../../lib/listora";
+	import { api, day, esc, uploadPhoto } from "../../lib/listora";
 
 	const tab = document.getElementById("dash-main")?.getAttribute("data-tab") || "overview";
 	const panels: Record<string, string> = {
@@ -150,14 +155,6 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 					})
 					.join("")}</ul>`
 			: `<div class="listora-empty"><h2>Nothing here yet</h2><p>This tab fills as you use the directory.</p></div>`;
-	}
-
-	// A date a person reads, in the visitor's own language: "13 Oct 2026".
-	function day(value: unknown): string {
-		const date = new Date(String(value || ""));
-		return Number.isNaN(date.getTime())
-			? ""
-			: date.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
 	}
 
 	// An owner's photos for one listing: what is there, what is waiting, and a way to add one.
@@ -288,7 +285,7 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 		fill(
 			"dash-counts",
 			Object.entries((data.counts ?? {}) as Record<string, number>)
-				.map(([key, value]) => `<span class="listora-chip">${esc(LABELS[key] ?? key)}: ${esc(value)}</span>`)
+				.map(([key, value]) => `<a class="listora-chip" href="/account/?tab=${esc(key)}">${esc(LABELS[key] ?? key)}: ${esc(value)}</a>`)
 				.join(""),
 		);
 		const fresh = Number((data.counts as Record<string, number> | undefined)?.messages) || 0;

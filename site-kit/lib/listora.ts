@@ -237,6 +237,54 @@ export function formatEventWhen(value: unknown, timeZone = "UTC"): string {
 	}).format(date);
 }
 
+/** The extra fields each listing type has. The add-a-listing form asks for them and the listing page shows them. */
+export const TYPE_FIELDS: Record<string, Array<{ key: string; label: string; help: string; type?: string }>> = {
+	restaurant: [
+		{ key: "cuisine", label: "Cuisine", help: "Italian, Korean, and so on." },
+		{ key: "price_range", label: "Price range", help: "Use $ to $$$." },
+	],
+	hotel: [{ key: "star_rating", label: "Stars", help: "1 to 5." }],
+	"real-estate": [
+		{ key: "beds", label: "Bedrooms", help: "Whole number." },
+		{ key: "baths", label: "Bathrooms", help: "Whole number." },
+		{ key: "price", label: "Price", help: "Asking or nightly rate." },
+	],
+	event: [
+		{ key: "event_start", label: "Starts", help: "Date and time, in this site's time zone.", type: "datetime-local" },
+		{ key: "event_end", label: "Ends", help: "Date and time, in this site's time zone.", type: "datetime-local" },
+	],
+	job: [
+		{ key: "salary", label: "Salary", help: "Range is fine." },
+		{ key: "job_type", label: "Job type", help: "Full-time, contract, or intern." },
+	],
+	healthcare: [{ key: "specialty", label: "Specialty", help: "What the practice treats." }],
+	education: [{ key: "program", label: "Program", help: "Course or school name." }],
+	classified: [{ key: "asking_price", label: "Asking price", help: "What you want for the item." }],
+	place: [{ key: "place_kind", label: "Kind of place", help: "Park, museum, or trail." }],
+	business: [{ key: "year_founded", label: "Year founded", help: "Four digits if you know it." }],
+};
+
+/**
+ * The filled-in extra fields of one listing, as label and value, ready to show. A few are
+ * fields of their own on the listing; the rest are stored together in `type_fields`.
+ */
+export function typeFacts(data: Record<string, unknown>, timeZone = "UTC"): Array<{ label: string; value: string }> {
+	let extra: Record<string, unknown> = {};
+	try {
+		const parsed = typeof data.type_fields === "string" ? JSON.parse(data.type_fields || "{}") : data.type_fields;
+		if (parsed && typeof parsed === "object") extra = parsed as Record<string, unknown>;
+	} catch {
+		extra = {};
+	}
+	return (TYPE_FIELDS[String(data.listing_type || "")] ?? [])
+		.map((field) => {
+			const raw = data[field.key] ?? extra[field.key];
+			const text = raw === null || raw === undefined ? "" : String(raw).trim();
+			return { label: field.label, value: field.type === "datetime-local" ? formatEventWhen(text, timeZone) : text };
+		})
+		.filter((fact) => fact.value !== "");
+}
+
 export function mapsDirectionsUrl(lat: number, lng: number): string {
 	return `https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=;${lat},${lng}`;
 }
@@ -284,6 +332,25 @@ export async function uploadPhoto(listingId: string, file: File): Promise<ApiRes
 	}
 }
 
+// Pages are the same for every visitor, so the browser keeps a note of whether this visitor
+// has used a member feature here. It only saves guests a request that would be refused.
+const MEMBER_ROUTES = /^(favorites|dashboard|submit|review|claims|privacy|edit|photo|reply|renew)\b/;
+function remember(member: boolean): void {
+	try {
+		if (member) localStorage.setItem("listora-member", "1");
+		else localStorage.removeItem("listora-member");
+	} catch {
+		// Storage can be blocked. The only cost is one extra request.
+	}
+}
+function seemsMember(): boolean {
+	try {
+		return localStorage.getItem("listora-member") === "1";
+	} catch {
+		return true;
+	}
+}
+
 export async function api(path: string, body?: unknown, method = body ? "POST" : "GET"): Promise<ApiResult> {
 	// Never throws: a dropped connection or a server error comes back as a result the page can show.
 	try {
@@ -293,7 +360,11 @@ export async function api(path: string, body?: unknown, method = body ? "POST" :
 			headers: { "Content-Type": "application/json", "X-EmDash-Request": "1" },
 			body: body ? JSON.stringify(body) : undefined,
 		});
-		if (response.status === 401) return { ok: false, error: { code: "SIGN_IN_REQUIRED", message: "Sign in to continue." } };
+		if (response.status === 401) {
+			remember(false);
+			return { ok: false, error: { code: "SIGN_IN_REQUIRED", message: "Sign in to continue." } };
+		}
+		if (response.ok && MEMBER_ROUTES.test(path)) remember(true);
 		const json = await response.json().catch(() => null);
 		if (!response.ok || !json) {
 			return { ok: false, error: { code: "FAILED", message: json?.error?.message || "Something went wrong. Try again." } };
@@ -302,6 +373,30 @@ export async function api(path: string, body?: unknown, method = body ? "POST" :
 	} catch {
 		return { ok: false, error: { code: "OFFLINE", message: "Could not reach the site. Check your connection and try again." } };
 	}
+}
+
+/**
+ * A date a person reads, in the visitor's language and the site's time zone ("13 Oct 2026"),
+ * so the same moment reads as the same day on every screen. The zone comes from the page
+ * (`data-zone` on <body> or any element), which got it from EmDash's settings.
+ */
+export function day(value: unknown): string {
+	const date = new Date(String(value || ""));
+	if (Number.isNaN(date.getTime())) return "";
+	const timeZone = document.querySelector<HTMLElement>("[data-zone]")?.dataset.zone || undefined;
+	try {
+		return date.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric", timeZone });
+	} catch {
+		return date.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
+	}
+}
+
+/** The listings this member has saved. Empty for a guest or when the request fails. A visitor who has never used a member feature in this browser is not asked. */
+export async function savedIds(): Promise<Set<string>> {
+	if (!seemsMember()) return new Set();
+	const result = await api("favorites");
+	const items = result.ok && Array.isArray(result.items) ? (result.items as Array<{ data?: { listingId?: string }; listingId?: string }>) : [];
+	return new Set(items.map((item) => String(item.data?.listingId ?? item.listingId ?? "")).filter(Boolean));
 }
 
 /** Show a result next to a form: success text, the API's error, or a sign-in link for guests. */

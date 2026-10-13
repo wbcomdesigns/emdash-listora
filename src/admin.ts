@@ -344,7 +344,8 @@ async function photoBlocks(ctx: PluginContext): Promise<BlockMap[]> {
 						fields: [
 							{ label: "Added", value: day(ctx, photo.createdAt) },
 							{ label: "Owner's file name", value: asString(photo.label) || "(none given)" },
-							{ label: "Size", value: photo.width && photo.height ? `${photo.width} by ${photo.height}` : "Not known" },
+							// EmDash does not always report a picture's size. Say it when known, never "not known".
+							...(photo.width && photo.height ? [{ label: "Size", value: `${photo.width} by ${photo.height}` }] : []),
 						],
 					},
 					{

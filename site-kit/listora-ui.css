@@ -504,7 +504,10 @@ ul.listora-chips {
 	min-height: 160px;
 }
 
+/* The photo fills the frame, so a card with a photo and a card without are the same height. */
 .listora-card-media img {
+	position: absolute;
+	inset: 0;
 	width: 100%;
 	height: 100%;
 	object-fit: cover;
@@ -1166,6 +1169,7 @@ ul.listora-chips {
 	box-shadow: var(--listora-shadow-sm);
 }
 
+.listora-detail__sidebar h2,
 .listora-detail__sidebar h3 {
 	margin: 0 0 var(--listora-space-3);
 	font-size: var(--listora-text-size-base);
@@ -1352,6 +1356,18 @@ ul.listora-chips {
 
 .listora-facts dd {
 	margin: 0;
+}
+
+/* The facts of one listing type, side by side under its summary. */
+.listora-facts--row {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--listora-space-3) var(--listora-space-6);
+	margin: 0 0 var(--listora-space-4);
+}
+
+.listora-facts--row dd {
+	font-weight: var(--listora-weight-semibold);
 }
 
 .listora-map {

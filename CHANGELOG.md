@@ -4,30 +4,15 @@ Versions match `package.json`, the git tag, and the EmDash registry release. New
 
 ## [Unreleased]
 
-Copy `site-kit/` again after you update, including the new `site-kit/layouts/ListoraLayout.astro`.
+## [0.5.0] - 2026-10-14
+
+Owner tools, photos, expiry, import and export, and a one-command setup. New permissions: sending email, reading and assigning categories, and adding files to the media library. Run `scripts/add-to-site.sh` again after you update.
 
 - New      - Optional Listings block for post and page text: a row of listing cards filtered by type, category or city. It is site code you switch on in `astro.config.mjs`; the registry plugin is unchanged.
 - New      - One setup command (`scripts/add-to-site.sh`) adds the directory pages to a site and writes a seed for the listings collection, with a one-page install guide.
 - New      - Import and export at `/listings/import/` for site admins: download every listing as a spreadsheet, or add up to 500 from a CSV. The file is checked first, bad rows and duplicates are listed, and imported listings wait in the queue as drafts.
-- New      - Settings has its own page, in three groups, with a line saying what each option does. The Listings queue page shows only what is waiting.
+- New      - Settings has its own page, in groups, with a line saying what each option does. The Listings queue page shows only what is waiting.
 - New      - A card on the EmDash dashboard shows how many listings, reviews, claims and messages are waiting, with a link to each.
-- Improve  - Admin lists show plain dates and type names, and the setup note leaves the Listings queue once the directory is ready.
-- Improve  - The admin lists (listings, reviews, claims, messages) show 25 at a time with Load more, and a box to find an item by its text. A decision keeps your place in the list.
-- Improve  - Search results that appear as you type are now the same cards as the rest of the page, so they keep each listing's real photo. The address bar follows the search, so a result page can be shared, and a search inside a category no longer reloads the page.
-- Improve  - Featured listings appear once, in the top row, not again in the list below.
-- Improve  - Sorting by rating works across every page of results.
-- Dev      - Removed "Near me". EmDash blocks location access on every page, so it could not work on any EmDash site.
-- Improve  - A listing with no photo shows a panel in your site's colours with an icon for its type. Stock photos are gone, and no image is loaded from another website.
-- Fix      - A listing's own photo is now the image used when its page is shared and in its search engine data. Before, a stock photo was used.
-- Improve  - Opening hours, "Open now" and event times use your site's own time zone from EmDash's settings. Before, every site was treated as New York.
-- Improve  - The event start and end fields are proper date-and-time pickers.
-- Fix      - An event time entered without a zone is shown as entered, not shifted.
-- Security - A member's account id no longer appears in anything a visitor or another member can see. Review ids are replaced by opaque handles.
-- Improve  - "Delete my data" says exactly what it removes and what it keeps, and now also removes replies and anything still waiting for approval. "Download my data" gives a real file.
-- Security - The public list of reviews now returns named fields only. Before, it also carried the reviewer's email when one was given.
-- Security - An owner's change is shown to you as exact text and applied from the same source, hidden characters are removed, and a change or reply cannot be approved once its sender no longer owns the listing.
-- Security - Listing text written into a page's search engine data can no longer break out of it, and an image address that is not a normal web address or a path on the site is dropped.
-- Fix      - A wrong number of days for expiry is refused with a message. Before, it was quietly saved as 0, which switched expiry off.
 - New      - Browse by category and by city on the directory page, with a count on each. A category on a listing page links to its filtered list.
 - New      - The add-a-listing form offers the site's own categories and saves the choice on the listing. Needs one new permission: reading and assigning categories.
 - New      - Owners can edit their own listing from their account. The public listing stays as it is until you approve the change, and you see each changed field, before and after, in the Listings queue.
@@ -39,10 +24,39 @@ Copy `site-kit/` again after you update, including the new `site-kit/layouts/Lis
 - New      - Once an hour the owner gets a short email saying messages are waiting. It goes to their account email and carries no visitor text. Needs a mail provider on the site and one new permission: sending email. A setting turns it off.
 - New      - Listing expiry. Set how many days a listing stays live (0 means never). A daily check takes expired listings out of the directory, and the owner can renew from their account.
 - New      - Seven days before a listing expires, its owner gets one short email telling them to sign in and renew. A setting turns it off.
+- New      - A listing page shows the extra details of its type under the summary: an event's start and end, a home's bedrooms, bathrooms and price, a restaurant's cuisine, a job's salary and so on. Before, the form asked for them and no page showed them.
+- Improve  - Admin lists show plain dates and type names, and the setup note leaves the Listings queue once the directory is ready.
+- Improve  - The admin lists (listings, reviews, claims, messages) show 25 at a time with Load more, and a box to find an item by its text. A decision keeps your place in the list.
+- Improve  - Search results that appear as you type are now the same cards as the rest of the page, so they keep each listing's real photo. The address bar follows the search, so a result page can be shared, and a search inside a category no longer reloads the page.
+- Improve  - Featured listings appear once, in the top row, not again in the list below.
+- Improve  - Sorting by rating works across every page of results.
+- Improve  - A listing with no photo shows a panel in your site's colours with an icon for its type. Stock photos are gone, and no image is loaded from another website.
+- Improve  - Opening hours, "Open now" and event times use your site's own time zone from EmDash's settings. Before, every site was treated as New York.
+- Improve  - The event start and end fields are proper date-and-time pickers.
+- Improve  - "Delete my data" says exactly what it removes and what it keeps, and now also removes replies and anything still waiting for approval. "Download my data" gives a real file.
+- Improve  - The kit works on any EmDash site: one file, `ListoraLayout.astro`, connects the pages to your own layout. Proven on a second site that is not the starter.
+- Improve  - A new listing is checked on the server as well as in the form: the confirm tick, the listing type and the website address.
+- Improve  - A listing owner can no longer review their own listing.
+- Improve  - Dates in the account read in the site's time zone, the same as everywhere else.
+- Improve  - The account Overview counts are links to their tabs.
+- Improve  - Keyboard and screen reader use: the listing tabs are one tab stop, each form step announces itself, and side panels use proper heading levels.
+- Fix      - A listing's own photo is now the image used when its page is shared and in its search engine data. Before, a stock photo was used.
+- Fix      - An event time entered without a zone is shown as entered, not shifted.
+- Fix      - A wrong number of days for expiry is refused with a message. Before, it was quietly saved as 0, which switched expiry off.
 - Fix      - Renew now works and has a button. Before, it saved a change that never went live.
 - Fix      - The category picked on the form was never sent. The form listed five fixed categories that may not exist on the site.
 - Fix      - The hourly limits on messages, claims and reviews hold when requests arrive at the same moment.
-- Improve  - The kit works on any EmDash site: one file, `ListoraLayout.astro`, connects the pages to your own layout. Proven on a second site that is not the starter.
+- Fix      - An event's search engine data now carries its start date, end date and location.
+- Fix      - A saved listing stays marked as saved after a reload, on its own page and on the directory.
+- Fix      - A listing with a street address and no map position now shows its address.
+- Fix      - The spreadsheet export no longer puts an apostrophe in front of a negative map position.
+- Fix      - The add-a-listing form no longer starts with United States and New York filled in, and its preview shows the listing type by name.
+- Fix      - The claim form no longer promises an email. The decision shows in the member's account.
+- Security - A member's account id no longer appears in anything a visitor or another member can see. Review ids are replaced by opaque handles.
+- Security - The public list of reviews now returns named fields only. Before, it also carried the reviewer's email when one was given.
+- Security - An owner's change is shown to you as exact text and applied from the same source, hidden characters are removed, and a change or reply cannot be approved once its sender no longer owns the listing.
+- Security - Listing text written into a page's search engine data can no longer break out of it, and an image address that is not a normal web address or a path on the site is dropped.
+- Dev      - Removed "Near me". EmDash blocks location access on every page, so it could not work on any EmDash site.
 
 ## [0.4.1] - 2026-10-13
 

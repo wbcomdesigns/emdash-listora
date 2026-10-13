@@ -7,7 +7,7 @@ import {
 } from "@emdash-cms/plugin-test";
 
 import manifestText from "../emdash-plugin.jsonc?raw";
-import submitPage from "../site-kit/pages/listings/submit.astro?raw";
+import kitLib from "../site-kit/lib/listora.ts?raw";
 import { LISTING_TYPES as KIT_TYPES } from "../site-kit/lib/listora";
 import { LISTING_TYPES } from "../src/lib/types";
 import { imageType } from "../src/plugin";
@@ -531,12 +531,10 @@ describe("listing types stay in step", () => {
 		expect(options).toEqual(LISTING_TYPES.map((t) => [t.slug, t.name]));
 	});
 
-	it("matches the extra fields on the submit page", () => {
+	it("matches the extra fields the form asks for and the listing page shows", () => {
 		for (const type of LISTING_TYPES) {
 			for (const field of type.fields) {
-				// Event dates are fixed inputs on the form, not per-type extras.
-				if (type.slug === "event") continue;
-				expect(submitPage, `${type.slug}.${field.key}`).toContain(`key: "${field.key}"`);
+				expect(kitLib, `${type.slug}.${field.key}`).toContain(`key: "${field.key}"`);
 			}
 		}
 	});
@@ -875,9 +873,19 @@ describe("owner reply to a review", () => {
 		type Public = { items: Array<Record<string, unknown>> };
 		const publicReviews = async (listingId: string) => ((await route("reviews", { listingId }, { method: "GET" })) as Public).items;
 
+		// The route is the gate: no tick, an unknown type or a bad website address is refused, with a plain reason.
+		for (const bad of [
+			{ title: "No Tick", listing_type: "restaurant" },
+			{ title: "Bad Type", listing_type: "nonsense", agree_terms: true },
+			{ title: "Bad Site", listing_type: "restaurant", website: "notaurl", agree_terms: true },
+		]) {
+			expect(await route("submit", bad, { method: "POST", user: ana })).toMatchObject({ ok: false, error: { code: "VALIDATION_ERROR" } });
+		}
 		await route("submit", { title: "Reply Cafe", listing_type: "restaurant", agree_terms: true }, { method: "POST", user: ana });
 		const listingId = (await rt.inspect.storage.list("submissions"))[0].id;
 		await admin("review", `approve:${listingId}`, "/queue");
+		// The owner cannot rate their own listing.
+		expect(await route("review", { listingId, stars: 5, body: "Best place in town." }, { method: "POST", user: ana })).toMatchObject({ ok: false, error: { code: "OWN_LISTING" } });
 		await route("review", { listingId, stars: 4, title: "Good", body: "Nice place.", email: "ben@private.test" }, { method: "POST", user: ben });
 		const review = (await rt.inspect.storage.list<{ rev: string }>("reviews"))[0];
 
@@ -1035,11 +1043,14 @@ describe("spreadsheet import and export", () => {
 			{ title: "Cafe, The", listing_type: "restaurant", city: 'New "York"' },
 			{ title: "Two\nLines", listing_type: "hotel", city: "Paris" },
 		]);
-		const out = toCsv([{ title: "=HYPERLINK(\"http://evil\")", city: "+1", excerpt: "@x", phone: "-5", address: "safe" }]);
+		const out = toCsv([{ title: "=HYPERLINK(\"http://evil\")", city: "+1", excerpt: "@x", phone: "-5", state: "-cmd|x", address: "safe" }]);
 		expect(out).toContain(`"'=HYPERLINK(""http://evil"")"`);
 		expect(out).toContain(`"'+1"`);
 		expect(out).toContain(`"'@x"`);
-		expect(out).toContain(`"'-5"`);
+		// A plain negative number (a longitude) stays a number. Anything else starting with a minus is guarded.
+		expect(out).toContain(`"-5"`);
+		expect(out).not.toContain(`"'-5"`);
+		expect(out).toContain(`"'-cmd|x"`);
 		expect(out).toContain('"safe"');
 		expect(unguard("'=1+1")).toBe("=1+1");
 		expect(unguard("'quoted'")).toBe("'quoted'");
@@ -1068,6 +1079,8 @@ describe("spreadsheet import and export", () => {
 		expect(checked.bad.map((row) => row.line)).toEqual([4, 5, 6]);
 		// Checking writes nothing.
 		expect(await rt.inspect.storage.list("submissions")).toHaveLength(0);
+		// A file with no title column gets one plain message, not a list of rows.
+		expect(await route("import", { csv: "name,city\nCafe,Lyon", mode: "check" }, { method: "POST" })).toMatchObject({ ok: false, error: { code: "VALIDATION_ERROR" } });
 
 		const done = (await route("import", { csv, mode: "import" }, { method: "POST" })) as Check;
 		expect(done).toMatchObject({ ok: true, imported: 2 });
