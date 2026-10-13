@@ -154,14 +154,17 @@ async function rememberEmail(ctx: Ctx, user: Member): Promise<void> {
  * visitor wrote and no link.
  */
 async function notifyOwners(ctx: Ctx): Promise<void> {
-	const waiting = rows(await ctx.storage.contacts.query({ where: { notice: "waiting" }, limit: 100 }));
+	// Oldest first, so a backlog drains in order and new messages are never skipped for good.
+	const waiting = rows(
+		await ctx.storage.contacts.query({ where: { notice: "waiting" }, orderBy: { createdAt: "asc" }, limit: 100 }),
+	);
 	if (!waiting.length) return;
-	const mark = (row: (typeof waiting)[number], notice: string) => {
-		const { id, ...data } = row;
-		return ctx.storage.contacts.put(id, { ...data, notice });
-	};
+	// Guarded in the database: only a row that still exists and is still waiting changes, and
+	// only these fields. An admin who handled or deleted it meanwhile is never overwritten.
+	const mark = (row: (typeof waiting)[number], set: Record<string, unknown>) =>
+		ctx.storage.contacts.updateIf(row.id, { where: { notice: "waiting" }, set });
 	if (!ctx.email || (await ctx.settings.get<boolean>("email_messages")) === false) {
-		for (const row of waiting) await mark(row, "none");
+		for (const row of waiting) await mark(row, { notice: "none" });
 		return;
 	}
 	const site = asString(ctx.site?.name).replace(/\s+/g, " ").trim().slice(0, 80);
@@ -172,7 +175,7 @@ async function notifyOwners(ctx: Ctx): Promise<void> {
 		if (!owners.has(listingId)) owners.set(listingId, await listingOwner(ctx, listingId));
 		const owner = owners.get(listingId) || "";
 		if (!owner) {
-			await mark(row, "none");
+			await mark(row, { notice: "none" });
 			continue;
 		}
 		if (!result.has(owner)) {
@@ -187,14 +190,16 @@ async function notifyOwners(ctx: Ctx): Promise<void> {
 					});
 					outcome = "sent";
 				} catch {
-					// Left waiting, so the next run tries again.
-					outcome = "waiting";
+					outcome = "failed";
 				}
 			}
 			result.set(owner, outcome);
 		}
 		const outcome = result.get(owner) || "none";
-		if (outcome !== "waiting") await mark(row, outcome);
+		// A failed send is tried on two more runs, then given up, so it cannot hold the queue.
+		const tries = (asNumber(row.tries) ?? 0) + 1;
+		if (outcome === "failed") await mark(row, tries >= 3 ? { notice: "none", tries } : { tries });
+		else await mark(row, { notice: outcome });
 	}
 }
 
@@ -202,9 +207,6 @@ const NO_LISTING = { ok: false, error: { code: "NOT_FOUND", message: "That listi
 
 const SIGN_IN = { ok: false, error: { code: "SIGN_IN_REQUIRED", message: "Sign in to continue." } };
 
-// ponytail: KV read-then-write is not atomic, so a burst of parallel requests can each
-// read the same count and slip a few past the cap. Fine for throttling abuse; move to a
-// host rate-limit primitive if one ships.
 async function rateLimited(ctx: Pick<Ctx, "kv">, who: string): Promise<boolean> {
 	if (!who) return false;
 	const key = `rate:${who}`;
@@ -598,7 +600,10 @@ const plugin: SandboxedPlugin = {
 				// Messages for listings this member answers for right now. listingOwner decides,
 				// so a rejected listing or one since handed to a claimant gives no access.
 				// ponytail: 25 listings, 10 messages each. Page it if an owner outgrows that.
-				const maybe = rows(listings).map((row) => asString(row.listingId) || row.id).slice(0, 25);
+				const maybe = rows(listings)
+					.filter((row) => row.status === "approved")
+					.map((row) => asString(row.listingId) || row.id)
+					.slice(0, 25);
 				const owned = (
 					await Promise.all(maybe.map(async (id) => ((await listingOwner(ctx, id)) === user.id ? id : "")))
 				).filter(Boolean);

@@ -407,6 +407,17 @@ describe("contact messages", () => {
 		expect(await send("After the erase", "203.0.113.4")).toMatchObject({ ok: true });
 		await tick();
 		expect(await rt.inspect.email()).toHaveLength(2);
+
+		// An admin handles a message while it waits: the hourly task must not undo that or bring back a deleted one.
+		expect(await send("Handled first", "203.0.113.7")).toMatchObject({ ok: true });
+		expect(await send("Deleted first", "203.0.113.8")).toMatchObject({ ok: true });
+		const fresh = (await rt.inspect.storage.list<{ message: string }>("contacts")).filter((row) => /first$/.test(row.data.message));
+		const idOf = (text: string) => fresh.find((row) => row.data.message === text)!.id;
+		await admin("message_mod", `done|${idOf("Handled first")}`, "/messages");
+		await admin("message_mod", `delete|${idOf("Deleted first")}`, "/messages");
+		await tick();
+		expect(await rt.inspect.storage.get("contacts", idOf("Handled first"))).toMatchObject({ status: "handled" });
+		expect(await rt.inspect.storage.get("contacts", idOf("Deleted first"))).toBeNull();
 	});
 
 	it("holds the hourly limit when messages arrive together", async () => {
