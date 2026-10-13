@@ -4,6 +4,8 @@ Versions match `package.json` and the EmDash registry release. Newest first.
 
 ## [Unreleased]
 
+- Team docs in `docs/website/`: what 0.1.0 shipped, architecture split, and the UX / presentation queue.
+
 ## [0.1.0] - 2026-10-13
 
 First registry release as `@vapvarun.bsky.social/listora`.
