@@ -27,7 +27,7 @@ Scoped with the owner on 2026-10-13. Every task is a GitHub issue under the `0.5
 | Preview check | A preview copy of knowxtheme.com |
 | Version | 0.5.0 |
 
-## Already built (PR #37, not merged)
+## Already built (PR #49, not merged)
 
 #23 kit on any site, #20 owner messages and hourly notice, #26 expiry and renew, #24 category and city filters.
 
@@ -64,7 +64,7 @@ Steps 1 to 7 are small and independent. Steps 8 to 10 share one pattern: a membe
 
 Tell the agent one thing: "Read `PLAN.md` and `ops/handoff.md` in `~/code/emdash-listora`, then work issue #N."
 
-- **Branch.** All 0.5.0 work lives on the `0.5.0` branch (PR #37 into `main`). An agent branches from `0.5.0` as `0.5.0-<issue number>` and opens a pull request back into `0.5.0`. Nobody commits to `main`.
+- **Branch.** All 0.5.0 work lives on the `0.5.0` branch (PR #49 into `main`). An agent branches from `0.5.0` as `0.5.0-<issue number>` and opens a pull request back into `0.5.0`. Nobody commits to `main`.
 - **Own lab.** Two agents must not share a lab site: `reset-lab.sh` wipes its database. Each agent creates its own with `LISTORA_LAB=../emdash-lab-listora-<issue> LISTORA_PORT=<free port from 4340 up> ./scripts/setup-lab.sh`, and passes the same two values to every lab script (`LISTORA_BASE=http://localhost:<port>` for `prove-lab.sh`).
 - **Can run side by side:** steps 1 to 7, and 11 and 12. They touch different screens. Steps 1, 2 and 3 all add to the Settings page, so step 1 merges first and the other two build on it.
 - **One agent, in order:** steps 8, 9 and 10. They share the wait-then-approve pattern.
