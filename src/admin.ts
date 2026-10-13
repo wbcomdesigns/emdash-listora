@@ -49,6 +49,53 @@ async function loadSettings(ctx: PluginContext): Promise<{
 	};
 }
 
+/* ---- Long lists: 25 at a time with Load more, and find by text ---- */
+
+const PAGE = 25;
+// ponytail: reads at most this many waiting rows per list. A site with more waiting than
+// this needs a paged storage query; the count line says when the list is cut.
+const LIST_CAP = 300;
+type View = { show: number; find: string };
+type Stored = { id: string; data: unknown };
+
+// What the admin is looking at is kept per list, so a decision keeps the place.
+// ponytail: one saved view per list, shared by every admin. Fine for a moderation queue.
+async function viewOf(ctx: PluginContext, list: string): Promise<View> {
+	const saved = asRecord(await ctx.kv.get(`view:${list}`));
+	return { show: Math.min(Math.max(Number(saved.show) || PAGE, PAGE), LIST_CAP), find: asString(saved.find).slice(0, 80) };
+}
+
+function page<T extends Stored>(items: T[], text: (item: T) => string, view: View) {
+	const term = view.find.trim().toLowerCase();
+	const hits = term ? items.filter((item) => text(item).toLowerCase().includes(term)) : items;
+	return {
+		items: hits.slice(0, view.show),
+		total: hits.length,
+		next: view.show < hits.length ? String(view.show + PAGE) : undefined,
+	};
+}
+
+/** The find box, and a line saying how much of the list is on screen. */
+function findBlocks(list: string, view: View, shown: number, total: number, waiting: number): BlockMap[] {
+	if (waiting <= PAGE && !view.find) return [];
+	return [
+		{
+			type: "form",
+			block_id: `${list}_find`,
+			fields: [{ type: "text_input", action_id: "find", label: "Find in this list", initial_value: view.find }],
+			submit: { label: view.find ? "Find again" : "Find", action_id: `${list}_find` },
+		},
+		{
+			type: "context",
+			text: view.find
+				? `Showing ${shown} of ${total} that contain "${view.find}". Clear the box and press Find to see everything.`
+				: `Showing ${shown} of ${total}.${waiting >= LIST_CAP ? ` Only the newest ${LIST_CAP} are listed: decide some to reach older ones.` : ""}`,
+		},
+	];
+}
+
+const lowerText = (...parts: unknown[]) => parts.map((part) => asString(part)).join(" ");
+
 export async function renderQueue(
 	ctx: PluginContext,
 	extra?: Pick<BlockResponse, "toast">,
@@ -61,11 +108,13 @@ export async function renderQueue(
 		ctx.storage.submissions.query({
 			where: { status: "pending" },
 			orderBy: { createdAt: "desc" },
-			limit: 50,
+			limit: LIST_CAP,
 		}),
 	]);
+	const view = await viewOf(ctx, "queue");
+	const listed = page(pending.items, (row) => lowerText(asRecord(row.data).title, asRecord(row.data).city, asRecord(row.data).listing_type), view);
 
-	const rows = pending.items.map((row) => {
+	const rows = listed.items.map((row) => {
 		const data = asRecord(row.data) as SubmissionRow;
 		const listingId = asString(data.listingId) || row.id;
 		return {
@@ -101,16 +150,21 @@ export async function renderQueue(
 	const queueBlocks: BlockMap[] =
 		rows.length === 0
 			? [
-					{
-						type: "empty",
-						title: "No pending submissions",
-						description: "Public listing forms create drafts here. Approve one to publish it.",
-					},
+					...findBlocks("queue", view, 0, 0, pending.items.length),
+					view.find
+						? { type: "empty", title: "Nothing matches", description: "No waiting listing contains that text." }
+						: {
+								type: "empty",
+								title: "No pending submissions",
+								description: "Public listing forms create drafts here. Approve one to publish it.",
+							},
 				]
 			: [
+					...findBlocks("queue", view, rows.length, listed.total, pending.items.length),
 					{
 						type: "table",
 						page_action_id: "queue_page",
+						next_cursor: listed.next,
 						columns: [
 							{ key: "title", label: "Listing" },
 							{ key: "type", label: "Type" },
@@ -202,10 +256,12 @@ async function renderReviewQueue(
 	const pending = await ctx.storage.reviews.query({
 		where: { status: "pending" },
 		orderBy: { createdAt: "desc" },
-		limit: 50,
+		limit: LIST_CAP,
 	});
 	const titles = await listingTitles(ctx, pending.items);
-	const rows = pending.items.map((row) => {
+	const view = await viewOf(ctx, "reviews");
+	const listed = page(pending.items, (row) => lowerText(titles.get(asString(asRecord(row.data).listingId)), asRecord(row.data).title, asRecord(row.data).body, asRecord(row.data).author), view);
+	const rows = listed.items.map((row) => {
 		const data = asRecord(row.data);
 		return {
 			// Shown in full: what the admin reads is exactly what goes live.
@@ -231,11 +287,15 @@ async function renderReviewQueue(
 				type: "section",
 				text: "Approve public reviews. Pending reviews stay off the listing.",
 			},
+			...findBlocks("reviews", view, rows.length, listed.total, pending.items.length),
 			rows.length === 0
-				? { type: "empty", title: "No pending reviews", description: "New reviews wait here." }
+				? view.find
+					? { type: "empty", title: "Nothing matches", description: "No waiting review contains that text." }
+					: { type: "empty", title: "No pending reviews", description: "New reviews wait here." }
 				: {
 						type: "table",
 						page_action_id: "reviews_page",
+						next_cursor: listed.next,
 						columns: [
 							{ key: "title", label: "Review" },
 							{ key: "listing", label: "Listing" },
@@ -257,10 +317,12 @@ async function renderClaimQueue(
 	const pending = await ctx.storage.claims.query({
 		where: { status: "pending" },
 		orderBy: { createdAt: "desc" },
-		limit: 50,
+		limit: LIST_CAP,
 	});
 	const titles = await listingTitles(ctx, pending.items);
-	const rows = pending.items.map((row) => {
+	const view = await viewOf(ctx, "claims");
+	const listed = page(pending.items, (row) => lowerText(titles.get(asString(asRecord(row.data).listingId)), asRecord(row.data).name, asRecord(row.data).email, asRecord(row.data).message), view);
+	const rows = listed.items.map((row) => {
 		const data = asRecord(row.data);
 		return {
 			listing: titles.get(asString(data.listingId)) ?? "Removed listing",
@@ -290,6 +352,7 @@ async function renderClaimQueue(
 				: {
 						type: "table",
 						page_action_id: "claims_page",
+						next_cursor: listed.next,
 						columns: [
 							{ key: "listing", label: "Listing" },
 							{ key: "name", label: "Name" },
@@ -553,10 +616,12 @@ async function renderMessages(ctx: PluginContext, extra?: Pick<BlockResponse, "t
 	const found = await ctx.storage.contacts.query({
 		where: { status: "new" },
 		orderBy: { createdAt: "desc" },
-		limit: 50,
+		limit: LIST_CAP,
 	});
 	const titles = await listingTitles(ctx, found.items);
-	const table = found.items.map((row) => {
+	const view = await viewOf(ctx, "messages");
+	const listed = page(found.items, (row) => lowerText(titles.get(asString(asRecord(row.data).listingId)), asRecord(row.data).name, asRecord(row.data).email, asRecord(row.data).message), view);
+	const table = listed.items.map((row) => {
 		const data = asRecord(row.data);
 		return {
 			listing: titles.get(asString(data.listingId)) ?? "Removed listing",
@@ -593,6 +658,7 @@ async function renderMessages(ctx: PluginContext, extra?: Pick<BlockResponse, "t
 				: {
 						type: "table",
 						page_action_id: "messages_page",
+						next_cursor: listed.next,
 						columns: [
 							{ key: "listing", label: "Listing" },
 							{ key: "from", label: "From" },
@@ -617,6 +683,24 @@ export async function handleAdmin(
 	const page = asString(raw.page);
 
 	if (type === "page_load") await backfillRatings(ctx);
+
+	// Where the admin is in a long list. Opening a page starts at the top; Load more and
+	// Find change the view; a decision keeps it.
+	const LISTS = ["queue", "reviews", "claims", "messages"];
+	const action = asString(raw.action_id);
+	const list = LISTS.find((name) => action === `${name}_page` || action === `${name}_find`) ?? LISTS.find((name) => page.includes(name));
+	if (list) {
+		const key = `view:${list}`;
+		if (type === "page_load") await ctx.kv.set(key, { show: PAGE, find: "" });
+		else if (action === `${list}_page`) await ctx.kv.set(key, { ...(await viewOf(ctx, list)), show: Number(raw.value) || PAGE });
+		else if (action === `${list}_find`) await ctx.kv.set(key, { show: PAGE, find: asString(asRecord(raw.values).find).trim().slice(0, 80) });
+		if (action === `${list}_page` || action === `${list}_find`) {
+			if (list === "messages") return renderMessages(ctx);
+			if (list === "reviews") return renderReviewQueue(ctx);
+			if (list === "claims") return renderClaimQueue(ctx);
+			return renderQueue(ctx);
+		}
+	}
 
 	if (type === "block_action" && asString(raw.action_id) === "load_sample") {
 		const result = await loadSampleDirectory(ctx);

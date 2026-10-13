@@ -657,3 +657,61 @@ describe("kit helpers that write member data into the page", () => {
 		expect(out).toBe(placeholderHtml("business"));
 	});
 });
+
+describe("ratings route", () => {
+	it("returns ratings only for listings a visitor can see", async () => {
+		const rt = await createPluginRuntimeTestHost();
+		await rt.fixtures.collection(listingsCollection as never);
+		host = { dispose: () => rt.dispose() } as unknown as PluginTestHost;
+		const make = (title: string, extra: Record<string, unknown>, status: string) =>
+			rt.fixtures.content("listings", { data: { title, listing_type: "restaurant", ...extra }, slug: title.toLowerCase().replace(/ /g, "-"), status } as never);
+		const live = await make("Live Cafe", { listing_status: "live" }, "published");
+		const expired = await make("Gone Cafe", { listing_status: "expired" }, "published");
+		const draft = await make("Draft Cafe", { listing_status: "live" }, "draft");
+		for (const item of [live, expired, draft]) {
+			await rt.fixtures.plugin.storage("ratings", item.id, { average: 4, count: 2, type: "Restaurant" });
+		}
+		const all = (await rt.transport.invokeRoute("ratings", { all: "1" })) as { ratings: Record<string, unknown> };
+		expect(Object.keys(all.ratings)).toEqual([live.id]);
+		const some = (await rt.transport.invokeRoute("ratings", { ids: [live.id, expired.id, draft.id].join(",") })) as { ratings: Record<string, unknown> };
+		expect(Object.keys(some.ratings)).toEqual([live.id]);
+	});
+});
+
+describe("long admin lists", () => {
+	it("shows 25 at a time, loads more, finds by text, and keeps the place after a decision", async () => {
+		const rt = await createPluginRuntimeTestHost();
+		await rt.fixtures.collection(listingsCollection as never);
+		host = { dispose: () => rt.dispose() } as unknown as PluginTestHost;
+		for (let index = 1; index <= 60; index += 1) {
+			await rt.fixtures.plugin.storage("submissions", `sub-${String(index).padStart(2, "0")}`, {
+				listingId: `sub-${String(index).padStart(2, "0")}`,
+				title: index === 7 ? "Needle Bakery" : `Listing ${index}`,
+				city: "Brooklyn",
+				status: "pending",
+				createdAt: new Date(Date.UTC(2026, 0, 1, 0, index)).toISOString(),
+			});
+		}
+		type Page = { blocks: Array<{ type: string; rows?: unknown[]; next_cursor?: string }> };
+		const admin = (input: Record<string, unknown>) => rt.transport.invokeRoute("admin", input) as Promise<Page>;
+		const table = (page: Page) => page.blocks.find((block) => block.type === "table");
+
+		const first = await admin({ type: "page_load", page: "/queue" });
+		expect(table(first)?.rows).toHaveLength(25);
+		expect(table(first)?.next_cursor).toBe("50");
+		const more = await admin({ type: "block_action", action_id: "queue_page", value: "50", page: "/queue" });
+		expect(table(more)?.rows).toHaveLength(50);
+
+		// A decision keeps the place: still 50 shown, one fewer waiting.
+		const afterReject = await admin({ type: "block_action", action_id: "review", value: "reject:sub-60", page: "/queue" });
+		expect(table(afterReject)?.rows).toHaveLength(50);
+
+		const found = await admin({ type: "form_submit", action_id: "queue_find", values: { find: "needle" }, page: "/queue" });
+		expect(table(found)?.rows).toHaveLength(1);
+		expect(JSON.stringify(found)).toContain("Needle Bakery");
+		const none = await admin({ type: "form_submit", action_id: "queue_find", values: { find: "zzzz" }, page: "/queue" });
+		expect(JSON.stringify(none)).toContain("Nothing matches");
+		// Opening the page again starts from the top with no filter.
+		expect(table(await admin({ type: "page_load", page: "/queue" }))?.rows).toHaveLength(25);
+	});
+});

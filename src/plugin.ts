@@ -12,7 +12,6 @@ import {
 	paginate,
 	listingRefs,
 	patchListing,
-	ratingsMap,
 	syncRating,
 	publishNow,
 } from "./lib/listings-query";
@@ -462,13 +461,19 @@ const plugin: SandboxedPlugin = {
 			methods: ["GET"],
 			handler: async (routeCtx, ctx) => {
 				const raw = asRecord(routeCtx.input);
-				const all = await ratingsMap(ctx);
+				// Only listings a visitor can see. A rating row can outlive its listing being
+				// unpublished or expiring, and this route is public.
+				const visible = new Map(
+					(await listPublished(ctx))
+						.filter((item) => item.listing_status !== "expired" && item.rating_count > 0)
+						.map((item) => [item.id, { average: item.rating_avg, count: item.rating_count }] as const),
+				);
 				// The directory page asks for every rating when it sorts by rating.
-				if (asString(raw.all) === "1") return { ok: true, ratings: Object.fromEntries(all) };
+				if (asString(raw.all) === "1") return { ok: true, ratings: Object.fromEntries(visible) };
 				const ids = asString(raw.ids).split(",").map((id) => id.trim()).filter(Boolean).slice(0, 80);
 				const ratings: Record<string, { average: number; count: number }> = {};
 				for (const id of ids) {
-					const rating = all.get(id);
+					const rating = visible.get(id);
 					if (rating) ratings[id] = rating;
 				}
 				return { ok: true, ratings };
