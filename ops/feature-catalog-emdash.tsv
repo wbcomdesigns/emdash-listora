@@ -1,0 +1,77 @@
+catalog_feature	tier	job	emdash_target	verdict	plugin_slice	notes
+Installation & Activation	Free	setup	registry install + sandbox	HOST	kit	EmDash install, not WP activate. See prototype-plan.md.
+Setup Wizard	Free	setup	site kit apply + demo seed	THEME	kit	Creates collection, pages, menu, optional demo listings. Not PHP wizard.
+Directory Page	Free	setup	/listings/ + /listings/submit/	THEME	kit	Astro pages replace Listing Grid + Search blocks.
+Listing Types	Free	setup	settings listing_types + field listing_type	SANDBOXED	B	Keep a type registry in settings. Seed default types.
+Listing Type Editor	Free + Pro	setup	admin page /types	SANDBOXED	B	Block Kit editor for fields, icon, schema type, category/feature allowlists.
+Listing Categories	Free + Pro	setup	taxonomy listing_category	COLLECTION	B	Site taxonomy. Submit assigns terms.
+Locations	Free + Pro	setup	taxonomy listing_location	COLLECTION	B	Hierarchical country/state/city.
+Amenities & Features	Free + Pro	setup	taxonomy listing_feature	COLLECTION	B	Filterable amenity set, limitable per type.
+Tags	Free + Pro	setup	taxonomy listing_tag	COLLECTION	B	Flat facet + chips.
+Gutenberg Blocks	Free + Pro	setup	Astro pages and components	THEME	kit	16 WP blocks become site components. Plugin does not ship Gutenberg.
+Template Overrides	Free	setup	Astro theme files	THEME	kit	Site owns markup. No PHP templates.
+OpenStreetMap	Free	setup	map on archive/detail	THEME	F	Page renders OSM. Plugin supplies lat/lng only.
+Google Maps	Pro	setup	map provider setting + Places	THEME+SANDBOXED	F	Page renders Google. Plugin may call Places if network:request + allowedHosts.
+Installing Pro	Pro	setup	settings gates or later listora-pro	SKIP	-	No WP add-on. One TS plugin; Pro-only rows gated by settings or a later compose plugin.
+License Management	Pro	setup	EmDash registry / site license	SKIP	-	WP licence key is not this plugin.
+Auto-Updates	Pro	setup	registry updates	HOST	-	EmDash registry updates the bundle.
+White Label	Pro	setup	EmDash site identity	HOST	-	Site name, logo, admin branding. Not a Listora PHP rename.
+Frontend Submission	Free + Pro	grow	route submit + /listings/submit/	SANDBOXED	A	Built. Expand to multi-step, draft save, media, hours, services.
+Photos & Video	Free + Pro	grow	media fields on listings	COLLECTION	B	featured_image + gallery + video url. Upload via ctx.media when granted.
+Business Hours	Free + Pro	grow	field hours json + timezone	COLLECTION	B	Up to three ranges per day.
+Services per Listing	Free + Pro	grow	field services repeater or storage.services	SANDBOXED	B	Name, price, duration on the listing.
+Duplicate Check	Free + Pro	grow	route submit/check-duplicate	SANDBOXED	C	Title + type + geo similarity before create.
+Draft Reminder	Free + Pro	grow	cron + email	SANDBOXED	G	ctx.cron + email when a draft sits unfinished.
+Business Claims	Free + Pro	grow	storage.claims + admin /claims	SANDBOXED	D	Claim flow, proof, approve sets is_claimed.
+Listing Lifecycle	Free + Pro	grow	draft pending published expired deactivated	SANDBOXED	B	Map WP statuses onto EmDash status + plugin fields.
+Listing Renewal	Free + Pro	grow	route renew + expired_at	SANDBOXED	C	Extend expiry. Credit-gated only after monetize slice.
+Featured Listings	Free + Pro	grow	field featured + list filter	SANDBOXED	B	Admin-set first. Self-serve featured after monetize.
+Import & Export	Free + Pro	grow	admin import/export + CLI script	SANDBOXED	I	CSV JSON GeoJSON. Competitor migrators as scripts, not WP admin PHP.
+Google Places Import	Pro	grow	route places/import	SANDBOXED	F	Needs network:request and places.googleapis.com.
+Search & Filters	Free + Pro	engage	route search	SANDBOXED	F	Full-text + facets + geo via content.list and fieldFilters.
+Advanced Search	Pro	engage	route search custom field filters	SANDBOXED	F	Filter builder over type fields.
+Saved Searches	Pro	engage	storage.saved_searches + cron alerts	SANDBOXED	F	Member + email. Needs users:read.
+Infinite Scroll	Pro	engage	archive page pagination	THEME	kit	Site JS calling listings/search cursor.
+Quick View	Pro	engage	detail card modal	THEME	kit	Site UI. Data from listings or search route.
+Compare Listings	Pro	engage	route compare + compare page	SANDBOXED+THEME	F	Plugin returns a compare payload. Page renders the table.
+Reviews System	Free + Pro	engage	storage.reviews + routes + admin	SANDBOXED	E	Stars, text, votes, report, owner reply, moderate.
+Multi-Criteria Reviews	Pro	engage	review criteria on type	SANDBOXED	E	Per-type aspects.
+Photo Reviews	Pro	engage	review media	SANDBOXED	E	Needs media:write.
+Favorites	Free + Pro	engage	storage.favorites	SANDBOXED	C	Per-user list. Needs users:read.
+Calendar & Events	Free + Pro	engage	event dates on listing + calendar page	SANDBOXED+THEME	F	Date fields in plugin/collection. Calendar UI is a page.
+Contact Form	Free + Pro	engage	route contact + email	SANDBOXED	G	Message owner. Superseded by lead forms when enabled.
+SEO Landing Pages	Pro	engage	generated pages /type-in-location/	THEME	kit	Site routes. Plugin can list pairs.
+Schema.org JSON-LD	Free + Pro	engage	page JSON-LD from type mapping	THEME	B	Site page emits schema. Plugin stores schema type on the listing type.
+Open Graph & Twitter Cards	Free + Pro	engage	EmDash SEO on listings	HOST	kit	Collection has_seo. Site layout already emits tags.
+Breadcrumbs	Free + Pro	engage	archive/detail crumbs	THEME	kit	Site markup.
+Sitemap	Free + Pro	engage	EmDash sitemap	HOST	kit	listings collection in site sitemap.
+User Dashboard	Free + Pro	community	/account pages + dashboard routes	SANDBOXED+THEME	C	Plugin returns my listings, reviews, favorites, claims, credits. Pages are the site kit.
+Member Blocking	Free + Pro	community	storage.blocks	SANDBOXED	E	Hide reviews and close contact between two users.
+App Sign-In	Free + Pro	community	EmDash auth / app tokens	SKIP	-	WP password sign-in. EmDash has its own auth. Do not port.
+Lead Forms	Pro	community	storage.leads + route lead	SANDBOXED	G	Recorded enquiry, not email-only.
+Needs Marketplace	Pro	community	collection needs or storage.needs	SANDBOXED	H	Buyer need, quote, match by type + location.
+Verification Badges	Pro	community	field badges	SANDBOXED	D	Verified and similar flags on the listing.
+BuddyPress Integration	Pro	community	none	SKIP	-	No EmDash BuddyPress host.
+Credit System	Pro	monetize	compose credits plugin	COMPOSE	J	Do not vendor the PHP credits SDK here.
+Pricing Plans	Pro	monetize	compose + listora plan check	COMPOSE	J	Plans live next to credits. Listora consumes hold-and-commit.
+Coupons	Pro	monetize	compose	COMPOSE	J	Credit-cost discounts.
+Payment Webhooks	Pro	monetize	compose gateways	COMPOSE	J	Stripe PayPal inbound stays in credits/compose.
+Moderation Queue	Free + Pro	run	admin /queue	SANDBOXED	A	Built for listings. Extend to reviews and claims.
+Moderators	Pro	run	EmDash roles + plugin permission	HOST	C	EmDash users/roles. Plugin routes already use permission.
+Audit Log	Pro	run	storage.audit	SANDBOXED	B	Status transitions, actor, timestamp. afterSave already starts an event index.
+Analytics	Pro	run	storage.analytics + ingest route	SANDBOXED	G	Cookie-free views and clicks. Public ingest must be rate-limited.
+Email Templates	Free + Pro	run	settings templates + ctx email	SANDBOXED	G	Only if the sandbox email callback is configured on the host.
+Email Log	Free + Pro	run	storage.email_log	SANDBOXED	G	What was sent.
+Digest Notifications	Pro	run	cron digest	SANDBOXED	G	Daily or weekly bundle.
+Spam Protection	Free + Pro	run	submit/review/claim guards	SANDBOXED	B	Honeypot, keyword list, URL density. CAPTCHA/Akismet need keys + network.
+Rate Limiting	Free + Pro	run	per-IP counters in kv/storage	SANDBOXED	B	Sliding window on every public write.
+Coming Soon & Private Mode	Pro	run	site flag or middleware	THEME	kit	Hide or login-gate the directory pages.
+Automation Triggers	Free + Pro	connect	hooks emit storage.events	SANDBOXED	G	Versioned event names. afterSave is the first trigger.
+Outgoing Webhooks	Pro	connect	network:request signed POST	SANDBOXED	G	HMAC to allowedHosts. Capability bump.
+REST API	Free + Pro	connect	plugin public/private routes	SANDBOXED	all	EmDash plugin routes replace listora/v1. Grow routes per slice. Do not clone 73 WP endpoints in one drop.
+Hooks & Filters	Free + Pro	connect	EmDash plugin hooks	SANDBOXED	all	content:afterSave now. Add hooks as slices need them. No wb_listora_* PHP filters.
+WP-CLI	Free + Pro	connect	repo scripts + emdash CLI	SKIP	I	WP-CLI does not run here. Import/repair as node scripts or admin routes.
+Custom Fields	Free + Pro	connect	type editor field defs	SANDBOXED	B	Stored on the type. Values on the listing. Site collection must allow extra fields or a json blob.
+Capabilities	Free + Pro	connect	EmDash roles + route permission	HOST	C	Do not invent a parallel cap table.
+Privacy Tools	Free + Pro	connect	export/erase routes	SANDBOXED	C	Export and erase plugin storage for a user. Wire to host privacy if it exists.
+Extending with Pro	Free + Pro	connect	settings flags or compose	SKIP	-	No Free/Pro PHP pair. Gate Pro rows in settings or a compose plugin.

@@ -1,0 +1,20 @@
+wp_surface	example	emdash_target	verdict	notes
+cpt	listora_listing	collection listings	COLLECTION	First slice. Fields match WP card/detail contract.
+taxonomy	listora_listing_type	field listing_type	COLLECTION	WP type registry becomes a string field for v0.1.
+taxonomy	listora_listing_cat	taxonomy listing_category	COLLECTION	Seeded on the local test site.
+taxonomy	listora_listing_tag	taxonomy listing_tag	COLLECTION	Seeded on the local test site.
+taxonomy	listora_listing_location	taxonomy listing_location	COLLECTION	Seeded on the local test site.
+taxonomy	listora_listing_feature	taxonomy listing_feature	COLLECTION	Seeded on the local test site.
+rest	POST /listora/v1/submit	route submit	SANDBOXED	Creates a listings draft. Public, like the frontend form.
+rest	GET /listora/v1/listings	route listings	SANDBOXED	Published listings only.
+rest	GET health	route health	SANDBOXED	Lab probe: collection present + pending count.
+hook	save_post / wb_listora_listing_submitted	content:afterSave	SANDBOXED	Indexes listing saves into plugin storage.events.
+option	default_listing_type, moderation	ctx.settings	SANDBOXED	admin.settingsSchema on the plugin.
+table	listora_claims	ctx.storage later	DEFER	Claims are the next slice, not v0.1.
+table	listora_reviews	ctx.storage later	DEFER	Reviews stay WordPress until the collection slice is proven.
+table	listora_geo	listing lat/lng/address fields	COLLECTION	Geo columns are listing fields, not a plugin table.
+credits	wbcom-credits-sdk	compose or later plugin	DEFER	Do not port Action Scheduler or the credits SDK in v0.1.
+buddypress	BuddyNext spaces	skip	SKIP	No EmDash host for BuddyPress.
+theme	archive/single templates	src/pages/listings	THEME	Archive, detail, and submit form live on the test site, not in the plugin bundle.
+public_js	facet search IAPI	page:fragments later	DEFER	Native only if we must inject search JS.
+seo	LocalBusiness JSON-LD	page:metadata later	DEFER	Stay sandboxed when we add it.

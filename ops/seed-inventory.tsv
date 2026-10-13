@@ -1,0 +1,28 @@
+id	status	type	title	city	featured	claimed	hours	services	reviews	notes
+listing-golden-fork	published	restaurant	The Golden Fork	Manhattan	yes	yes	yes	yes	5	WP general pack. Screenshot hero.
+listing-sakura-house	published	restaurant	Sakura House	Manhattan	no	yes	yes	yes	4	WP general pack
+listing-casa-miguel	published	restaurant	Casa Miguel Cantina	Manhattan	no	no	yes	yes	3	WP general pack. Claim CTA.
+listing-spice-route	published	restaurant	Spice Route Kitchen	Manhattan	no	no	yes	yes	3	WP general pack
+listing-other-restaurants	published	restaurant	(remaining general-pack restaurants)	NYC	mix	mix	yes	yes	2+	Keep WP names. Count toward 25+.
+listing-real-estate	published	real-estate	(general-pack homes)	NYC	mix	no	no	no	1	Beds/baths/price fields in Drop 2
+listing-hotels	published	hotel	(general-pack hotels)	NYC	mix	yes	yes	yes	3	Hours + services
+listing-businesses	published	business	(general-pack businesses)	NYC	mix	mix	yes	yes	2	Default type
+listing-event-1	published	event	Harbor Jazz Night	Manhattan	yes	no	no	no	0	Calendar. Date required.
+listing-event-2	published	event	Brooklyn Book Fair	Brooklyn	no	no	no	no	0	Calendar
+listing-job-1	published	job	Frontend Engineer	Manhattan	no	no	no	no	0	From job-board pack
+listing-job-2	published	job	Cafe Manager	Brooklyn	no	no	no	no	0	From job-board pack
+listing-healthcare-1	published	healthcare	Riverside Family Clinic	Manhattan	no	yes	yes	yes	4	From healthcare pack
+listing-education-1	published	education	Hudson Language School	Manhattan	no	yes	yes	yes	2	From education pack
+listing-place-1	published	place	Central Park Conservancy Hub	Manhattan	no	no	yes	no	2	From place pack
+listing-classified-1	published	classified	Vintage Oak Desk	Brooklyn	no	no	no	no	0	From classified pack
+listing-pending-1	pending	business	Night Owl Locksmith	Manhattan	no	no	no	no	0	Queue row
+listing-pending-2	pending	restaurant	Little Dock Dumplings	Brooklyn	no	no	no	no	0	Queue row
+listing-draft-1	draft	business	(owner draft)	Manhattan	no	no	no	no	0	Dashboard + wizard
+listing-draft-2	draft	restaurant	(owner draft)	Brooklyn	no	no	no	no	0	Dashboard + wizard
+listing-rejected-1	rejected	classified	Spam Moving Van	Queens	no	no	no	no	0	Queue history
+listing-expired-1	expired	business	Old Town Printers	Manhattan	no	yes	yes	no	0	Renewal Drop 5
+review-public-*	published	-	-	-	-	-	-	-	40+	Drop 4. Mixed 1-5 stars. Real reviewer names.
+review-pending-1	pending	-	-	-	-	-	-	-	1	Review queue
+claim-pending-1	pending	-	Casa Miguel Cantina	-	-	-	-	-	-	Drop 4 claims queue
+favorite-demo-*	-	-	-	-	-	-	-	-	4	Drop 5. Demo member.
+import-sample	-	-	site-kit/seed/import/sample.csv	-	-	-	-	-	-	Drop 6. 3 extra listings.

@@ -1,0 +1,94 @@
+{
+	"$schema": "./node_modules/@emdash-cms/plugin-cli/schemas/emdash-plugin.schema.json",
+
+	"slug": "listora",
+	"publisher": "did:plc:2o6axbe264shvyedyhycyhya",
+
+	"license": "MIT",
+	"repo": "https://github.com/wbcomdesigns/emdash-listora",
+	"author": { "name": "Wbcom Designs", "url": "https://wbcomdesigns.com", "email": "security@wbcomdesigns.com" },
+	"security": { "email": "security@wbcomdesigns.com" },
+	"description": "Directory listings for EmDash: search, submit, reviews, claims, dashboard, and import with Listora Free chrome.",
+
+	"capabilities": ["content:read", "content:write", "content:publish", "schema:read"],
+	"allowedHosts": [],
+	"storage": {
+		"submissions": {
+			"indexes": ["status", "createdAt", "title"]
+		},
+		"events": {
+			"indexes": ["savedAt", "contentId", "collection"]
+		},
+		"reviews": {
+			"indexes": ["status", "listingId", "member_id", "createdAt"]
+		},
+		"claims": {
+			"indexes": ["status", "listingId", "member_id", "createdAt"]
+		},
+		"favorites": {
+			"indexes": ["member_id", "listingId", "createdAt"]
+		},
+		"contacts": {
+			"indexes": ["listingId", "createdAt"]
+		},
+		"email_log": {
+			"indexes": ["template", "status", "createdAt"]
+		},
+		"blocked": {
+			"indexes": ["member_id", "createdAt"]
+		}
+	},
+	"admin": {
+		"pages": [
+			{
+				"path": "/queue",
+				"label": "Listora",
+				"icon": "buildings",
+				"group": "Listings"
+			},
+			{
+				"path": "/reviews",
+				"label": "Reviews",
+				"icon": "star",
+				"group": "Listings"
+			},
+			{
+				"path": "/claims",
+				"label": "Claims",
+				"icon": "badge-check",
+				"group": "Listings"
+			}
+		],
+		"settingsSchema": {
+			"require_moderation": {
+				"label": "Require moderation",
+				"description": "Keep public submissions as drafts until someone approves them.",
+				"type": "boolean",
+				"default": true
+			},
+			"default_listing_type": {
+				"label": "Default listing type",
+				"type": "select",
+				"default": "business",
+				"options": [
+					{ "value": "business", "label": "Business" },
+					{ "value": "restaurant", "label": "Restaurant" },
+					{ "value": "real-estate", "label": "Real estate" },
+					{ "value": "hotel", "label": "Hotel" },
+					{ "value": "event", "label": "Event" },
+					{ "value": "job", "label": "Job" },
+					{ "value": "healthcare", "label": "Healthcare" },
+					{ "value": "education", "label": "Education" },
+					{ "value": "place", "label": "Place" },
+					{ "value": "classified", "label": "Classified" }
+				]
+			},
+			"spam_keywords": {
+				"label": "Spam keywords",
+				"description": "Comma-separated words that reject a public submit.",
+				"type": "string",
+				"default": "viagra, crypto pump"
+			}
+		}
+	}
+}
