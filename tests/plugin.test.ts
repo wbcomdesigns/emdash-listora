@@ -531,7 +531,7 @@ describe("listing expiry", () => {
 		await rt.fixtures.collection(listingsCollection as never);
 		host = { dispose: () => rt.dispose() } as unknown as PluginTestHost;
 		const admin = (input: Record<string, unknown>) => rt.transport.invokeRoute("admin", { page: "/queue", ...input });
-		await admin({ type: "form_submit", action_id: "save_settings", values: { expiry_days: "10", require_moderation: true } });
+		await admin({ type: "form_submit", action_id: "save_lifetime", values: { expiry_days: 10 } });
 		await rt.transport.invokeRoute("submit", { title: "Dated Cafe", listing_type: "restaurant", agree_terms: true }, { method: "POST", user: ana });
 		const id = (await rt.inspect.storage.list("submissions"))[0].id;
 		await admin({ type: "block_action", action_id: "review", value: `approve:${id}` });
@@ -556,7 +556,7 @@ describe("listing expiry", () => {
 		expect(await rt.transport.invokeRoute("renew", { listingId: id }, { method: "POST", user: ana })).toMatchObject({ ok: true });
 
 		// Expiry off: nothing is renewable and the dashboard carries no dates.
-		await admin({ type: "form_submit", action_id: "save_settings", values: { expiry_days: "0", require_moderation: true } });
+		await admin({ type: "form_submit", action_id: "save_lifetime", values: { expiry_days: 0 } });
 		expect(await rt.transport.invokeRoute("renew", { listingId: id }, { method: "POST", user: ana })).toMatchObject({
 			ok: false,
 			error: { code: "NOT_RENEWABLE" },
@@ -599,5 +599,34 @@ describe("categories on submit", () => {
 		);
 		expect(sent).toMatchObject({ ok: true });
 		expect(await rt.inspect.storage.list("submissions")).toHaveLength(1);
+	});
+});
+
+describe("settings page and dashboard card", () => {
+	it("saves each group, refuses a bad number of days, and counts what is waiting", async () => {
+		const rt = await createPluginRuntimeTestHost();
+		await rt.fixtures.collection(listingsCollection as never);
+		host = { dispose: () => rt.dispose() } as unknown as PluginTestHost;
+		const admin = (input: Record<string, unknown>) =>
+			rt.transport.invokeRoute("admin", input) as Promise<{ blocks: Array<{ type: string }>; toast?: { type: string; message: string } }>;
+
+		const page = await rt.admin.loadPage("/settings");
+		expect(page.blocks.filter((block) => block.type === "form")).toHaveLength(3);
+		// The queue page no longer carries a settings form.
+		expect((await rt.admin.loadPage("/queue")).blocks.map((block) => block.type)).not.toContain("form");
+
+		await admin({ type: "form_submit", action_id: "save_lifetime", page: "/settings", values: { expiry_days: 30 } });
+		for (const bad of ["abc", -1, 2.5, 99999]) {
+			const refused = await admin({ type: "form_submit", action_id: "save_lifetime", page: "/settings", values: { expiry_days: bad } });
+			expect(refused.toast?.type).toBe("error");
+		}
+		// A refused value leaves the saved one in place: it is never turned into 0.
+		const again = JSON.stringify(await rt.admin.loadPage("/settings"));
+		expect(again).toContain('"initial_value":30');
+
+		await rt.transport.invokeRoute("submit", { title: "Waiting Cafe", listing_type: "restaurant", agree_terms: true }, { method: "POST", user: ana });
+		const card = JSON.stringify(await admin({ type: "page_load", widget: "waiting" }));
+		expect(card).toContain('"label":"Listings","value":1');
+		expect(card).toContain("plugin-page");
 	});
 });

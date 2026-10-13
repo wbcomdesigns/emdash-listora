@@ -72,7 +72,7 @@
 			},
 			{
 				"path": "/queue",
-				"label": "Listora",
+				"label": "Listings queue",
 				"icon": "buildings",
 				"group": "Listings"
 			},
@@ -93,8 +93,15 @@
 				"label": "Messages",
 				"icon": "envelope",
 				"group": "Listings"
+			},
+			{
+				"path": "/settings",
+				"label": "Settings",
+				"icon": "settings",
+				"group": "Listings"
 			}
 		],
+		"widgets": [{ "id": "waiting", "title": "Listora: waiting for you", "size": "half" }],
 		"settingsSchema": {
 			"require_moderation": {
 				"label": "Require moderation",

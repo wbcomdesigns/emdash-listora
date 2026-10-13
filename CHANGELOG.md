@@ -6,6 +6,9 @@ Versions match `package.json`, the git tag, and the EmDash registry release. New
 
 Copy `site-kit/` again after you update, including the new `site-kit/layouts/ListoraLayout.astro`.
 
+- New      - Settings has its own page, in three groups, with a line saying what each option does. The Listings queue page shows only what is waiting.
+- New      - A card on the EmDash dashboard shows how many listings, reviews, claims and messages are waiting, with a link to each.
+- Fix      - A wrong number of days for expiry is refused with a message. Before, it was quietly saved as 0, which switched expiry off.
 - New      - Browse by category and by city on the directory page, with a count on each. A category on a listing page links to its filtered list.
 - New      - The add-a-listing form offers the site's own categories and saves the choice on the listing. Needs one new permission: reading and assigning categories.
 - New      - Messages tab in the owner's account: the member who added or claimed a listing reads the messages visitors send about it.

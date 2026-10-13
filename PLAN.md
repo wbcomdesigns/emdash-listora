@@ -47,7 +47,7 @@ Scoped with the owner on 2026-10-13. Every task is a GitHub issue under the `0.5
 
 | Step | Issue | Task |
 | --- | --- | --- |
-| 1 | #27 | Settings page, and the queue page without settings |
+| 1 | #27 | Settings page, and the queue page without settings. **Done 2026-10-13** |
 | 2 | #39 | Site time zone |
 | 3 | #38 | Placeholder and default image |
 | 4 | #44 | Featured listings shown once |

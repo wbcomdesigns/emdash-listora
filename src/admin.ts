@@ -141,48 +141,6 @@ export async function renderQueue(
 			},
 			{ type: "header", text: "Pending queue" },
 			...queueBlocks,
-			{ type: "divider" },
-			{ type: "header", text: "Settings" },
-			{
-				type: "form",
-				block_id: "listora_settings",
-				fields: [
-					{
-						type: "toggle",
-						action_id: "require_moderation",
-						label: "Require moderation",
-						initial_value: settings.requireModeration,
-					},
-					{
-						type: "toggle",
-						action_id: "email_messages",
-						label: "Email the listing owner when a message arrives",
-						initial_value: settings.emailMessages,
-					},
-					{
-						type: "select",
-						action_id: "default_listing_type",
-						label: "Default listing type",
-						initial_value: settings.defaultListingType,
-						options: LISTING_TYPES.map((type) => ({ label: type.name, value: type.slug })),
-					},
-					{
-						type: "text_input",
-						action_id: "expiry_days",
-						label: "Listings expire after this many days (0 = never)",
-						help_text: "0 means listings never expire. An expired listing leaves the directory and its page says it has expired. The owner can renew it from their account.",
-						initial_value: String(settings.expiryDays),
-					},
-					{
-						type: "text_input",
-						action_id: "spam_keywords",
-						label: "Spam keywords",
-						help_text: "Comma-separated words that reject a submission.",
-						initial_value: settings.spamKeywords,
-					},
-				],
-				submit: { label: "Save settings", action_id: "save_settings" },
-			},
 		],
 		toast: extra?.toast,
 	};
@@ -399,6 +357,138 @@ function renderOnboardBlocks(onboard: Awaited<ReturnType<typeof getOnboardState>
 	];
 }
 
+const HELP = {
+	submissions: [
+		"Approve listings before they show: when on, a new listing waits in the Listings queue. When off, it goes live at once.",
+		"Default listing type: the type already selected on the add-a-listing form.",
+		"Blocked words: a listing that contains any of these words is refused. Separate them with commas.",
+	],
+	lifetime: [
+		"Listings expire after this many days: 0 means listings never expire. Above 0, a listing leaves the directory after that many days, its page says it has expired, and its owner can renew it from their account.",
+	],
+	messages: [
+		"Email the listing owner when a message arrives: one short notice an hour to the owner's account email. The message itself stays on the site. Needs email set up on your site.",
+	],
+};
+
+const lines = (items: string[]) => items.map((text) => ({ type: "context", text }));
+
+export async function renderSettings(
+	ctx: PluginContext,
+	extra?: Pick<BlockResponse, "toast">,
+): Promise<BlockResponse> {
+	const settings = await loadSettings(ctx);
+	return {
+		blocks: [
+			{ type: "header", text: "Settings" },
+			{ type: "section", text: "Each group saves on its own." },
+			{ type: "header", text: "Submissions" },
+			...lines(HELP.submissions),
+			{
+				type: "form",
+				block_id: "settings_submissions",
+				fields: [
+					{
+						type: "toggle",
+						action_id: "require_moderation",
+						label: "Approve listings before they show",
+						initial_value: settings.requireModeration,
+					},
+					{
+						type: "select",
+						action_id: "default_listing_type",
+						label: "Default listing type",
+						initial_value: settings.defaultListingType,
+						options: LISTING_TYPES.map((type) => ({ label: type.name, value: type.slug })),
+					},
+					{
+						type: "text_input",
+						action_id: "spam_keywords",
+						label: "Blocked words",
+						initial_value: settings.spamKeywords,
+					},
+				],
+				submit: { label: "Save submissions", action_id: "save_submissions" },
+			},
+			{ type: "divider" },
+			{ type: "header", text: "Listing lifetime" },
+			...lines(HELP.lifetime),
+			{
+				type: "form",
+				block_id: "settings_lifetime",
+				fields: [
+					{
+						type: "number_input",
+						action_id: "expiry_days",
+						label: "Listings expire after this many days (0 = never)",
+						min: 0,
+						max: 3650,
+						initial_value: settings.expiryDays,
+					},
+				],
+				submit: { label: "Save lifetime", action_id: "save_lifetime" },
+			},
+			{ type: "divider" },
+			{ type: "header", text: "Messages" },
+			...lines(HELP.messages),
+			{
+				type: "form",
+				block_id: "settings_messages",
+				fields: [
+					{
+						type: "toggle",
+						action_id: "email_messages",
+						label: "Email the listing owner when a message arrives",
+						initial_value: settings.emailMessages,
+					},
+				],
+				submit: { label: "Save messages", action_id: "save_messages" },
+			},
+		],
+		toast: extra?.toast,
+	};
+}
+
+/** The card on the EmDash dashboard: what is waiting, with a way to each list. */
+export async function renderWaiting(ctx: PluginContext): Promise<BlockResponse> {
+	const [listings, reviews, claims, messages] = await Promise.all([
+		ctx.storage.submissions.count({ status: "pending" }),
+		ctx.storage.reviews.count({ status: "pending" }),
+		ctx.storage.claims.count({ status: "pending" }),
+		ctx.storage.contacts.count({ status: "new" }),
+	]);
+	const total = listings + reviews + claims + messages;
+	const link = (label: string, path: string) => ({
+		type: "link",
+		label,
+		target: { kind: "plugin-page", path },
+	});
+	return {
+		blocks: [
+			total === 0
+				? { type: "section", text: "Nothing is waiting." }
+				: {
+						type: "stats",
+						items: [
+							{ label: "Listings", value: listings },
+							{ label: "Reviews", value: reviews },
+							{ label: "Claims", value: claims },
+							{ label: "Messages", value: messages },
+						],
+					},
+			{
+				type: "actions",
+				elements: [
+					link("Listings queue", "/queue"),
+					link("Reviews", "/reviews"),
+					link("Claims", "/claims"),
+					link("Messages", "/messages"),
+				],
+			},
+		],
+	};
+}
+
 export async function renderSetup(
 	ctx: PluginContext,
 	extra?: Pick<BlockResponse, "toast">,
@@ -540,20 +630,33 @@ export async function handleAdmin(
 		return renderQueue(ctx, extra);
 	}
 
-	if (type === "form_submit" && asString(raw.action_id) === "save_settings") {
+	if (type === "form_submit") {
 		const values = asRecord(raw.values);
-		await ctx.settings.set(
-			"default_listing_type",
-			asString(values.default_listing_type) || "business",
-		);
-		await ctx.settings.set("require_moderation", asBoolean(values.require_moderation));
-		await ctx.settings.set("email_messages", asBoolean(values.email_messages));
-		await ctx.settings.set("spam_keywords", asString(values.spam_keywords));
-		await ctx.settings.set("expiry_days", Math.max(0, Math.floor(Number(values.expiry_days) || 0)));
-		// The daily check only exists while expiry is on.
-		if (await expiryDays(ctx)) await ctx.cron?.schedule("expire", { schedule: "0 3 * * *" });
-		else await ctx.cron?.cancel("expire").catch(() => undefined);
-		return renderQueue(ctx, { toast: { message: "Settings saved.", type: "success" } });
+		const saved = (message: string) => renderSettings(ctx, { toast: { message, type: "success" } });
+		switch (asString(raw.action_id)) {
+			case "save_submissions":
+				await ctx.settings.set("default_listing_type", asString(values.default_listing_type) || "business");
+				await ctx.settings.set("require_moderation", asBoolean(values.require_moderation));
+				await ctx.settings.set("spam_keywords", asString(values.spam_keywords));
+				return saved("Submissions saved.");
+			case "save_lifetime": {
+				const days = Number(values.expiry_days);
+				// Refused, never quietly turned into 0: 0 switches expiry off.
+				if (!Number.isInteger(days) || days < 0 || days > 3650) {
+					return renderSettings(ctx, {
+						toast: { message: "Enter a whole number of days from 0 to 3650. Nothing was changed.", type: "error" },
+					});
+				}
+				await ctx.settings.set("expiry_days", days);
+				// The daily check only exists while expiry is on.
+				if (days) await ctx.cron?.schedule("expire", { schedule: "0 3 * * *" });
+				else await ctx.cron?.cancel("expire").catch(() => undefined);
+				return saved(days ? `Listings now expire after ${days} days.` : "Listings no longer expire.");
+			}
+			case "save_messages":
+				await ctx.settings.set("email_messages", asBoolean(values.email_messages));
+				return saved("Messages saved.");
+		}
 	}
 
 	if (type === "block_action" && asString(raw.action_id) === "review") {
@@ -627,6 +730,9 @@ export async function handleAdmin(
 		});
 	}
 
+	// A dashboard card asks with its widget id; a page asks with its path. Seen on the lab: see handoff.
+	if (asString(raw.widget) === "waiting" || page.includes("waiting")) return renderWaiting(ctx);
+	if (page.includes("settings")) return renderSettings(ctx);
 	if (page.includes("messages")) return renderMessages(ctx);
 	if (page.includes("reviews")) return renderReviewQueue(ctx);
 	if (page.includes("claims")) return renderClaimQueue(ctx);

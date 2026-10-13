@@ -100,6 +100,11 @@ Three roles, always in this order: **guest**, **member** (subscriber role), **ad
 | A-18 | Turn off "Email the listing owner when a message arrives" and save | Stays off after reload. New messages are stored and marked Owner not notified |
 | A-19 | Set "Listings expire after this many days" to 10, save, reload | Shows 10. A listing approved after that carries a date 10 days ahead | dates a listing on approval |
 | A-20 | A listing past its date, after the daily check | Gone from the directory and search. Its page says it has expired | marks a listing past its date as expired |
+| A-21 | Open Settings | Three groups (Submissions, Listing lifetime, Messages), a line under each heading saying what each option does, a Save button per group | settings page and dashboard card |
+| A-22 | Change one option in each group, save, reload | Each stays as saved | same test |
+| A-23 | Enter a negative number or text for the days and save | Refused with a message. The saved value is unchanged | same test |
+| A-24 | Open the Listings queue | Only counts and the waiting list. No settings form | same test |
+| A-25 | Open the EmDash dashboard | A "Listora: waiting for you" card with the four counts and a link to each list. "Nothing is waiting." when all are zero | same test |
 | A-12 | Get started on a site with no listings collection | Clear "create the collection first" message, no crash | tells the owner to create the listings collection first |
 
 ## Presentation, every screen
