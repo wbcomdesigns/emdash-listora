@@ -81,3 +81,7 @@ Tell the agent one thing: "Read `PLAN.md` and `ops/handoff.md` in `~/code/emdash
 Everyone installing an EmDash plugin today is a developer. So a step that needs a developer (copying the kit, a trusted install to get an in-text block) is acceptable now. The screens the site owner and visitors use after setup still have to be plain and complete: no internal ids, no half-built features. We keep polishing setup as EmDash grows.
 
 After step 12, do #50 (in-text Listings block, prove first).
+
+## Before any task
+
+Read `EMDASH-SUPPORT.md` in `~/code/emdash-plugin-starter` (`wbcomdesigns/emdash-plugin-starter`). If a task depends on a row marked "not proven", prove it on the lab first. If the proof fails, stop and tell the owner on the issue. Do not build around it.
