@@ -165,7 +165,7 @@ export async function backfillRatings(ctx: PluginContext): Promise<void> {
 	}
 }
 
-export type ListingRef = { title: string; slug: string; published: boolean };
+export type ListingRef = { title: string; slug: string; published: boolean; email: string };
 
 /** Title and slug for a set of listing ids, so screens show names instead of ids. */
 export async function listingRefs(ctx: PluginContext, ids: string[]): Promise<Map<string, ListingRef>> {
@@ -180,6 +180,7 @@ export async function listingRefs(ctx: PluginContext, ids: string[]): Promise<Ma
 			title: asString(asRecord(item.data).title) || id,
 			slug: item.slug || id,
 			published: item.status === "published",
+			email: asString(asRecord(item.data).email),
 		});
 	});
 	return refs;

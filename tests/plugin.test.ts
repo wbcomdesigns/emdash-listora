@@ -343,6 +343,39 @@ describe("contact messages", () => {
 		expect(await host!.storage("contacts").get(rows[0].id)).toMatchObject({ status: "handled" });
 	});
 
+	it("emails the listing's own address, with the visitor as reply-to, and marks the row", async () => {
+		const rt = await createPluginRuntimeTestHost();
+		await rt.fixtures.collection(listingsCollection as never);
+		const made = await rt.fixtures.content("listings", {
+			data: { title: "Mail Cafe", listing_type: "restaurant", email: "owner@cafe.test" },
+			slug: "mail-cafe",
+			status: "published",
+		} as never);
+		host = { dispose: () => rt.dispose() } as unknown as PluginTestHost;
+		const send = (body: Record<string, unknown>, ip: string) =>
+			rt.transport.invokeRoute("contact", { listingId: made.id, ...body }, {
+				method: "POST",
+				meta: { ip, userAgent: null, referer: null, geo: null },
+			});
+		expect(await send({ name: "Vee", email: "vee@example.com", message: "Are you open Sunday?" }, "203.0.113.1")).toMatchObject({ ok: true });
+		// A reply-to that is not a plain address is dropped, never passed to the mailer.
+		expect(await send({ email: "x@y.test\nBcc: z@z.test", message: "Hi" }, "203.0.113.2")).toMatchObject({ ok: true });
+		const mail = await rt.inspect.email();
+		const rows = await rt.inspect.storage.list<{ emailed: boolean }>("contacts");
+		if (mail.length === 0) {
+			// Host without a mail provider: stored, flagged as not sent.
+			expect(rows.every((row) => row.data.emailed === false)).toBe(true);
+			return;
+		}
+		expect(mail).toHaveLength(2);
+		const text = JSON.stringify(mail);
+		expect(text).toContain("owner@cafe.test");
+		expect(text).toContain("vee@example.com");
+		expect(mail.map((item) => item.replyTo ?? null)).toEqual(expect.arrayContaining(["vee@example.com", null]));
+		expect(mail.every((item) => item.to === "owner@cafe.test")).toBe(true);
+		expect(rows.every((row) => row.data.emailed === true)).toBe(true);
+	});
+
 	it("refuses a message for a listing that is not public", async () => {
 		await directory();
 		const sent = await host!.invokeRoute("contact", { listingId: "no-such-listing", message: "Hi" }, { method: "POST" });

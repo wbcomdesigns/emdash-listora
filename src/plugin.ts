@@ -113,6 +113,8 @@ type Member = { id: string; name: string | null; role: number };
 // Short enough that an approved review or a new listing shows within a minute.
 const CACHE = "public, max-age=30, stale-while-revalidate=120";
 
+// Strict on purpose: this value becomes a mail header.
+const EMAIL_RE = /^[^\s@<>,;]+@[^\s@<>,;]+\.[^\s@<>,;]+$/;
 const NO_LISTING = { ok: false, error: { code: "NOT_FOUND", message: "That listing is not available." } };
 
 const SIGN_IN = { ok: false, error: { code: "SIGN_IN_REQUIRED", message: "Sign in to continue." } };
@@ -530,20 +532,52 @@ const plugin: SandboxedPlugin = {
 				if (asString(raw.company_website)) {
 					return { ok: false, error: { code: "SPAM", message: "Message rejected." } };
 				}
-				if (!(await isPublicListing(ctx, listingId))) return NO_LISTING;
+				const listing = (await listingRefs(ctx, [listingId])).get(listingId);
+				if (!listing?.published) return NO_LISTING;
 				// Per visitor IP. With no IP from the host every guest shares one bucket: fail closed.
 				const ip = (routeCtx.requestMeta as { ip?: string | null } | undefined)?.ip || "unknown";
 				if (await rateLimited(ctx, `contact:${ip}`)) return RATE_LIMITED;
 				const id = `contact-${listingId}-${Date.now()}`;
-				await ctx.storage.contacts.put(id, {
+				const row = {
 					listingId,
-					name: asString(raw.name).slice(0, 80),
-					email: email.slice(0, 160),
+					// One line each: these go into a mail subject and body.
+					name: asString(raw.name).replace(/\s+/g, " ").trim().slice(0, 80),
+					email: email.replace(/\s+/g, " ").trim().slice(0, 160),
 					// Capped so the admin table can show every character.
 					message: message.slice(0, 1000),
 					status: "new",
+					emailed: false,
 					createdAt: nowIso(),
-				});
+				};
+				// Stored first, so a mail failure never loses the message.
+				await ctx.storage.contacts.put(id, row);
+				// Only ever to the address on the listing itself, plain text, behind the rate limit above.
+				// ctx.email is absent when the site has no mail provider.
+				if (
+					ctx.email &&
+					EMAIL_RE.test(listing.email) &&
+					(await ctx.settings.get<boolean>("email_messages")) !== false
+				) {
+					try {
+						await ctx.email.send({
+							to: listing.email,
+							replyTo: EMAIL_RE.test(row.email) ? row.email : undefined,
+							subject: `New message about ${listing.title}`.replace(/\s+/g, " ").slice(0, 150),
+							text: [
+								`Someone sent a message from your listing "${listing.title}".`,
+								"",
+								`From: ${row.name || "No name given"}${row.email ? ` (${row.email})` : ""}`,
+								"",
+								row.message,
+								"",
+								row.email ? "Reply to this email to answer them." : "They left no email address.",
+							].join("\n"),
+						});
+						await ctx.storage.contacts.put(id, { ...row, emailed: true });
+					} catch {
+						// Left as emailed: false. The Messages page shows it was not sent.
+					}
+				}
 				return { ok: true, id };
 			},
 		},

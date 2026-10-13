@@ -31,7 +31,7 @@
 		}
 	},
 
-	"capabilities": ["content:read", "content:write", "content:publish", "schema:read"],
+	"capabilities": ["content:read", "content:write", "content:publish", "schema:read", "email:send"],
 	"allowedHosts": [],
 	"storage": {
 		"submissions": {
@@ -99,6 +99,12 @@
 			"require_moderation": {
 				"label": "Require moderation",
 				"description": "Keep public submissions as drafts until someone approves them.",
+				"type": "boolean",
+				"default": true
+			},
+			"email_messages": {
+				"label": "Email messages to the listing",
+				"description": "Send each contact message to the email address on the listing. Needs a mail provider on the site.",
 				"type": "boolean",
 				"default": true
 			},

@@ -28,11 +28,13 @@ function localeFor(ctx: PluginContext): string {
 async function loadSettings(ctx: PluginContext): Promise<{
 	requireModeration: boolean;
 	defaultListingType: string;
+	emailMessages: boolean;
 	spamKeywords: string;
 }> {
 	return {
 		spamKeywords: (await ctx.settings.get<string>("spam_keywords")) ?? "viagra, crypto pump",
 		requireModeration: (await ctx.settings.get<boolean>("require_moderation")) !== false,
+		emailMessages: (await ctx.settings.get<boolean>("email_messages")) !== false,
 		defaultListingType: (await ctx.settings.get<string>("default_listing_type")) || "business",
 	};
 }
@@ -140,6 +142,12 @@ export async function renderQueue(
 						action_id: "require_moderation",
 						label: "Require moderation",
 						initial_value: settings.requireModeration,
+					},
+					{
+						type: "toggle",
+						action_id: "email_messages",
+						label: "Email contact messages to the listing",
+						initial_value: settings.emailMessages,
 					},
 					{
 						type: "select",
@@ -438,6 +446,7 @@ async function renderMessages(ctx: PluginContext, extra?: Pick<BlockResponse, "t
 			// Shown in full. Visitors write these, so they are plain text here, never markup.
 			message: asString(data.message),
 			received: asString(data.createdAt).slice(0, 10),
+			emailed: data.emailed === true ? "Sent to the listing" : "Not sent",
 			action: {
 				type: "menu",
 				action_id: "message_mod",
@@ -454,7 +463,7 @@ async function renderMessages(ctx: PluginContext, extra?: Pick<BlockResponse, "t
 			{ type: "header", text: "Messages" },
 			{
 				type: "section",
-				text: "Messages visitors sent from a listing page. They are stored here and are not emailed to anyone yet.",
+				text: "Messages visitors sent from a listing page. Each one is also emailed to the address on the listing when the site has a mail provider and the listing has an email. Anything marked Not sent needs you to pass it on.",
 			},
 			table.length === 0
 				? { type: "empty", title: "No new messages", description: "Messages from the contact form on a listing wait here." }
@@ -466,6 +475,7 @@ async function renderMessages(ctx: PluginContext, extra?: Pick<BlockResponse, "t
 							{ key: "from", label: "From" },
 							{ key: "message", label: "Message" },
 							{ key: "received", label: "Received" },
+							{ key: "emailed", label: "Email" },
 							{ key: "action", label: "Decision", format: "element" },
 						],
 						rows: table,
@@ -504,6 +514,7 @@ export async function handleAdmin(
 			asString(values.default_listing_type) || "business",
 		);
 		await ctx.settings.set("require_moderation", asBoolean(values.require_moderation));
+		await ctx.settings.set("email_messages", asBoolean(values.email_messages));
 		await ctx.settings.set("spam_keywords", asString(values.spam_keywords));
 		return renderQueue(ctx, { toast: { message: "Settings saved.", type: "success" } });
 	}

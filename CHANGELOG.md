@@ -2,6 +2,14 @@
 
 Versions match `package.json`, the git tag, and the EmDash registry release. Newest first. Never publish a version that is not on `origin/main`.
 
+## [Unreleased]
+
+Copy `site-kit/` again after you update, including the new `site-kit/layouts/ListoraLayout.astro`.
+
+- New      - A contact message is emailed to the address on the listing, with the visitor as the reply address. Needs a mail provider on the site and asks for one new permission: sending email.
+- New      - Setting to turn that email off. The Messages page shows which messages were sent and which were not.
+- Improve  - The kit works on any EmDash site: one file, `ListoraLayout.astro`, connects the pages to your own layout. Proven on a second site that is not the starter.
+
 ## [0.4.1] - 2026-10-13
 
 Found by walking every QA case in the browser as guest, member and admin. Copy `site-kit/` again after you update.

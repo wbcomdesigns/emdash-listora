@@ -88,6 +88,8 @@ Three roles, always in this order: **guest**, **member** (subscriber role), **ad
 | A-14 | Same listing: approve a claim on it | Refused with "has unpublished edits". The claim stays pending | |
 | A-15 | Open Messages after a visitor sent one | Listing name, sender, the full message, date. Mark as handled removes it from the list |
 | A-16 | Open Messages with none waiting | Empty state |
+| A-17 | Messages, Email column | "Sent to the listing" when the site has a mail provider and the listing has an email. "Not sent" otherwise. The mail goes only to the listing address, reply address is the visitor | emails the listing's own address |
+| A-18 | Turn off "Email contact messages to the listing" and save | Stays off after reload. New messages are stored and marked Not sent |
 | A-12 | Get started on a site with no listings collection | Clear "create the collection first" message, no crash | tells the owner to create the listings collection first |
 
 ## Presentation, every screen
