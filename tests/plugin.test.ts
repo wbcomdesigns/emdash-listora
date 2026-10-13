@@ -12,6 +12,7 @@ import { LISTING_TYPES as KIT_TYPES } from "../site-kit/lib/listora";
 import { LISTING_TYPES } from "../src/lib/types";
 // @ts-expect-error plain module shared with the lab seed
 import { listingsCollection } from "../site-kit/seed/collection.mjs";
+import { imageUrl, jsonForScript, placeholderHtml, safeImageUrl } from "../site-kit/lib/listora";
 
 let host: PluginTestHost | undefined;
 
@@ -628,5 +629,31 @@ describe("settings page and dashboard card", () => {
 		const card = JSON.stringify(await admin({ type: "page_load", widget: "waiting" }));
 		expect(card).toContain('"label":"Listings","value":1');
 		expect(card).toContain("plugin-page");
+	});
+});
+
+describe("kit helpers that write member data into the page", () => {
+	it("drops any image address that is not a web address or a path on this site", () => {
+		for (const bad of ["javascript:alert(1)", "data:text/html,x", 'https://x.test/a"><script>', "//evil.test/a.jpg", "a b", ""]) {
+			expect(safeImageUrl(bad)).toBe("");
+		}
+		expect(safeImageUrl("/_emdash/api/media/file/A.jpg")).toBe("/_emdash/api/media/file/A.jpg");
+		expect(safeImageUrl("https://cdn.test/a.jpg")).toBe("https://cdn.test/a.jpg");
+		expect(imageUrl({ src: "javascript:alert(1)" })).toBe("");
+		expect(imageUrl({ meta: { storageKey: "../../etc" } })).toBe("");
+		expect(imageUrl({ meta: { storageKey: "01ABC.jpg" } })).toBe("/_emdash/api/media/file/01ABC.jpg");
+	});
+
+	it("cannot close a script block or start markup from listing text", () => {
+		const hostile = "</script><script>alert(1)</script>&\u2028";
+		const out = jsonForScript({ name: hostile });
+		for (const char of ["<", ">", "&", "\u2028"]) expect(out).not.toContain(char);
+		expect(JSON.parse(out).name).toBe(hostile);
+	});
+
+	it("draws the placeholder from a fixed icon set, whatever the listing type says", () => {
+		const out = placeholderHtml('"><script>alert(1)</script>');
+		expect(out).not.toContain("alert");
+		expect(out).toBe(placeholderHtml("business"));
 	});
 });

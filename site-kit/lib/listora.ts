@@ -146,12 +146,38 @@ export function hoursForWeek(hours: HourRow[]) {
  * (To draw an image on the page, use EmDash's own Image component.)
  */
 export function imageUrl(image: unknown, publicUrl?: (key: string) => string): string {
-	const ref = (image ?? {}) as { src?: string; url?: string; meta?: { storageKey?: string } };
-	if (ref.src) return ref.src;
-	if (ref.url) return ref.url;
-	const key = ref.meta?.storageKey;
-	if (!key || !/^[A-Za-z0-9._-]+$/.test(key)) return "";
-	return publicUrl ? publicUrl(key) : `/_emdash/api/media/file/${key}`;
+	const ref = (image ?? {}) as { src?: unknown; url?: unknown; meta?: { storageKey?: unknown } };
+	const key = typeof ref.meta?.storageKey === "string" ? ref.meta.storageKey : "";
+	const candidate =
+		(typeof ref.src === "string" && ref.src) ||
+		(typeof ref.url === "string" && ref.url) ||
+		(/^[A-Za-z0-9._-]+$/.test(key) ? (publicUrl ? publicUrl(key) : `/_emdash/api/media/file/${key}`) : "");
+	return safeImageUrl(candidate);
+}
+
+/** Only a web address or a path on this site. Anything else (javascript:, data:, markup) is dropped. */
+export function safeImageUrl(value: string): string {
+	if (!value || /[\s<>"'`\\]/.test(value)) return "";
+	if (value.startsWith("/") && !value.startsWith("//")) return value;
+	try {
+		const parsed = new URL(value);
+		return parsed.protocol === "https:" || parsed.protocol === "http:" ? parsed.href : "";
+	} catch {
+		return "";
+	}
+}
+
+/**
+ * JSON for a script block. Listing text is written by members, so the characters that could
+ * close the block or start markup are written as escapes. The data itself is unchanged.
+ */
+export function jsonForScript(value: unknown): string {
+	return JSON.stringify(value)
+		.replace(/</g, "\\u003c")
+		.replace(/>/g, "\\u003e")
+		.replace(/&/g, "\\u0026")
+		.replace(/\u2028/g, "\\u2028")
+		.replace(/\u2029/g, "\\u2029");
 }
 
 // One simple line icon per listing type, drawn inside a 24 by 24 box.

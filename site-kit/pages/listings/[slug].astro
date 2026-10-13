@@ -11,6 +11,7 @@ import Layout from "../../layouts/ListoraLayout.astro";
 import {
 	asNumber,
 	imageUrl,
+	jsonForScript,
 	placeholderHtml,
 	hoursForWeek,
 	isOpenNow,
@@ -102,7 +103,7 @@ const schema = {
 	image={photo}
 	content={{ collection: "listings", id: data.id, slug }}
 >
-	<script type="application/ld+json" set:html={JSON.stringify(schema)} />
+	<script type="application/ld+json" set:html={jsonForScript(schema)} />
 	<div class="listora-block">
 		<article class="listora-detail">
 			<nav class="listora-detail__breadcrumb" aria-label="Breadcrumb">
