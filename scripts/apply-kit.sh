@@ -2,10 +2,10 @@
 set -euo pipefail
 
 PLUGIN="${LISTORA_PLUGIN:-$(cd "$(dirname "$0")/.." && pwd)}"
-LAB="${LISTORA_LAB:-$(cd "$PLUGIN/.." && pwd)/emdash-local}"
+LAB="${1:-${LISTORA_LAB:-$(cd "$PLUGIN/.." && pwd)/emdash-local}}"
 
 if [[ ! -d "$LAB/src" ]]; then
-	echo "Lab site not found at $LAB. Run scripts/setup-lab.sh first." >&2
+	echo "No EmDash site found at $LAB (it has no src folder)." >&2
 	exit 1
 fi
 

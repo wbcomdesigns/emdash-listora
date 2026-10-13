@@ -6,23 +6,11 @@ Install `@vapvarun.bsky.social/listora` first (or the local package). Then apply
 
 ## Apply on a site
 
-On the lab, prefer `./scripts/apply-kit.sh` (or `./scripts/setup-lab.sh` the first time). Manual copy from the site root (`src/` is the Astro app):
-
 ```bash
-K=path/to/listora/site-kit
-
-# The one file that connects the Listora pages to your design (see below)
-mkdir -p src/layouts src/styles src/lib src/pages/listings src/pages/account public/vendor
-cp $K/layouts/ListoraLayout.astro src/layouts/ListoraLayout.astro
-
-cp $K/listora-ui.css src/styles/listora-ui.css
-cp $K/lib/listora.ts src/lib/listora.ts
-cp $K/pages/listings/*.astro src/pages/listings/
-cp $K/pages/account/index.astro src/pages/account/index.astro
-
-# The map library, served from your own site (no outside host)
-cp -R $K/public/vendor/. public/vendor/
+path/to/emdash-listora/scripts/add-to-site.sh /path/to/your/site
 ```
+
+It copies everything in this folder to the right place, writes a seed for the listings collection, and prints what is left to do. Run it again after each plugin update: it never replaces `src/layouts/ListoraLayout.astro` once it exists. The full steps are in [Set up Listora on your site](../docs/website/getting-started/install.md).
 
 ## Connect it to your design
 
@@ -32,7 +20,7 @@ Colours and fonts come from your site: the kit reads `--color-bg`, `--color-text
 
 Proven on two sites: the EmDash `starter` template and a clean `portfolio` template site, as guest, member and admin, in light and dark, at 1440 and 390.
 
-Collection: create a `listings` collection with the same fields the lab seed uses, or run `site-kit/seed/listings.mjs` the way the lab reset does.
+Collection: `npx emdash seed .emdash/listora-seed.json --no-content` in your site, after the setup command.
 
 Demo rows: Admin → Get started → **Load sample directory** (12 NYC listings, reviews, a claim). The lab seed still loads the larger 33-listing pack.
 

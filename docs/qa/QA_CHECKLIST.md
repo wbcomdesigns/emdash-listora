@@ -160,6 +160,7 @@ Three roles, always in this order: **guest**, **member** (subscriber role), **ad
 | A-45 | Choose a CSV with good rows, a row with no title, an unknown type and a bad latitude, then Check file | "N of M rows are ready", each bad row listed with its row number and reason. Nothing is created yet |
 | A-46 | Import N listings as drafts | "N listings added as drafts". They are in the Listings queue, not on the site |
 | A-47 | Check the same file again | The imported rows are listed as already in the directory and skipped |
+| A-49 | On a new template site, follow `docs/website/getting-started/install.md` and nothing else | `/listings/`, `/listings/submit/`, `/listings/calendar/` and `/account/` all open. Running the command again leaves `ListoraLayout.astro` as it was |
 | A-48 | A file over 500 rows, an empty file, a file with no title column | A plain message, nothing imported |
 | A-12 | Get started on a site with no listings collection | Clear "create the collection first" message, no crash | tells the owner to create the listings collection first |
 

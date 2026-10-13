@@ -518,14 +518,14 @@ function renderOnboardBlocks(onboard: Awaited<ReturnType<typeof getOnboardState>
 		return [
 			{
 				type: "context",
-				text: "Sample directory is ready. Copy site-kit pages if /listings/ is still a 404.",
+				text: "Sample directory is ready. If /listings/ is not found, run the setup command from the install guide: it adds the directory pages to your site.",
 			},
 		];
 	}
 
 	const missing = onboard.hasCollection
 		? "The listings collection is ready. Load sample data so the first visit shows real NYC cards, reviews, and a claim."
-		: "Create a listings collection on this site first. Then load sample data. Copy site-kit pages so /listings/ exists.";
+		: "This site has no listings collection yet. Run the setup command from the install guide: it creates the collection and adds the directory pages. Then load sample data here.";
 
 	return [
 		{
@@ -561,7 +561,7 @@ function renderOnboardBlocks(onboard: Awaited<ReturnType<typeof getOnboardState>
 		},
 		{
 			type: "context",
-			text: "After load: copy site-kit CSS, pages, and menu links. Open /listings/.",
+			text: "The directory pages come from the setup command in the install guide. After that, open /listings/.",
 		},
 	];
 }
@@ -769,7 +769,7 @@ export async function renderSetup(
 				type: "empty",
 				title: "Then copy the site kit",
 				description:
-					"Install does not create /listings/. Copy site-kit/listora-ui.css, site-kit/lib/listora.ts, and site-kit/pages/ onto the EmDash site. Add menu links for Listings, Submit, Calendar, and Account.",
+					"Installing the plugin does not add the /listings/ pages. Run the setup command from the install guide to add them, then add menu links for Listings, Add a listing, Calendar and Account.",
 			},
 		],
 		toast: extra?.toast,
