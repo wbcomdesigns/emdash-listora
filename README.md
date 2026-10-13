@@ -21,9 +21,10 @@ Testers install `@vapvarun.bsky.social/listora@0.2.1` only. Ignore `0.1.0` and `
 
 Read these on GitHub. They are the team handbook for this early release.
 
-1. [Docs landing](docs/website/README.md)
-2. [What we built](docs/website/getting-started/what-we-built.md)
-3. [Improve the screens](docs/website/how-to/improve-the-screens.md)
+1. [Session handoff](ops/handoff.md)
+2. [Docs landing](docs/website/README.md)
+3. [What we built](docs/website/getting-started/what-we-built.md)
+4. [Improve the screens](docs/website/how-to/improve-the-screens.md)
 
 Planning notes that fed the port stay in [`ops/`](ops/README.md).
 

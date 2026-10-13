@@ -2,7 +2,7 @@
 
 **Included in Free**
 
-This is the working queue after `0.1.0`. Engine drops 1-6 are in the lab. Presentation is the product gap.
+This is the working queue after `0.2.1`. Engine drops 1-6 are in the lab. Presentation is still the product gap. Current next PR: [ops/handoff.md](https://github.com/wbcomdesigns/emdash-listora/blob/main/ops/handoff.md).
 
 Do not add Pro jobs. Do not add native-plugin features. Do not restyle listings as blog posts.
 
@@ -31,7 +31,7 @@ Stop calling those screens done until the gate in [Match Listora chrome](match-l
 ### 3. Then the rest of Free chrome
 
 - Category icon grid
-- Featured carousel
+- Archive paging, empty / loading / error
 - Calendar month plus phone agenda
 - Dashboard left nav with real account URLs
 - Map cluster and drag-search
@@ -48,12 +48,13 @@ Do not ship a plugin route change without the screen that uses it. If you add a 
 
 ## Suggested next PR
 
-1. Extract Card + Grid + Search from the lab into `site-kit/`.
-2. Rebuild `/listings/` to consume those kit pieces.
-3. Featured carousel and category icon grid (Free chrome only).
-4. Update this inventory and `CHANGELOG.md` under Unreleased.
-5. Do not publish a new registry version until a visitor can see the difference.
-6. Do not add Pro jobs.
+Follow [ops/handoff.md](https://github.com/wbcomdesigns/emdash-listora/blob/main/ops/handoff.md). Short version:
+
+1. Prove `setup-lab.sh` on a clean second EmDash site.
+2. Archive: category icon grid, paging, empty / loading / error.
+3. Extract Card + Grid + Search into `site-kit/components/`.
+4. Update this inventory and `CHANGELOG.md` under Unreleased. Next kit/UX release is `0.2.2`.
+5. Do not add Pro jobs.
 
 ## Planning files
 

@@ -2,7 +2,7 @@
 
 This repo is the source of truth for the sandboxed plugin. WordPress Listora stays at [wbcomdesigns/wb-listora](https://github.com/wbcomdesigns/wb-listora). Do not copy PHP into this tree.
 
-Registry identity is `@vapvarun.bsky.social/listora` (publisher DID `did:plc:2o6axbe264shvyedyhycyhya`). GitHub is where we review and version the code.
+Registry identity is `@vapvarun.bsky.social/listora` (publisher DID `did:plc:2o6axbe264shvyedyhycyhya`). GitHub is where we review and version the code. New session: read [ops/handoff.md](ops/handoff.md) first.
 
 This product is Free only. No Pro plan in this pass. Check code completion and site-owner readiness with `docs/qa/`. Do not add Compare, Needs, credits, Google Maps, lead forms, verification, or photo reviews to screens or routes. Next work stays on Free chrome. See [Not now](docs/website/pro-features/parked-work.md).
 
