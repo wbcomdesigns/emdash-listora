@@ -42,12 +42,25 @@ Plans:
 
 ## Local test
 
+First time on a machine (creates a sibling EmDash site if needed):
+
 ```bash
-cd ~/code/emdash-listora
+git clone https://github.com/wbcomdesigns/emdash-listora.git
+cd emdash-listora
 npm install --legacy-peer-deps
+./scripts/setup-lab.sh
 ./scripts/reset-lab.sh
 ./scripts/prove-lab.sh --all
 ```
+
+After that:
+
+```bash
+./scripts/reset-lab.sh
+./scripts/prove-lab.sh --all
+```
+
+Default lab folder is `../emdash-local`. Override with `LISTORA_LAB`. Steps: [Set up a new machine](docs/website/getting-started/new-machine.md).
 
 Then open:
 

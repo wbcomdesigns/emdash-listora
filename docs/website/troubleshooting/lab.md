@@ -2,6 +2,10 @@
 
 **Included in Free**
 
+## New machine has no `/listings/` or no lab folder
+
+You cloned the plugin only. The host site is not in this repo. Run `./scripts/setup-lab.sh`, then `./scripts/reset-lab.sh`. Page: [Set up a new machine](../getting-started/new-machine.md).
+
 ## Health is green, `/listings/` is empty or 500
 
 Auto-seed created collections, then media-usage aborted content inserts. Open:

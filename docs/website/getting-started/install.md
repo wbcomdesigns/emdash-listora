@@ -6,11 +6,12 @@ Two install paths. Use the lab path while you change code. Use the registry path
 
 ## Lab (developers)
 
-The plugin is a local package. From the site:
+On a new machine, run [Set up a new machine](new-machine.md). That creates the EmDash site, wires this plugin as a `file:` package, and copies the kit.
 
 ```bash
-# site: ~/code/emdash-local
-# plugin: ~/code/emdash-listora (often linked as node_modules/@wbcomdesigns/listora)
+# plugin: this repo
+# site: sibling emdash-local (or $LISTORA_LAB)
+./scripts/setup-lab.sh
 ```
 
 `astro.config.mjs` must load the sandbox runner and the plugin:
@@ -44,7 +45,7 @@ Health check: `http://localhost:4321/_emdash/api/plugins/listora/health`
 3. Search `@vapvarun.bsky.social/listora`.
 4. Review capabilities, then Install.
 
-Until the labeler approves `0.1.0`, the public page stays empty:
+Until the labeler approves the version testers install (`0.2.1`), the public page stays empty:
 
 https://plugins.emdashcms.com/plugins/@vapvarun.bsky.social/listora
 

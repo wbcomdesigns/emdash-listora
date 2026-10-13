@@ -19,9 +19,10 @@ Do not port PHP. Port jobs and chrome.
 
 ## Start here
 
-1. [Install the plugin](getting-started/install.md)
-2. [Run the local lab](getting-started/local-lab.md)
-3. [What we built in 0.1.0](getting-started/what-we-built.md)
+1. [Set up a new machine](getting-started/new-machine.md)
+2. [Install the plugin](getting-started/install.md)
+3. [Run the local lab](getting-started/local-lab.md)
+4. [What we built in 0.1.0](getting-started/what-we-built.md)
 4. [Form presentation](how-to/form-presentation.md)
 5. [QA catalog](how-to/qa-catalog.md)
 6. [Improve the screens](how-to/improve-the-screens.md)

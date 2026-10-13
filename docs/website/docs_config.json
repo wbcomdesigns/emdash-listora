@@ -11,8 +11,9 @@
     {
       "name": "Getting Started",
       "folder": "getting-started",
-      "description": "Install the plugin, run the lab, and see what 0.1.0 already ships.",
+      "description": "Install the plugin, set up a new machine, run the lab, and see what already ships.",
       "pages": [
+        { "slug": "new-machine", "title": "Set up a new machine" },
         { "slug": "install", "title": "Install the plugin" },
         { "slug": "local-lab", "title": "Run the local lab" },
         { "slug": "what-we-built", "title": "What we built in 0.1.0" }
