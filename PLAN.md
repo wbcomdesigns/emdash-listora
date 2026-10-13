@@ -75,3 +75,9 @@ Tell the agent one thing: "Read `PLAN.md` and `ops/handoff.md` in `~/code/emdash
 ## Parked
 
 #28 type editor, reminders, health check (milestone Later). Per-listing time zone. Data and map export formats. File import from the media library.
+
+## Who uses this today (owner, 2026-10-13)
+
+Everyone installing an EmDash plugin today is a developer. So a step that needs a developer (copying the kit, a trusted install to get an in-text block) is acceptable now. The screens the site owner and visitors use after setup still have to be plain and complete: no internal ids, no half-built features. We keep polishing setup as EmDash grows.
+
+After step 12, do #50 (in-text Listings block, prove first).
