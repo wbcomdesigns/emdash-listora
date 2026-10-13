@@ -79,7 +79,7 @@ describe("admin route", () => {
 		const result = await host.invokeRoute("admin", { type: "page_load", page: "/queue" });
 		expect(result).toMatchObject({
 			blocks: expect.arrayContaining([
-				expect.objectContaining({ type: "header", text: "Listora" }),
+				expect.objectContaining({ type: "header", text: "Listings queue" }),
 				expect.objectContaining({ type: "empty", title: "No pending submissions" }),
 				expect.objectContaining({ type: "banner", title: "Get a finished first look" }),
 				expect.objectContaining({
@@ -763,5 +763,65 @@ describe("long admin lists", () => {
 		expect(JSON.stringify(none)).toContain("Nothing matches");
 		// Opening the page again starts from the top with no filter.
 		expect(table(await admin({ type: "page_load", page: "/queue" }))?.rows).toHaveLength(25);
+	});
+});
+
+describe("owner edits a live listing", () => {
+	it("keeps the live listing unchanged until an admin approves, and only for the owner", async () => {
+		const rt = await createPluginRuntimeTestHost();
+		await rt.fixtures.collection(listingsCollection as never);
+		host = { dispose: () => rt.dispose() } as unknown as PluginTestHost;
+		const route = rt.transport.invokeRoute.bind(rt.transport);
+		const admin = (action_id: string, value: string) => route("admin", { type: "block_action", action_id, value, page: "/queue" }) as Promise<{ toast?: { type: string; message: string } }>;
+		const liveTitle = async () => ((await route("search", { q: "cafe" })) as { items: Array<{ title: string; phone: string }> }).items.map((item) => item.title);
+
+		await route("submit", { title: "Edit Cafe", listing_type: "restaurant", phone: "111", agree_terms: true }, { method: "POST", user: ana });
+		const id = (await rt.inspect.storage.list("submissions"))[0].id;
+		// Not public yet: nothing to edit.
+		expect(await route("edit", { listingId: id }, { method: "GET", user: ana })).toMatchObject({ ok: false });
+		await admin("review", `approve:${id}`);
+
+		// Only the owner. Same answer for someone else's listing and a made-up id.
+		expect(await route("edit", { listingId: id }, { method: "GET", user: ben })).toMatchObject({ ok: false, error: { code: "NOT_FOUND" } });
+		expect(await route("edit", { listingId: "nope" }, { method: "GET", user: ana })).toMatchObject({ ok: false, error: { code: "NOT_FOUND" } });
+		expect(await route("edit", { listingId: id, title: "Hijacked" }, { method: "POST", user: ben })).toMatchObject({ ok: false });
+		expect(await route("edit", { listingId: id, title: "Hijacked" }, { method: "POST" })).not.toMatchObject({ ok: true });
+
+		const opened = (await route("edit", { listingId: id }, { method: "GET", user: ana })) as { values: Record<string, string>; pending: boolean };
+		expect(opened).toMatchObject({ ok: true, pending: false });
+		expect(opened.values.title).toBe("Edit Cafe");
+
+		// A change that tries to set fields an owner may not touch.
+		const sent = await route(
+			"edit",
+			{ listingId: id, title: "Edit Cafe Deluxe", phone: "222", is_featured: true, listing_status: "live", listing_type: "hotel", expires_at: "2099-01-01" },
+			{ method: "POST", user: ana },
+		);
+		expect(sent).toMatchObject({ ok: true, pending: true });
+		const stored = (await rt.inspect.storage.get<{ fields: Record<string, string>; rev: string }>("edits", id))!;
+		expect(Object.keys(stored.fields).sort()).toEqual(["phone", "title"]);
+		// The public listing has not moved.
+		expect(await liveTitle()).toEqual(["Edit Cafe"]);
+		expect(((await route("dashboard", {}, { user: ana })) as { listings: Array<{ edit_pending: boolean }> }).listings[0].edit_pending).toBe(true);
+
+		// The owner rewrites the change after the admin loaded the page: the older click is refused.
+		const oldStamp = `approve|${stored.rev}|${id}`;
+		await route("edit", { listingId: id, title: "Edit Cafe Supreme", phone: "222" }, { method: "POST", user: ana });
+		expect((await admin("edit_mod", oldStamp)).toast?.type).toBe("error");
+		expect(await liveTitle()).toEqual(["Edit Cafe"]);
+
+		const fresh = (await rt.inspect.storage.get<{ rev: string }>("edits", id))!;
+		expect((await admin("edit_mod", `approve|${fresh.rev}|${id}`)).toast?.type).toBe("success");
+		expect(await liveTitle()).toEqual(["Edit Cafe Supreme"]);
+		expect(await rt.inspect.storage.get("edits", id)).toBeNull();
+
+		// A rejected change leaves no trace.
+		await route("edit", { listingId: id, title: "Bad Name" }, { method: "POST", user: ana });
+		const again = (await rt.inspect.storage.get<{ rev: string }>("edits", id))!;
+		await admin("edit_mod", `reject|${again.rev}|${id}`);
+		expect(await liveTitle()).toEqual(["Edit Cafe Supreme"]);
+		// Sending the same values as the live listing stores nothing.
+		expect(await route("edit", { listingId: id, title: "Edit Cafe Supreme", phone: "222" }, { method: "POST", user: ana })).toMatchObject({ unchanged: true });
+		expect(await rt.inspect.storage.get("edits", id)).toBeNull();
 	});
 });

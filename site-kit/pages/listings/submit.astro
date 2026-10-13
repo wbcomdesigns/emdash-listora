@@ -19,10 +19,10 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 	<div class="listora-block">
 		<header class="listora-page-head">
 			<div>
-				<h1>Add a listing</h1>
-				<p>Type, basics, details, categories, then a card preview.</p>
+				<h1 id="wizard-title">Add a listing</h1>
+				<p id="wizard-intro">Type, basics, details, categories, then a card preview.</p>
 			</div>
-			<a class="listora-btn listora-btn--ghost" href="/listings/">All listings</a>
+			<a class="listora-btn listora-btn--ghost" id="wizard-back" href="/listings/">All listings</a>
 		</header>
 
 		{
@@ -201,6 +201,8 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 
 	function wizard(form: HTMLFormElement) {
 	let step = 1;
+	// /listings/submit/?edit=<listing> opens the same form for a listing the member already owns.
+	const editId = new URLSearchParams(location.search).get("edit") || "";
 	const typeFields: Record<string, Array<{ key: string; label: string; help: string }>> = {
 		restaurant: [
 			{ key: "cuisine", label: "Cuisine", help: "Italian, Korean, and so on." },
@@ -274,7 +276,8 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 
 	async function checkDuplicate(title: string) {
 		const warning = document.getElementById("dup-warning");
-		if (!warning || !title.trim()) return;
+		// When editing, the match would be the listing itself.
+		if (editId || !warning || !title.trim()) return;
 		const data = await api(`duplicate?title=${encodeURIComponent(title)}`);
 		const matches = (data.matches ?? []) as Array<{ slug: string; title: string }>;
 		warning.hidden = matches.length === 0;
@@ -311,6 +314,58 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 	});
 	document.getElementById("back-btn")?.addEventListener("click", () => showStep(Math.max(1, step - 1)));
 	renderTypeFields();
+	if (editId) startEdit();
+
+	async function startEdit() {
+		const status = document.getElementById("listora-status");
+		const data = await api(`edit?listingId=${encodeURIComponent(editId)}`);
+		if (!data.ok) {
+			// Not theirs, not public, or not found: say so and offer no form.
+			form.hidden = true;
+			document.getElementById("wizard-steps")?.setAttribute("hidden", "");
+			if (status) {
+				status.hidden = false;
+				status.dataset.tone = "error";
+				status.innerHTML = `${esc(data.error?.message || "That listing is not available to edit.")} <a href="/account/?tab=listings">Back to your listings</a>`;
+			}
+			return;
+		}
+		const values = (data.values ?? {}) as Record<string, unknown>;
+		const title = document.getElementById("wizard-title");
+		const intro = document.getElementById("wizard-intro");
+		if (title) title.textContent = "Edit your listing";
+		const back = document.getElementById("wizard-back") as HTMLAnchorElement | null;
+		if (back) {
+			back.textContent = "Back to my listings";
+			back.href = "/account/?tab=listings";
+		}
+		if (intro) {
+			intro.textContent = data.pending
+				? "You already sent changes that are waiting for approval. Sending again replaces them."
+				: "Your listing stays as it is until your changes are approved.";
+		}
+		// The type of a live listing is fixed: pick it, lock the others, and start on Basics.
+		form.querySelectorAll<HTMLInputElement>('input[name="listing_type"]').forEach((input) => {
+			input.checked = input.value === data.listing_type;
+			input.disabled = input.value !== data.listing_type;
+		});
+		renderTypeFields();
+		const set = (name: string, value: unknown) => {
+			const field = form.elements.namedItem(name);
+			if (field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement || field instanceof HTMLSelectElement) {
+				field.value = String(value ?? "");
+			}
+		};
+		for (const [key, value] of Object.entries(values)) {
+			if (key === "type_fields") for (const [inner, text] of Object.entries((value ?? {}) as Record<string, unknown>)) set(inner, text);
+			else set(key, value);
+		}
+		// The category is set by the site's admin, so it is not part of an edit.
+		document.getElementById("category")?.closest<HTMLElement>(".listora-field")?.setAttribute("hidden", "");
+		const submit = document.getElementById("submit-btn");
+		if (submit) submit.textContent = "Send changes for approval";
+		showStep(2);
+	}
 
 	form.addEventListener("submit", async (event) => {
 		event.preventDefault();
@@ -332,7 +387,8 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 		button.disabled = true;
 		form.setAttribute("aria-busy", "true");
 		try {
-			const result = await api("submit", {
+			const result = await api(editId ? "edit" : "submit", {
+					...(editId ? { listingId: editId } : {}),
 					title,
 					listing_type: String(data.get("listing_type") ?? "business"),
 					category: String(data.get("category") ?? ""),
@@ -368,6 +424,18 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 					},
 				});
 			if (!result.ok) throw new Error(result.error?.message || "Could not submit.");
+			if (editId) {
+				// Stay on the form with what they sent, and say plainly what happens next.
+				if (status) {
+					status.hidden = false;
+					status.dataset.tone = "success";
+					status.innerHTML = result.unchanged
+						? 'Nothing was different, so there is nothing to approve. <a href="/account/?tab=listings">Back to your listings</a>'
+						: 'Thanks. Your changes are waiting for approval. Your listing stays as it is until then. <a href="/account/?tab=listings">Back to your listings</a>';
+					status.scrollIntoView({ block: "center" });
+				}
+				return;
+			}
 			form.reset();
 			showStep(1);
 			if (status) {

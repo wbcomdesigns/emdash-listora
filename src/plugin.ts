@@ -96,6 +96,49 @@ function parseSubmit(input: unknown): { ok: true; data: SubmitInput } | { ok: fa
 	};
 }
 
+/** What an owner may change on their own listing. Type, featured, claimed and dates are not theirs. */
+export const EDITABLE = [
+	"title",
+	"excerpt",
+	"description",
+	"phone",
+	"email",
+	"website",
+	"address",
+	"city",
+	"state",
+	"country",
+	"owner_name",
+	"amenities",
+	"price_range",
+	"cuisine",
+	"event_start",
+	"event_end",
+	"type_fields",
+] as const;
+
+const EDIT_CAPS: Record<string, number> = { title: 200, excerpt: 280, description: 5000, type_fields: 2000 };
+
+/** The extra per-type details with the empty ones left out, in a stable order. */
+export function filled(value: unknown): Record<string, string> {
+	return Object.fromEntries(
+		Object.entries(asRecord(value))
+			.map(([key, text]) => [key, asString(text).trim().slice(0, 200)] as const)
+			.filter(([, text]) => text !== "")
+			.sort(([x], [y]) => x.localeCompare(y)),
+	);
+}
+
+/** The editable fields from a parsed form, each capped, as they are stored on a listing. */
+function editFields(data: SubmitInput): Record<string, string> {
+	const out: Record<string, string> = {};
+	for (const key of EDITABLE) {
+		const value = key === "type_fields" ? JSON.stringify(filled(data.type_fields)) : asString((data as Record<string, unknown>)[key]);
+		out[key] = value.slice(0, EDIT_CAPS[key] ?? 200);
+	}
+	return out;
+}
+
 function spamBlocked(title: string, description: string, keywords: string[]): boolean {
 	const hay = `${title} ${description}`.toLowerCase();
 	return keywords.some((word) => word && hay.includes(word.toLowerCase()));
@@ -210,20 +253,28 @@ async function notifyOwners(ctx: Ctx): Promise<void> {
  */
 async function warnExpiring(ctx: Ctx, now = Date.now()): Promise<number> {
 	if (!ctx.email || (await ctx.settings.get<boolean>("email_expiry")) === false) return 0;
-	const soon = (await listPublished(ctx))
-		.filter((item) => {
-			if (item.listing_status === "expired" || !item.expires_at) return false;
-			const left = Date.parse(item.expires_at) - now;
-			return left > 0 && left < 7 * 86_400_000;
-		})
-		.slice(0, 50);
+	const soon = (await listPublished(ctx)).filter((item) => {
+		if (item.listing_status === "expired" || !item.expires_at) return false;
+		const left = Date.parse(item.expires_at) - now;
+		return left > 0 && left < 7 * 86_400_000;
+	});
 	const site = asString(ctx.site?.name).replace(/\s+/g, " ").trim().slice(0, 80);
 	const byOwner = new Map<string, Array<{ id: string; expires_at: string }>>();
+	// The cap counts listings still to be dealt with, never ones already warned, so a batch
+	// of handled listings cannot hold back the rest. A listing nobody can be told about (no
+	// owner, or no address) is marked too, for the same reason.
+	let taken = 0;
 	for (const item of soon) {
-		// Already warned for this date.
+		if (taken >= 50) break;
 		if ((await ctx.kv.get<string>(`warned:${item.id}`)) === item.expires_at) continue;
+		taken += 1;
 		const owner = await listingOwner(ctx, item.id);
-		if (owner) byOwner.set(owner, [...(byOwner.get(owner) ?? []), { id: item.id, expires_at: item.expires_at }]);
+		const reachable = owner && EMAIL_RE.test(asString(await ctx.kv.get<string>(emailKey(owner))));
+		if (!owner || !reachable) {
+			await ctx.kv.set(`warned:${item.id}`, item.expires_at);
+			continue;
+		}
+		byOwner.set(owner, [...(byOwner.get(owner) ?? []), { id: item.id, expires_at: item.expires_at }]);
 	}
 	let sent = 0;
 	for (const [owner, listings] of byOwner) {
@@ -672,6 +723,12 @@ const plugin: SandboxedPlugin = {
 				const all = [listings, reviews, claims, favorites, inbox].map(rows);
 				const refs = await listingRefs(ctx, all.flat().map((row) => asString(row.listingId)));
 				const days = await expiryDays(ctx);
+				// Which of this member's listings have a change waiting.
+				const editing = new Set(
+					rows(await ctx.storage.edits.query({ where: { member_id: user.id }, limit: 100 }))
+						.filter((row) => row.status === "pending")
+						.map((row) => asString(row.listingId)),
+				);
 				const named = (items: ReturnType<typeof rows>, own = false) =>
 					items.map((row) => {
 						const ref = refs.get(asString(row.listingId));
@@ -683,6 +740,9 @@ const plugin: SandboxedPlugin = {
 							listing_url: ref?.published ? `/listings/${ref.slug}/` : "",
 							...(own && ref?.published && days
 								? { expires_at: ref.expires_at, expired: ref.expired, can_renew: renewable(ref) }
+								: {}),
+							...(own && ref?.published
+								? { can_edit: true, edit_pending: editing.has(asString(row.listingId) || row.id) }
 								: {}),
 						};
 					});
@@ -709,6 +769,66 @@ const plugin: SandboxedPlugin = {
 						})
 						.sort((x, y) => Number(x.done) - Number(y.done)),
 				};
+			},
+		},
+		// The owner changes their own listing. The change waits in plugin storage: a member route
+		// never writes to a listing. An admin applies it from the queue.
+		edit: {
+			permission: MEMBER,
+			methods: ["GET", "POST"],
+			handler: async (routeCtx, ctx) => {
+				const user = routeCtx.user as Member | undefined;
+				if (!user) return SIGN_IN;
+				const raw = asRecord(routeCtx.input);
+				const listingId = asString(raw.listingId);
+				const NOT_YOURS = { ok: false, error: { code: "NOT_FOUND", message: "That listing is not available to edit." } };
+				if (!listingId || (await listingOwner(ctx, listingId)) !== user.id) return NOT_YOURS;
+				const listing = await ctx.content?.get?.(LISTINGS, listingId).catch(() => null);
+				if (!listing || listing.status !== "published") return NOT_YOURS;
+				const current = asRecord(listing.data);
+				const waiting = asRecord(await ctx.storage.edits.get(listingId));
+
+				if (routeCtx.request.method !== "POST") {
+					// What the form opens with: the waiting change if there is one, else the live values.
+					const source = waiting.status === "pending" ? { ...current, ...asRecord(waiting.fields) } : current;
+					const values: Record<string, unknown> = {};
+					for (const key of EDITABLE) values[key] = key === "type_fields" ? parseJson(source[key], {}) : asString(source[key]);
+					return { ok: true, listingId, listing_type: asString(current.listing_type), pending: waiting.status === "pending", values };
+				}
+
+				const parsed = parseSubmit(raw);
+				if (!parsed.ok) return { ok: false, error: { code: "VALIDATION_ERROR", message: parsed.error } };
+				if (await rateLimited(ctx, `edit:${user.id}`)) return RATE_LIMITED;
+				const keywords = asStringArray(await ctx.settings.get<string>("spam_keywords"));
+				if (spamBlocked(parsed.data.title, parsed.data.description, keywords.length ? keywords : ["viagra", "crypto pump"])) {
+					return { ok: false, error: { code: "SPAM", message: "Those changes were rejected." } };
+				}
+				const fields = editFields(parsed.data);
+				// Only what actually differs is kept, so the admin sees the change and nothing else.
+				const changed = Object.fromEntries(
+					Object.entries(fields).filter(([key, value]) =>
+						// A field the form did not send is left alone, never blanked.
+						!(key in raw)
+							? false
+							: key === "type_fields"
+							? JSON.stringify(filled(parseJson(current[key], {}))) !== value
+							: asString(current[key]) !== value,
+					),
+				);
+				if (Object.keys(changed).length === 0) {
+					await ctx.storage.edits.delete(listingId);
+					return { ok: true, listingId, pending: false, unchanged: true };
+				}
+				await ctx.storage.edits.put(listingId, {
+					listingId,
+					member_id: user.id,
+					fields: changed,
+					status: "pending",
+					// A second edit replaces the first, and a click on the older version is refused.
+					rev: crypto.randomUUID(),
+					createdAt: nowIso(),
+				});
+				return { ok: true, listingId, pending: true };
 			},
 		},
 		// The listing owner marks a message as done or as new again. Their own mark only.
@@ -855,6 +975,9 @@ const plugin: SandboxedPlugin = {
 						...claims.items.map((row) => ctx.storage.claims.delete(row.id)),
 						...favorites.items.map((row) => ctx.storage.favorites.delete(row.id)),
 					]);
+					for (const row of (await ctx.storage.edits.query({ where: { member_id: user.id }, limit: 200 })).items) {
+						await ctx.storage.edits.delete(row.id);
+					}
 					await ctx.kv.delete(emailKey(user.id));
 					for (const id of new Set(rows(reviews).map((row) => asString(row.listingId)))) await syncRating(ctx, id);
 					return { ok: true, erased: true };

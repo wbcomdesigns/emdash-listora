@@ -511,6 +511,30 @@ ul.listora-chips {
 	display: block;
 }
 
+/* A dashboard row: what it is on the left, what you can do on the right. Stacks on a phone. */
+.listora-row {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--listora-space-3);
+}
+
+.listora-row__text {
+	flex: 1 1 16rem;
+	min-width: 0;
+}
+
+.listora-row__actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--listora-space-2);
+}
+
+.listora-row__actions:empty {
+	display: none;
+}
+
 /* A small inline label. (.listora-badge sits on top of a photo, so it cannot be used in text.) */
 .listora-tag {
 	display: inline-block;

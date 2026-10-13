@@ -98,6 +98,126 @@ function findBlocks(list: string, view: View, shown: number, total: number, wait
 
 const lowerText = (...parts: unknown[]) => parts.map((part) => asString(part)).join(" ");
 
+const FIELD_LABELS: Record<string, string> = {
+	title: "Listing title",
+	excerpt: "Short summary",
+	description: "Description",
+	phone: "Phone",
+	email: "Email",
+	website: "Website",
+	address: "Address",
+	city: "City",
+	state: "State",
+	country: "Country",
+	owner_name: "Owner name",
+	amenities: "Features",
+	price_range: "Price range",
+	cuisine: "Cuisine",
+	event_start: "Starts",
+	event_end: "Ends",
+	type_fields: "Other details",
+};
+
+const words = (key: string) => key.replace(/[-_]/g, " ").replace(/^\w/, (char) => char.toUpperCase());
+
+/** A date an admin reads, in the admin's own language: "13 Oct 2026". */
+function day(ctx: PluginContext, value: unknown): string {
+	const date = new Date(asString(value));
+	if (Number.isNaN(date.getTime())) return "-";
+	try {
+		return date.toLocaleDateString(ctx.site?.locale || "en", { day: "numeric", month: "short", year: "numeric" });
+	} catch {
+		return date.toISOString().slice(0, 10);
+	}
+}
+
+const typeName = (slug: unknown) => LISTING_TYPES.find((type) => type.slug === asString(slug))?.name ?? "Business";
+
+/** One line per field that changes: what it is now and what it becomes. Plain text. */
+function changeLines(live: Record<string, unknown>, fields: Record<string, unknown>): Array<{ label: string; value: string }> {
+	const show = (text: unknown) => asString(text) || "(empty)";
+	const lines: Array<{ label: string; value: string }> = [];
+	for (const key of Object.keys(FIELD_LABELS)) {
+		if (!(key in fields)) continue;
+		if (key !== "type_fields") {
+			lines.push({ label: FIELD_LABELS[key], value: `${show(live[key])}  →  ${show(fields[key])}` });
+			continue;
+		}
+		// The extra per-type details, one line for each that differs.
+		const was = asRecord(parseDetails(live[key]));
+		const next = asRecord(parseDetails(fields[key]));
+		for (const inner of new Set([...Object.keys(was), ...Object.keys(next)])) {
+			// Cuisine and the like are also listing fields of their own, shown above. Once is enough.
+			if (inner in FIELD_LABELS) continue;
+			if (asString(was[inner]) !== asString(next[inner])) {
+				lines.push({ label: words(inner), value: `${show(was[inner])}  →  ${show(next[inner])}` });
+			}
+		}
+	}
+	return lines;
+}
+
+function parseDetails(value: unknown): unknown {
+	if (typeof value !== "string") return value ?? {};
+	try {
+		return JSON.parse(value);
+	} catch {
+		return {};
+	}
+}
+
+/**
+ * Changes owners sent for listings that are already live. One block per listing: its name,
+ * a line per changed field, and the two decisions. Not a table: the text can be long.
+ */
+async function editBlocks(ctx: PluginContext): Promise<BlockMap[]> {
+	const found = await ctx.storage.edits.query({ where: { status: "pending" }, orderBy: { createdAt: "asc" }, limit: 20 });
+	if (found.items.length === 0) return [];
+	const blocks: BlockMap[] = [
+		{ type: "divider" },
+		{ type: "header", text: "Changes to live listings" },
+		{ type: "context", text: "An owner changed a listing that is already public. The public page stays as it is until you approve." },
+	];
+	for (const item of found.items) {
+		const edit = asRecord(item.data);
+		const listingId = asString(edit.listingId) || item.id;
+		// Each one isolated: a removed listing must not stop the page.
+		const listing = await ctx.content?.get?.(LISTINGS, listingId).catch(() => null);
+		const live = asRecord(listing?.data);
+		const lines = changeLines(live, asRecord(edit.fields));
+		// The same change can sit in two places (cuisine is also an extra detail): say it once.
+		const seen = new Set<string>();
+		const unique = lines.filter((line) => !seen.has(`${line.label}|${line.value}`) && seen.add(`${line.label}|${line.value}`));
+		// A short change fits a field. A long one is written out in full: the admin must be able
+		// to read every word of what goes live.
+		const short = unique.filter((line) => line.value.length <= 90);
+		const long = unique.filter((line) => line.value.length > 90);
+		blocks.push(
+			{ type: "section", text: `${asString(live.title) || "Removed listing"}  ·  sent ${day(ctx, edit.createdAt)}` },
+			...(short.length || !long.length
+				? [{ type: "fields", fields: short.length ? short : [{ label: "Changes", value: "Nothing differs from the live listing any more." }] }]
+				: []),
+			...long.flatMap((line) => {
+				const [was, next] = line.value.split("  →  ");
+				return [
+					{ type: "context", text: `${line.label}, now:` },
+					{ type: "section", text: was },
+					{ type: "context", text: `${line.label}, after approval:` },
+					{ type: "section", text: next },
+				];
+			}),
+			{
+				type: "actions",
+				elements: [
+					{ type: "button", label: "Approve and publish", action_id: "edit_mod", style: "primary", value: stamped("approve", item.id, edit) },
+					{ type: "button", label: "Reject", action_id: "edit_mod", value: stamped("reject", item.id, edit) },
+				],
+			},
+		);
+	}
+	return blocks;
+}
+
 export async function renderQueue(
 	ctx: PluginContext,
 	extra?: Pick<BlockResponse, "toast">,
@@ -121,9 +241,9 @@ export async function renderQueue(
 		const listingId = asString(data.listingId) || row.id;
 		return {
 			title: asString(data.title) || listingId,
-			type: asString(data.listing_type) || "business",
+			type: typeName(data.listing_type),
 			city: asString(data.city) || "-",
-			submitted: asString(data.createdAt).slice(0, 10) || "-",
+			submitted: day(ctx, data.createdAt),
 			open: {
 				type: "link",
 				label: "Open",
@@ -147,7 +267,8 @@ export async function renderQueue(
 	});
 
 	const onboard = await getOnboardState(ctx);
-	const onboardBlocks = renderOnboardBlocks(onboard);
+	// Setup help belongs on Get started. Here it only shows while the directory is not ready.
+	const onboardBlocks = onboard.ready ? [] : renderOnboardBlocks(onboard);
 
 	const queueBlocks: BlockMap[] =
 		rows.length === 0
@@ -181,7 +302,7 @@ export async function renderQueue(
 
 	return {
 		blocks: [
-			{ type: "header", text: "Listora" },
+			{ type: "header", text: "Listings queue" },
 			...onboardBlocks,
 			{
 				type: "section",
@@ -197,6 +318,7 @@ export async function renderQueue(
 			},
 			{ type: "header", text: "Pending queue" },
 			...queueBlocks,
+			...(await editBlocks(ctx)),
 		],
 		toast: extra?.toast,
 	};
@@ -523,13 +645,14 @@ export async function renderSettings(
 
 /** The card on the EmDash dashboard: what is waiting, with a way to each list. */
 export async function renderWaiting(ctx: PluginContext): Promise<BlockResponse> {
-	const [listings, reviews, claims, messages] = await Promise.all([
+	const [edits, listings, reviews, claims, messages] = await Promise.all([
+		ctx.storage.edits.count({ status: "pending" }),
 		ctx.storage.submissions.count({ status: "pending" }),
 		ctx.storage.reviews.count({ status: "pending" }),
 		ctx.storage.claims.count({ status: "pending" }),
 		ctx.storage.contacts.count({ status: "new" }),
 	]);
-	const total = listings + reviews + claims + messages;
+	const total = listings + edits + reviews + claims + messages;
 	const link = (label: string, path: string) => ({
 		type: "link",
 		label,
@@ -543,6 +666,7 @@ export async function renderWaiting(ctx: PluginContext): Promise<BlockResponse> 
 						type: "stats",
 						items: [
 							{ label: "Listings", value: listings },
+							{ label: "Changes", value: edits },
 							{ label: "Reviews", value: reviews },
 							{ label: "Claims", value: claims },
 							{ label: "Messages", value: messages },
@@ -637,7 +761,7 @@ async function renderMessages(ctx: PluginContext, extra?: Pick<BlockResponse, "t
 			from: [asString(data.name), asString(data.email)].filter(Boolean).join(", ") || "No name given",
 			// Shown in full. Visitors write these, so they are plain text here, never markup.
 			message: asString(data.message),
-			received: asString(data.createdAt).slice(0, 10),
+			received: day(ctx, data.createdAt),
 			emailed:
 				data.notice === "sent"
 					? "Owner notified"
@@ -760,6 +884,32 @@ export async function handleAdmin(
 		const action = split === -1 ? value : value.slice(0, split);
 		const listingId = split === -1 ? "" : value.slice(split + 1);
 		return reviewListing(ctx, action, listingId);
+	}
+
+	if (type === "block_action" && asString(raw.action_id) === "edit_mod") {
+		const { action, id, stamp } = parseStamped(raw.value);
+		const edit = asRecord(await ctx.storage.edits.get(id));
+		const stale = staleRow(edit, stamp);
+		if (stale) return renderQueue(ctx, { toast: { message: stale, type: "error" } });
+		if (action === "approve") {
+			// Only the fields the owner may change, whatever the stored row holds.
+			const fields = asRecord(edit.fields);
+			const patch = Object.fromEntries(Object.keys(FIELD_LABELS).filter((key) => key in fields).map((key) => [key, asString(fields[key])]));
+			const patched = await patchListing(ctx, asString(edit.listingId), patch);
+			if (patched.state === "busy") {
+				return renderQueue(ctx, {
+					toast: { message: "That listing has unpublished edits of your own. Publish or discard them, then approve the change.", type: "error" },
+				});
+			}
+			if (patched.state === "missing") {
+				await ctx.storage.edits.delete(id);
+				return renderQueue(ctx, { toast: { message: "That listing no longer exists. The change was removed.", type: "info" } });
+			}
+		}
+		await ctx.storage.edits.delete(id);
+		return renderQueue(ctx, {
+			toast: { message: action === "approve" ? "Change published." : "Change rejected. The listing is unchanged.", type: "success" },
+		});
 	}
 
 	if (type === "block_action" && asString(raw.action_id) === "review_mod") {

@@ -137,7 +137,12 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 						const renew = item.can_renew
 							? ` <button type="button" class="listora-btn listora-btn--secondary" data-renew="${esc(item.listingId || item.id)}">Renew</button>`
 							: "";
-						return `<li class="listora-review"><strong>${title}</strong>${rest.length ? ` · ${rest.join(" · ")}` : ""}${renew}</li>`;
+						const id = esc(item.listingId || item.id);
+						const waiting = item.edit_pending ? ' <span class="listora-tag">Changes waiting for approval</span>' : "";
+						const edit = item.can_edit
+							? ` <a class="listora-btn listora-btn--secondary" href="/listings/submit/?edit=${id}">${item.edit_pending ? "Edit again" : "Edit"}</a>`
+							: "";
+						return `<li class="listora-review listora-row"><span class="listora-row__text"><strong>${title}</strong>${rest.length ? ` · ${rest.join(" · ")}` : ""}${waiting}</span><span class="listora-row__actions">${edit}${renew}</span></li>`;
 					})
 					.join("")}</ul>`
 			: `<div class="listora-empty"><h2>Nothing here yet</h2><p>This tab fills as you use the directory.</p></div>`;

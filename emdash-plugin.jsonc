@@ -49,6 +49,9 @@
 		"favorites": {
 			"indexes": ["member_id", "listingId", "createdAt"]
 		},
+		"edits": {
+			"indexes": ["status", "listingId", "member_id", "createdAt"]
+		},
 		"contacts": {
 			"indexes": ["listingId", "createdAt", "status", "notice"]
 		},

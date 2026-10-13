@@ -89,6 +89,10 @@ Three roles, always in this order: **guest**, **member** (subscriber role), **ad
 | M-22 | Mark one as done, reload | The count drops to 1, the message moves to the bottom without the New mark, and stays so after reload. Mark as new puts it back |
 | M-23 | Block the request and press Mark as done | A message says it could not be done, and the button works again |
 | M-24 | Call `message` for a message on someone else's listing, or with a made-up id | The same "not available" answer for both | notifies the current owner from the hourly task |
+| M-25 | My listings, a live listing: press Edit | The add-a-listing form opens as "Edit your listing", filled in, on Basics, with the type locked and no category field |
+| M-26 | Change the title and phone, send | "Your changes are waiting for approval." My listings shows "Changes waiting for approval" and "Edit again". The public page is unchanged | owner edits a live listing |
+| M-27 | Send the form without changing anything | "Nothing was different, so there is nothing to approve." | same test |
+| M-28 | Open `/listings/submit/?edit=` with someone else's listing or a made-up id | No form. "That listing is not available to edit." | same test |
 | M-13 | Dashboard at 390 | Tabs are one sideways-scrolling row. Content starts above the fold | |
 
 ## Admin
@@ -123,6 +127,10 @@ Three roles, always in this order: **guest**, **member** (subscriber role), **ad
 | A-27 | Type part of a listing name in "Find in this list" and press Find | Only matching rows, with a line saying how many. Text that matches nothing says "Nothing matches". Reopening the page clears the search | same test |
 | A-28 | Settings, Listing lifetime: turn "Email the owner 7 days before" off and save, reload | Stays off. Turn it back on the same way |
 | A-29 | A listing expiring within 7 days, after the daily check | Its owner gets one email, to their account address, with no listing name and no link. A second run sends nothing. After a renewal the next date is warned once. Nothing is sent when the switch is off | warns the owner once per expiry date |
+| A-30 | Listings queue with an owner's change waiting | A "Changes to live listings" block: the listing name, one line per changed field with before and after, a long change written out in full, Approve and publish, Reject. The dashboard card counts it under Changes |
+| A-31 | Approve a change | "Change published." The public page shows the new values. The block goes |
+| A-32 | Reject a change | "Change rejected." The public page is unchanged |
+| A-33 | The owner sends a newer change after you opened the page, then you approve the old one | Refused: "That item changed after this page loaded." | owner edits a live listing |
 | A-12 | Get started on a site with no listings collection | Clear "create the collection first" message, no crash | tells the owner to create the listings collection first |
 
 ## Presentation, every screen
