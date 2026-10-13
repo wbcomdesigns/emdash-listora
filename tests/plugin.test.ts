@@ -317,6 +317,22 @@ describe("ratings live in plugin storage", () => {
 	});
 });
 
+describe("paging", () => {
+	it("returns one page with totals, and clamps a page past the end", async () => {
+		const { rt } = await directory();
+		for (let n = 0; n < 5; n += 1) {
+			await rt.fixtures.content("listings", { data: { title: `Paged Place ${n}` }, slug: `paged-${n}`, status: "published" } as never);
+		}
+		const first = await host!.invokeRoute("listings", { per_page: 4 }, { method: "GET" });
+		expect(first).toMatchObject({ total: 6, page: 1, pages: 2, per_page: 4 });
+		expect((first as { items: unknown[] }).items).toHaveLength(4);
+		const last = await host!.invokeRoute("listings", { per_page: 4, page: 99 }, { method: "GET" });
+		expect(last).toMatchObject({ page: 2 });
+		expect((last as { items: unknown[] }).items).toHaveLength(2);
+		expect(await host!.invokeRoute("search", { q: "paged", per_page: 2 })).toMatchObject({ total: 5, pages: 3 });
+	});
+});
+
 describe("moderation pages with rows", () => {
 	it("renders valid Block Kit for pending reviews and claims", async () => {
 		const { a, rt } = await directory();

@@ -22,7 +22,7 @@ const sort = Astro.url.searchParams.get("sort") || "featured";
 
 const { entries, cacheHint } = await getEmDashCollection("listings", {
 	orderBy: { published_at: "desc" },
-	limit: 80,
+	limit: 500,
 });
 if (Astro.cache?.enabled) Astro.cache.set(cacheHint);
 
@@ -38,6 +38,10 @@ const filtered = sortListings(
 	sort,
 );
 const featured = published.filter((entry) => entry.data.is_featured);
+const PER_PAGE = 24;
+const pages = Math.max(1, Math.ceil(filtered.length / PER_PAGE));
+const page = Math.min(Math.max(Number(Astro.url.searchParams.get("page")) || 1, 1), pages);
+const shown = filtered.slice((page - 1) * PER_PAGE, page * PER_PAGE);
 const querySuffix = [
 	type ? `type=${encodeURIComponent(type)}` : "",
 	q ? `q=${encodeURIComponent(q)}` : "",
@@ -209,7 +213,7 @@ function amenityList(value: unknown): string[] {
 						<a class="listora-btn" href="/listings/submit/">Add a listing</a>
 					</div>
 				) : (
-					filtered.map((listing) => {
+					shown.map((listing) => {
 						const hours = parseHours(listing.data.hours);
 						const open = hours.length ? isOpenNow(hours, String(listing.data.timezone || "America/New_York")) : null;
 						const amenities = amenityList(listing.data.amenities);
@@ -254,6 +258,17 @@ function amenityList(value: unknown): string[] {
 				)
 			}
 		</div>
+
+		{
+			pages > 1 ? (
+				<nav class="listora-pager" id="listora-pager" aria-label="Pages of listings">
+					{page > 1 ? <a class="listora-btn listora-btn--secondary" rel="prev" href={withQuery(`page=${page - 1}`)}>Previous</a> : <span></span>}
+					<span class="listora-pager__status">Page {page} of {pages}</span>
+					{page < pages ? <a class="listora-btn listora-btn--secondary" rel="next" href={withQuery(`page=${page + 1}`)}>Next</a> : <span></span>}
+				</nav>
+			) : null
+		}
+		<p class="listora-pager" id="listora-more" hidden><a class="listora-btn listora-btn--secondary" href="/listings/">See all results</a></p>
 
 		<div class="listora-skeletons" aria-hidden="true">
 			<div class="listora-skeleton"></div>
@@ -377,11 +392,26 @@ function amenityList(value: unknown): string[] {
 			credentials: "same-origin",
 			headers: { "X-EmDash-Request": "1" },
 		});
-		const json = (await response.json()) as { data?: { items?: Array<Parameters<typeof cardHtml>[0]> } };
+		const json = (await response.json()) as { data?: { items?: Array<Parameters<typeof cardHtml>[0]>; total?: number } };
 		const items = json.data?.items ?? [];
+		const total = json.data?.total ?? items.length;
 		results.innerHTML = items.length === 0 ? emptyHtml() : items.map((item) => cardHtml(item)).join("");
-		if (count) count.textContent = items.length === 1 ? "1 listing" : `${items.length} listings`;
-		if (toolbar) toolbar.textContent = items.length === 1 ? "1 result" : `${items.length} results`;
+		if (count) count.textContent = total === 1 ? "1 listing" : `${total} listings`;
+		if (toolbar) toolbar.textContent = total === 1 ? "1 result" : `${total} results`;
+		// Live search shows the first page. The full list is the same query as a normal paged page.
+		document.getElementById("listora-pager")?.setAttribute("hidden", "");
+		const more = document.getElementById("listora-more");
+		const link = more?.querySelector("a");
+		if (more && link) {
+			more.hidden = total <= items.length;
+			const full = new URLSearchParams();
+			if (params.get("q")) full.set("q", params.get("q")!);
+			if (params.get("listing_type")) full.set("type", params.get("listing_type")!);
+			if (params.get("location")) full.set("location", params.get("location")!);
+			if (params.get("sort") && params.get("sort") !== "featured") full.set("sort", params.get("sort")!);
+			link.href = `/listings/?${full}`;
+			link.textContent = `See all ${total} results`;
+		}
 		if (featuredEl instanceof HTMLElement) {
 			featuredEl.hidden = Boolean(activeType || q?.value || locationInput?.value || near);
 		}

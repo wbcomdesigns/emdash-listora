@@ -15,17 +15,40 @@ export async function ratingsMap(ctx: PluginContext): Promise<Map<string, Rating
 	);
 }
 
-export async function listPublished(ctx: PluginContext, limit = 100): Promise<ListingCard[]> {
+const PAGE_SIZE = 100;
+const MAX_LISTINGS = 1000;
+
+/**
+ * Every published listing, read page by page.
+ * ponytail: filters and sorts in memory over up to 1000 listings per request. Move the
+ * filters into the content query once a directory outgrows that.
+ */
+export async function listPublished(ctx: PluginContext): Promise<ListingCard[]> {
 	if (!ctx.content) return [];
 	try {
-		const [result, ratings] = await Promise.all([
-			ctx.content.list(LISTINGS, { limit, where: { status: "published" } }),
-			ratingsMap(ctx),
-		]);
-		return result.items.map((item) => listingFromContent(item, ratings.get(item.id)));
+		const ratings = await ratingsMap(ctx);
+		const cards: ListingCard[] = [];
+		let cursor: string | undefined;
+		do {
+			const page = await ctx.content.list(LISTINGS, { limit: PAGE_SIZE, cursor, where: { status: "published" } });
+			for (const item of page.items) cards.push(listingFromContent(item, ratings.get(item.id)));
+			cursor = page.hasMore ? page.cursor : undefined;
+		} while (cursor && cards.length < MAX_LISTINGS);
+		return cards;
 	} catch {
 		return [];
 	}
+}
+
+export const PER_PAGE = 24;
+
+/** One page of an already filtered list, with what a pager needs. */
+export function paginate<T>(items: T[], input: unknown): { items: T[]; total: number; page: number; pages: number; per_page: number } {
+	const raw = asRecord(input);
+	const perPage = Math.min(Math.max(asNumber(raw.per_page) ?? PER_PAGE, 1), 60);
+	const pages = Math.max(1, Math.ceil(items.length / perPage));
+	const page = Math.min(Math.max(Math.floor(asNumber(raw.page) ?? 1), 1), pages);
+	return { items: items.slice((page - 1) * perPage, page * perPage), total: items.length, page, pages, per_page: perPage };
 }
 
 export async function filterListings(

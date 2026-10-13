@@ -6,6 +6,7 @@ import {
 	filterListings,
 	isPublicListing,
 	listPublished,
+	paginate,
 	listingRefs,
 	ratingsMap,
 	syncRating,
@@ -204,15 +205,7 @@ const plugin: SandboxedPlugin = {
 			public: true,
 			handler: async (routeCtx, ctx) => {
 				const filtered = await filterListings(ctx, routeCtx.input);
-				const raw = asRecord(routeCtx.input);
-				const limit = Math.min(Math.max(asNumber(raw.limit) ?? 40, 1), 100);
-				return {
-					ok: true,
-					items: filtered.items.slice(0, limit),
-					total: filtered.total,
-					cursor: null,
-					hasMore: filtered.total > limit,
-				};
+				return { ok: true, ...paginate(filtered.items, routeCtx.input) };
 			},
 		},
 		search: {
@@ -248,7 +241,7 @@ const plugin: SandboxedPlugin = {
 							})),
 					};
 				}
-				return { ok: true, items: filtered.items, total: filtered.total };
+				return { ok: true, ...paginate(filtered.items, raw) };
 			},
 		},
 		submit: {
