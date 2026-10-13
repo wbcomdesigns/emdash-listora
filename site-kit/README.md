@@ -2,7 +2,7 @@
 
 Copy these into an EmDash site after the sandboxed plugin is installed.
 
-- `listora-ui.css` - `--listora-*` tokens, directory chrome, and form primitives (label, helper, error, check, empty). See `docs/website/how-to/form-presentation.md`.
+- `listora-ui.css` - `--listora-*` tokens, directory chrome, and form primitives (label, helper, error, type cards, form section, empty). See `docs/website/how-to/form-presentation.md`.
 - `seed/listings.mjs` - collection fields, taxonomies, 33 NYC listings
 - `seed/import/sample.csv` - Drop 6 import fixture
 

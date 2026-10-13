@@ -56,6 +56,8 @@ Banned: placeholder-as-label, inline `style` on fields, `alert()`, a lone top ba
 
 Wizard steps use the real names: Type, Basics, Details, Categories, Preview. Not "Step 1". Steps are buttons (or links) so keyboard users can move. The active step is `aria-current="step"`.
 
+Type is a radio card grid (`.listora-type-card`), not a lone select. Each step sits in `.listora-form-section`. Related fields use `.listora-form-grid` (two columns, one column under 1024px). Every control uses `.listora-input`.
+
 Preview must look like a `listora-card`, not a dump of raw fields.
 
 ## States
