@@ -1,5 +1,7 @@
 # Agent instructions
 
+**Before anything else:** load the `emdash-plugin-development` skill. It separates what EmDash core already gives every site, what a plugin may add, and what was decided with the owner. Then read `PLAN.md`, `SCOPE.md` and `ops/handoff.md` here.
+
 Read `ops/handoff.md` first. That is the session handoff for the next change.
 
 This product is Free only. No Pro plan in this pass. Check code completion and site-owner readiness with `docs/qa/`. Do not start, surface, or continue Pro work.
