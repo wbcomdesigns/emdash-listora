@@ -317,6 +317,31 @@ describe("ratings live in plugin storage", () => {
 	});
 });
 
+describe("contact messages", () => {
+	it("stores a capped message for a public listing and shows it to the admin", async () => {
+		const { a, rt } = await directory();
+		const sent = await host!.invokeRoute(
+			"contact",
+			{ listingId: a, name: "Vee", email: "vee@example.com", message: "x".repeat(3000) },
+			{ method: "POST", meta: { ip: "203.0.113.9", userAgent: null, referer: null, geo: null } },
+		);
+		expect(sent).toMatchObject({ ok: true });
+		const rows = await host!.storage<{ message: string; status: string }>("contacts").list();
+		expect(rows).toHaveLength(1);
+		expect(rows[0].data.message).toHaveLength(1000);
+		const page = await rt.admin.loadPage("/messages");
+		expect(page.blocks.map((block) => block.type)).toContain("table");
+		await host!.invokeRoute("admin", { type: "block_action", action_id: "message_mod", value: `done|${rows[0].id}`, page: "/messages" });
+		expect(await host!.storage("contacts").get(rows[0].id)).toMatchObject({ status: "handled" });
+	});
+
+	it("refuses a message for a listing that is not public", async () => {
+		await directory();
+		const sent = await host!.invokeRoute("contact", { listingId: "no-such-listing", message: "Hi" }, { method: "POST" });
+		expect(sent).toMatchObject({ ok: false, error: { code: "NOT_FOUND" } });
+	});
+});
+
 describe("paging", () => {
 	it("returns one page with totals, and clamps a page past the end", async () => {
 		const { rt } = await directory();

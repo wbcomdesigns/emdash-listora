@@ -520,15 +520,18 @@ const plugin: SandboxedPlugin = {
 				if (asString(raw.company_website)) {
 					return { ok: false, error: { code: "SPAM", message: "Message rejected." } };
 				}
+				if (!(await isPublicListing(ctx, listingId))) return NO_LISTING;
 				// Per visitor IP. With no IP from the host every guest shares one bucket: fail closed.
 				const ip = (routeCtx.requestMeta as { ip?: string | null } | undefined)?.ip || "unknown";
 				if (await rateLimited(ctx, `contact:${ip}`)) return RATE_LIMITED;
 				const id = `contact-${listingId}-${Date.now()}`;
 				await ctx.storage.contacts.put(id, {
 					listingId,
-					name: asString(raw.name),
-					email,
-					message,
+					name: asString(raw.name).slice(0, 80),
+					email: email.slice(0, 160),
+					// Capped so the admin table can show every character.
+					message: message.slice(0, 1000),
+					status: "new",
 					createdAt: nowIso(),
 				});
 				return { ok: true, id };

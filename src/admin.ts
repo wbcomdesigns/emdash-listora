@@ -423,6 +423,58 @@ function staleRow(row: Record<string, unknown>, stamp: string): string | null {
 	return null;
 }
 
+async function renderMessages(ctx: PluginContext, extra?: Pick<BlockResponse, "toast">): Promise<BlockResponse> {
+	const found = await ctx.storage.contacts.query({
+		where: { status: "new" },
+		orderBy: { createdAt: "desc" },
+		limit: 50,
+	});
+	const titles = await listingTitles(ctx, found.items);
+	const table = found.items.map((row) => {
+		const data = asRecord(row.data);
+		return {
+			listing: titles.get(asString(data.listingId)) ?? "Removed listing",
+			from: [asString(data.name), asString(data.email)].filter(Boolean).join(", ") || "No name given",
+			// Shown in full. Visitors write these, so they are plain text here, never markup.
+			message: asString(data.message),
+			received: asString(data.createdAt).slice(0, 10),
+			action: {
+				type: "menu",
+				action_id: "message_mod",
+				label: "Handle",
+				items: [
+					{ label: "Mark as handled", value: `done|${row.id}` },
+					{ label: "Delete", value: `delete|${row.id}` },
+				],
+			},
+		};
+	});
+	return {
+		blocks: [
+			{ type: "header", text: "Messages" },
+			{
+				type: "section",
+				text: "Messages visitors sent from a listing page. They are stored here and are not emailed to anyone yet.",
+			},
+			table.length === 0
+				? { type: "empty", title: "No new messages", description: "Messages from the contact form on a listing wait here." }
+				: {
+						type: "table",
+						page_action_id: "messages_page",
+						columns: [
+							{ key: "listing", label: "Listing" },
+							{ key: "from", label: "From" },
+							{ key: "message", label: "Message" },
+							{ key: "received", label: "Received" },
+							{ key: "action", label: "Decision", format: "element" },
+						],
+						rows: table,
+					},
+		],
+		toast: extra?.toast,
+	};
+}
+
 export async function handleAdmin(
 	input: unknown,
 	ctx: PluginContext,
@@ -512,6 +564,21 @@ export async function handleAdmin(
 		return renderClaimQueue(ctx, { toast: { message: "Claim updated.", type: "success" } });
 	}
 
+	if (type === "block_action" && asString(raw.action_id) === "message_mod") {
+		const [action = "", ...rest] = asString(raw.value).split("|");
+		const id = rest.join("|");
+		const existing = asRecord(await ctx.storage.contacts.get(id));
+		if (!existing.listingId) {
+			return renderMessages(ctx, { toast: { message: "Someone already handled that message.", type: "info" } });
+		}
+		if (action === "delete") await ctx.storage.contacts.delete(id);
+		else await ctx.storage.contacts.put(id, { ...existing, status: "handled" });
+		return renderMessages(ctx, {
+			toast: { message: action === "delete" ? "Message deleted." : "Marked as handled.", type: "success" },
+		});
+	}
+
+	if (page.includes("messages")) return renderMessages(ctx);
 	if (page.includes("reviews")) return renderReviewQueue(ctx);
 	if (page.includes("claims")) return renderClaimQueue(ctx);
 	if (page.includes("setup") || page.includes("started")) return renderSetup(ctx);
