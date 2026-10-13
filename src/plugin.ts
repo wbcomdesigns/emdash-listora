@@ -408,7 +408,6 @@ const plugin: SandboxedPlugin = {
 					event_end: parsed.data.event_end,
 					type_fields: JSON.stringify(parsed.data.type_fields),
 					listing_status: "live",
-					timezone: "America/New_York",
 				});
 
 				// Moderation off means the listing goes live now, not into a queue nobody reads.

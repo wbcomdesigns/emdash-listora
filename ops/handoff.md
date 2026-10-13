@@ -47,7 +47,7 @@ Override lab folder with `LISTORA_LAB`. After a kit change: edit `site-kit/`, th
 
 ## Next, in order
 
-The 0.5.0 plan is locked. Read `PLAN.md`: it holds every owner decision, the order of work, and how to take a task. Work happens on the `0.5.0` branch (PR #49), never on `main`. Built so far on that branch: #23, #20, #26, #24, #27 (Settings page, queue page, dashboard card). A dashboard card asks the admin route with `{ type: "page_load", page: "widget:<id>" }`. Open tasks: #39, #38, #44, #45, #43, #42, #40, #41, #25, #46, #47, then #48 (full QA, preview on knowxtheme.com, release).
+The 0.5.0 plan is locked. Read `PLAN.md`: it holds every owner decision, the order of work, and how to take a task. Work happens on the `0.5.0` branch (PR #49), never on `main`. Built so far on that branch: #23, #20, #26, #24, #27 (Settings page, queue page, dashboard card). A dashboard card asks the admin route with `{ type: "page_load", page: "widget:<id>" }`. Open tasks: #38, #44, #45, #43, #42, #40, #41, #25, #46, #47, then #48 (full QA, preview on knowxtheme.com, release).
 
 ## How a release is verified
 
@@ -75,7 +75,7 @@ Every case in `docs/qa/QA_CHECKLIST.md` is run in a browser as guest, subscriber
 | Dashboard rows | Renew only. No edit |
 | Featured row | The same listings repeat at the top of the grid below it |
 | Banner | `images/banner.png` is the dark-text lockup on a transparent ground. Check it on the registry page |
-| Timezone | Hardcoded to America/New_York on submit and in the calendar |
+| Time zone | The site's own, from EmDash settings (`siteZone` in the kit lib). The plugin never computes open or closed: the page does, because a plugin cannot read the site zone. Listings no longer store a zone |
 
 QA cases by role: `docs/qa/QA_CHECKLIST.md` (walk all of it before a release; `./scripts/lab-role.sh subscriber` for member cases). QA source: `docs/qa/`. Screen ticks: `docs/qa/screen-checklist.md`. Parked Pro: `docs/website/pro-features/parked-work.md`.
 

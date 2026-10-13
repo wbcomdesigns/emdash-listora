@@ -38,7 +38,22 @@ export function parseHours(value: unknown): HourRow[] {
 	}
 }
 
-export function isOpenNow(hours: HourRow[], timeZone = "America/New_York"): boolean {
+/**
+ * The site's own time zone, from EmDash's site settings. One zone for the whole directory.
+ * An empty or unknown value falls back to UTC so a page never fails over it.
+ */
+export function siteZone(value: unknown): string {
+	const zone = typeof value === "string" ? value.trim() : "";
+	if (!zone) return "UTC";
+	try {
+		new Intl.DateTimeFormat("en-US", { timeZone: zone });
+		return zone;
+	} catch {
+		return "UTC";
+	}
+}
+
+export function isOpenNow(hours: HourRow[], timeZone = "UTC"): boolean {
 	if (!hours.length) return false;
 	const parts = new Intl.DateTimeFormat("en-US", {
 		timeZone,
@@ -107,7 +122,7 @@ export function sortListings<T extends { data: Record<string, unknown> }>(items:
 
 export const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
-export function weekdayIndex(timeZone = "America/New_York"): number {
+export function weekdayIndex(timeZone = "UTC"): number {
 	const map: Record<string, number> = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
 	const weekday = new Intl.DateTimeFormat("en-US", { timeZone, weekday: "short" }).format(new Date());
 	return map[weekday] ?? 0;
@@ -146,13 +161,17 @@ export function coverUrl(slug: string, featured?: { src?: string } | null, type?
 	return `https://images.unsplash.com/${id}?auto=format&fit=crop&w=1600&h=900&q=80&sig=${encodeURIComponent(slug)}`;
 }
 
-export function formatEventWhen(value: unknown): string {
+export function formatEventWhen(value: unknown, timeZone = "UTC"): string {
 	const raw = String(value || "").trim();
 	if (!raw) return "";
 	const dateOnly = /^(\d{4})-(\d{2})-(\d{2})$/.exec(raw);
+	// A time typed with no zone ("2026-10-18T15:00") means that clock time in the site's zone,
+	// so it is shown as typed. A value that carries an offset is converted to the site's zone.
+	const naive = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?$/.test(raw);
+	if (naive) timeZone = "UTC";
 	const date = dateOnly
 		? new Date(Number(dateOnly[1]), Number(dateOnly[2]) - 1, Number(dateOnly[3]))
-		: new Date(raw);
+		: new Date(naive ? `${raw}Z` : raw);
 	if (Number.isNaN(date.getTime())) return raw;
 	if (dateOnly) {
 		return new Intl.DateTimeFormat("en-US", {
@@ -169,7 +188,7 @@ export function formatEventWhen(value: unknown): string {
 		year: "numeric",
 		hour: "numeric",
 		minute: "2-digit",
-		timeZone: "America/New_York",
+		timeZone,
 	}).format(date);
 }
 

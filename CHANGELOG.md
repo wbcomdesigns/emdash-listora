@@ -8,6 +8,9 @@ Copy `site-kit/` again after you update, including the new `site-kit/layouts/Lis
 
 - New      - Settings has its own page, in three groups, with a line saying what each option does. The Listings queue page shows only what is waiting.
 - New      - A card on the EmDash dashboard shows how many listings, reviews, claims and messages are waiting, with a link to each.
+- Improve  - Opening hours, "Open now" and event times use your site's own time zone from EmDash's settings. Before, every site was treated as New York.
+- Improve  - The event start and end fields are proper date-and-time pickers.
+- Fix      - An event time entered without a zone is shown as entered, not shifted.
 - Fix      - A wrong number of days for expiry is refused with a message. Before, it was quietly saved as 0, which switched expiry off.
 - New      - Browse by category and by city on the directory page, with a count on each. A category on a listing page links to its filtered list.
 - New      - The add-a-listing form offers the site's own categories and saves the choice on the listing. Needs one new permission: reading and assigning categories.

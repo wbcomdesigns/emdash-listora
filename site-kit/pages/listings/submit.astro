@@ -213,8 +213,8 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 			{ key: "price", label: "Price", help: "Asking or nightly rate." },
 		],
 		event: [
-			{ key: "event_start", label: "Starts", help: "Date and time." },
-			{ key: "event_end", label: "Ends", help: "Date and time." },
+			{ key: "event_start", label: "Starts", help: "Date and time, in this site's time zone.", type: "datetime-local" },
+			{ key: "event_end", label: "Ends", help: "Date and time, in this site's time zone.", type: "datetime-local" },
 		],
 		job: [
 			{ key: "salary", label: "Salary", help: "Range is fine." },
@@ -258,7 +258,7 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 		box.innerHTML = (typeFields[type] ?? [])
 			.map(
 				(field) =>
-					`<div class="listora-field"><label class="listora-label" for="${field.key}">${field.label}</label><input id="${field.key}" class="listora-input" name="${field.key}" aria-describedby="${field.key}-help" /><p class="listora-helper" id="${field.key}-help">${field.help}</p></div>`,
+					`<div class="listora-field"><label class="listora-label" for="${field.key}">${field.label}</label><input id="${field.key}" class="listora-input" name="${field.key}" type="${field.type || "text"}" aria-describedby="${field.key}-help" /><p class="listora-helper" id="${field.key}-help">${field.help}</p></div>`,
 			)
 			.join("");
 	}

@@ -51,6 +51,8 @@ Three roles, always in this order: **guest**, **member** (subscriber role), **ad
 | G-19 | Click a category chip | Only that category's listings, the count matches the chip, the chip is marked active, the featured row is hidden. Click it again to clear |
 | G-20 | With a category active, type a search and press Search | The category stays applied. Typing alone does not reload the page |
 | G-21 | Click a city chip | The city fills the location box and the list narrows to it |
+| G-22 | Change the site time zone in EmDash Settings, General, then open the directory, a listing and the calendar | Open and Closed badges, the "today" row in the hours table and event times all follow the new zone. Live search cards show the same badges as the page |
+| G-23 | A site with no time zone set | Pages work and use UTC |
 | G-12 | Request `import`, `dashboard`, `favorites`, `privacy` routes directly | 401 each | prove: guests refused |
 
 ## Member (subscriber role)
@@ -75,6 +77,7 @@ Three roles, always in this order: **guest**, **member** (subscriber role), **ad
 | M-17 | With expiry on, open My listings | Each live listing shows "Expires <date>". Renew shows when expired or inside 30 days. Renew confirms "Renewed until <date>". A failed request says so and the button works again | dates a listing on approval |
 | M-18 | Call `renew` for someone else's listing | Refused | same test |
 | M-19 | Add a listing and pick a category on step 4 | The list shows the site's own categories plus "No category". After approval the listing page shows the category as a link, and the directory count for it goes up by one | |
+| M-20 | Add an event: the Starts and Ends fields | Date-and-time pickers. The help says the site's time zone. After approval the calendar shows the time exactly as entered |
 | M-13 | Dashboard at 390 | Tabs are one sideways-scrolling row. Content starts above the fold | |
 
 ## Admin

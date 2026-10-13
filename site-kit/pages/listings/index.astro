@@ -1,11 +1,12 @@
 ---
-import { getEmDashCollection, getTermsForEntries } from "emdash";
+import { getEmDashCollection, getSiteSettings, getTermsForEntries } from "emdash";
 import { Image } from "emdash/ui";
 import Layout from "../../layouts/ListoraLayout.astro";
 import {
 	LISTING_TYPES,
 	coverUrl,
 	isOpenNow,
+	siteZone,
 	matchesPlace,
 	parseHours,
 	placeOf,
@@ -18,6 +19,8 @@ const type = Astro.url.searchParams.get("type") || "";
 const q = Astro.url.searchParams.get("q") || "";
 const location = Astro.url.searchParams.get("location") || "";
 const category = Astro.url.searchParams.get("category") || "";
+// One zone for the whole directory: the site's own, from EmDash's settings.
+const zone = siteZone((await getSiteSettings())?.timezone);
 const view = Astro.url.searchParams.get("view") || "grid";
 const sort = Astro.url.searchParams.get("sort") || "featured";
 
@@ -109,7 +112,7 @@ function amenityList(value: unknown): string[] {
 			<a class="listora-btn" href="/listings/submit/">Add a listing</a>
 		</header>
 
-		<form class="listora-search" role="search" id="listora-search-form">
+		<form class="listora-search" role="search" id="listora-search-form" data-zone={zone}>
 			<div class="listora-search__bar">
 				<div class="listora-search__field listora-search__field--keyword">
 					<label class="listora-sr-only" for="listora-q">Search</label>
@@ -290,7 +293,7 @@ function amenityList(value: unknown): string[] {
 				) : (
 					shown.map((listing) => {
 						const hours = parseHours(listing.data.hours);
-						const open = hours.length ? isOpenNow(hours, String(listing.data.timezone || "America/New_York")) : null;
+						const open = hours.length ? isOpenNow(hours, zone) : null;
 						const amenities = amenityList(listing.data.amenities);
 						const owner = String(listing.data.owner_name || "");
 						return (
@@ -357,7 +360,7 @@ function amenityList(value: unknown): string[] {
 
 <link rel="stylesheet" href="/vendor/leaflet/leaflet.css" />
 <script>
-	import { api, signInUrl } from "../../lib/listora";
+	import { api, isOpenNow, signInUrl } from "../../lib/listora";
 
 	const form = document.getElementById("listora-search-form") as HTMLFormElement | null;
 	const q = document.getElementById("listora-q") as HTMLInputElement | null;
@@ -369,6 +372,8 @@ function amenityList(value: unknown): string[] {
 	const mapEl = document.getElementById("listora-map");
 	const featuredEl = document.querySelector(".listora-featured");
 	const clearBtn = document.getElementById("listora-clear") as HTMLButtonElement | null;
+	// The same zone the server used for the cards already on the page.
+	const zone = form?.dataset.zone || "UTC";
 	let activeType = new URLSearchParams(location.search).get("type") || "";
 	const activeCategory = new URLSearchParams(location.search).get("category") || "";
 	let near: { lat: string; lng: string } | null = null;
@@ -406,7 +411,7 @@ function amenityList(value: unknown): string[] {
 		excerpt: string;
 		is_featured: boolean;
 		rating_avg: number;
-		open_label: string;
+		hours?: Array<{ day: number; open: string; close: string }>;
 		owner_name?: string;
 		amenities?: string[];
 		lat?: number;
@@ -430,7 +435,7 @@ function amenityList(value: unknown): string[] {
 				<h2><a href="/listings/${escapeHtml(item.slug)}/">${escapeHtml(item.title)}</a></h2>
 				<p class="listora-meta">
 					<span>${escapeHtml(place)}</span>
-					${item.open_label ? `<span class="${item.open_label === "Open" ? "listora-open" : "listora-closed"}">${escapeHtml(item.open_label)}</span>` : ""}
+					${item.hours?.length ? (isOpenNow(item.hours, zone) ? '<span class="listora-open">Open</span>' : '<span class="listora-closed">Closed</span>') : ""}
 				</p>
 				${item.owner_name ? `<p class="listora-meta">Listed by ${escapeHtml(item.owner_name)}</p>` : ""}
 				${amenities.length ? `<p class="listora-card__features">${amenities.map((row) => `<span>${escapeHtml(row)}</span>`).join("")}</p>` : ""}

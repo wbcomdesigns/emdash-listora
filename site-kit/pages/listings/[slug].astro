@@ -13,6 +13,7 @@ import {
 	coverUrl,
 	hoursForWeek,
 	isOpenNow,
+	siteZone,
 	mapsDirectionsUrl,
 	parseHours,
 	schemaType,
@@ -29,7 +30,8 @@ const { entry: listing, cacheHint } = await getEmDashEntry("listings", slug);
 if (!listing) return Astro.rewrite("/404");
 if (Astro.cache?.enabled) Astro.cache.set(cacheHint);
 
-const siteTitle = (await getSiteSettings())?.title ?? "";
+const site = await getSiteSettings();
+const siteTitle = site?.title ?? "";
 const seo = getSeoMeta(listing, {
 	siteTitle,
 	siteUrl: Astro.url.origin,
@@ -44,7 +46,8 @@ const address = [data.address, data.city, data.state, data.postal_code, data.cou
 const place = [data.city, data.state, data.country].filter(Boolean).join(", ");
 const website = websiteHref(data.website);
 const hours = parseHours(data.hours);
-const zone = String(data.timezone || "America/New_York");
+// One zone for the whole directory: the site's own, from EmDash's settings.
+const zone = siteZone(site?.timezone);
 const open = hours.length ? isOpenNow(hours, zone) : null;
 const weekHours = hoursForWeek(hours);
 const today = weekdayIndex(zone);

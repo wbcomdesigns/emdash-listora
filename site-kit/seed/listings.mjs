@@ -78,7 +78,6 @@ const restaurant = (id, slug, title, city, lat, lng, extra = {}) => ({
 		is_claimed: extra.claimed ?? false,
 		is_featured: extra.featured ?? false,
 		owner_name: extra.owner || "",
-		timezone: "America/New_York",
 		rating_avg: extra.rating ?? 4.6,
 		rating_count: extra.reviews ?? 3,
 		hours: JSON.stringify(week()),
@@ -162,7 +161,6 @@ export const listings = [
 			listing_status: "live",
 			type_fields: JSON.stringify({ beds: 2, baths: 2, price: "$8,400/mo" }),
 			featured_image: img("photo-1502672260266-1c1ef2d93688"),
-			timezone: "America/New_York",
 		},
 		taxonomies: { listing_category: ["apartment"], listing_location: ["soho"] },
 	},
@@ -183,7 +181,6 @@ export const listings = [
 			listing_status: "live",
 			type_fields: JSON.stringify({ beds: 4, baths: 3, price: "$3.2M" }),
 			featured_image: img("photo-1568605114967-8130f3a36994"),
-			timezone: "America/New_York",
 		},
 		taxonomies: { listing_category: ["house"], listing_location: ["brooklyn"] },
 	},
@@ -203,7 +200,6 @@ export const listings = [
 			is_featured: true,
 			listing_status: "live",
 			featured_image: img("photo-1502672260266-1c1ef2d93688"),
-			timezone: "America/New_York",
 		},
 	},
 	{
@@ -230,7 +226,6 @@ export const listings = [
 			services: JSON.stringify([{ name: "Spa hour", price: 120, duration: 60 }]),
 			listing_status: "live",
 			featured_image: img("photo-1566073771259-6a8506099945"),
-			timezone: "America/New_York",
 		},
 		taxonomies: { listing_category: ["boutique"], listing_location: ["tribeca"] },
 	},
@@ -250,7 +245,6 @@ export const listings = [
 			hours: JSON.stringify(week("00:00", "23:59")),
 			listing_status: "live",
 			featured_image: img("photo-1551882547-ff40c63fe5fa"),
-			timezone: "America/New_York",
 		},
 	},
 	{
@@ -269,7 +263,6 @@ export const listings = [
 			hours: JSON.stringify(week("00:00", "23:59")),
 			listing_status: "live",
 			featured_image: img("photo-1566073771259-6a8506099945"),
-			timezone: "America/New_York",
 		},
 	},
 	{
@@ -295,7 +288,6 @@ export const listings = [
 			amenities: "wifi, parking",
 			listing_status: "live",
 			featured_image: img("photo-1534438327276-14e5300c3a48"),
-			timezone: "America/New_York",
 		},
 		taxonomies: { listing_category: ["health-wellness"], listing_feature: ["wifi", "parking"] },
 	},
@@ -315,7 +307,6 @@ export const listings = [
 			hours: JSON.stringify(week("09:00", "18:00")),
 			listing_status: "live",
 			featured_image: img("photo-1497366216548-37526070297c"),
-			timezone: "America/New_York",
 		},
 	},
 	{
@@ -334,7 +325,6 @@ export const listings = [
 			hours: JSON.stringify(week("10:00", "19:00")),
 			listing_status: "live",
 			featured_image: img("photo-1416879595882-3373a0480b5b"),
-			timezone: "America/New_York",
 		},
 		taxonomies: { listing_category: ["retail"] },
 	},
@@ -355,7 +345,6 @@ export const listings = [
 			services: JSON.stringify([{ name: "Haircut", price: 45, duration: 45 }]),
 			listing_status: "live",
 			featured_image: img("photo-1503951914875-452162b0f3f1"),
-			timezone: "America/New_York",
 		},
 		taxonomies: { listing_category: ["services"] },
 	},
@@ -375,7 +364,6 @@ export const listings = [
 			hours: JSON.stringify(week("07:00", "20:00")),
 			listing_status: "live",
 			featured_image: img("photo-1544367567-0f2fcb009e0b"),
-			timezone: "America/New_York",
 		},
 	},
 	{
@@ -394,7 +382,6 @@ export const listings = [
 			hours: JSON.stringify(week("08:00", "19:00")),
 			listing_status: "live",
 			featured_image: img("photo-1586281380349-632531db7ed4"),
-			timezone: "America/New_York",
 		},
 	},
 	{
@@ -412,7 +399,6 @@ export const listings = [
 			lng: -73.968,
 			listing_status: "live",
 			featured_image: img("photo-1502672260266-1c1ef2d93688"),
-			timezone: "America/New_York",
 		},
 	},
 	{
@@ -433,7 +419,6 @@ export const listings = [
 			event_end: "2026-11-08T22:30:00-05:00",
 			listing_status: "live",
 			featured_image: img("photo-1511192336575-5a79af67a986"),
-			timezone: "America/New_York",
 		},
 	},
 	{
@@ -453,7 +438,6 @@ export const listings = [
 			event_end: "2026-10-18T17:00:00-04:00",
 			listing_status: "live",
 			featured_image: img("photo-1481627834876-b7833e8f5570"),
-			timezone: "America/New_York",
 		},
 	},
 	{
@@ -471,7 +455,6 @@ export const listings = [
 			lng: -73.989,
 			type_fields: JSON.stringify({ salary: "$140k-$170k", job_type: "full-time" }),
 			listing_status: "live",
-			timezone: "America/New_York",
 		},
 	},
 	{
@@ -488,7 +471,6 @@ export const listings = [
 			lat: 40.678,
 			lng: -73.944,
 			listing_status: "live",
-			timezone: "America/New_York",
 		},
 	},
 	{
@@ -512,7 +494,6 @@ export const listings = [
 			services: JSON.stringify([{ name: "Annual physical", price: 180, duration: 40 }]),
 			listing_status: "live",
 			featured_image: img("photo-1519494026892-80bbd2d6fd0d"),
-			timezone: "America/New_York",
 		},
 	},
 	{
@@ -534,7 +515,6 @@ export const listings = [
 			hours: JSON.stringify(week("10:00", "21:00")),
 			listing_status: "live",
 			featured_image: img("photo-1503676260728-1c00da094a0b"),
-			timezone: "America/New_York",
 		},
 	},
 	{
@@ -553,7 +533,6 @@ export const listings = [
 			hours: JSON.stringify(week("09:00", "17:00")),
 			listing_status: "live",
 			featured_image: img("photo-1568515387631-8b650bbcdb90"),
-			timezone: "America/New_York",
 		},
 	},
 	{
@@ -572,7 +551,6 @@ export const listings = [
 			type_fields: JSON.stringify({ asking_price: "$420" }),
 			listing_status: "live",
 			featured_image: img("photo-1518455027359-f3f8164ba6bd"),
-			timezone: "America/New_York",
 		},
 	},
 	{
@@ -589,7 +567,6 @@ export const listings = [
 			lat: 40.73,
 			lng: -73.99,
 			listing_status: "live",
-			timezone: "America/New_York",
 		},
 	},
 	{
@@ -604,7 +581,6 @@ export const listings = [
 			state: "NY",
 			country: "US",
 			listing_status: "live",
-			timezone: "America/New_York",
 		},
 	},
 	{
@@ -617,7 +593,6 @@ export const listings = [
 			listing_type: "restaurant",
 			city: "Manhattan",
 			listing_status: "live",
-			timezone: "America/New_York",
 		},
 	},
 	{
@@ -630,7 +605,6 @@ export const listings = [
 			listing_type: "classified",
 			city: "Queens",
 			listing_status: "live",
-			timezone: "America/New_York",
 		},
 	},
 	{
@@ -650,7 +624,6 @@ export const listings = [
 			expires_at: "2025-01-01T00:00:00.000Z",
 			listing_status: "expired",
 			hours: JSON.stringify(week("09:00", "17:00")),
-			timezone: "America/New_York",
 		},
 	},
 ];
