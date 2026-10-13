@@ -154,7 +154,7 @@ function amenityList(value: unknown): string[] {
 			featured.length > 0 && !q && !type && !location ? (
 				<section class="listora-featured" aria-label="Featured listings">
 					<h2 class="listora-meta">Featured</h2>
-					<div class="listora-grid">
+					<div class="listora-featured__track">
 						{featured.slice(0, 3).map((listing) => (
 							<article class="listora-card">
 								<div class="listora-card-media">

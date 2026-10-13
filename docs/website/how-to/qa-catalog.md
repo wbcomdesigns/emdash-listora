@@ -13,7 +13,7 @@ QA for Listora for EmDash lives at repo level in [`docs/qa/`](https://github.com
 | [owner-readiness.md](https://github.com/wbcomdesigns/emdash-listora/blob/main/docs/qa/owner-readiness.md) | EmDash site-owner install journey |
 | [code-completion.md](https://github.com/wbcomdesigns/emdash-listora/blob/main/docs/qa/code-completion.md) | Engine, kit, host: done / thin / missing |
 | [screen-checklist.md](https://github.com/wbcomdesigns/emdash-listora/blob/main/docs/qa/screen-checklist.md) | Browser ticks at 1440 and 390 |
-| [cover-before-next-release.md](https://github.com/wbcomdesigns/emdash-listora/blob/main/docs/qa/cover-before-next-release.md) | Close these before testers use `0.2.0` |
+| [cover-before-next-release.md](https://github.com/wbcomdesigns/emdash-listora/blob/main/docs/qa/cover-before-next-release.md) | Close these before testers use `0.2.1` |
 
 ## Current readiness (2026-10-13)
 

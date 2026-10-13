@@ -2,6 +2,16 @@
 
 Versions match `package.json`, the git tag, and the EmDash registry release. Newest first. Never publish a version that is not on `origin/main`.
 
+## [0.2.1] - 2026-10-13
+
+Site-kit chrome. Copy `site-kit/` again after install. Plugin routes stay the same.
+
+- Improve - Type chips and detail tabs stay one row and scroll sideways on a phone.
+- Improve - Featured listings use a horizontal track instead of a stacked card grid.
+- Improve - Detail cover fills the content width. Title sits beside the sidebar on desktop.
+- Improve - Detail sidebar uses owner, contact, hours, map, and claimed cards.
+- Improve - Calendar event times use America/New_York. Date-only events stay on that calendar day.
+
 ## [0.2.0] - 2026-10-13
 
 First-run Get started plus drop-in site-kit pages so testers see a finished directory.

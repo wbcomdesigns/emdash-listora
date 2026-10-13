@@ -16,7 +16,7 @@ No. They get routes, storage, and Block Kit admin. They still copy the site kit 
 
 ## Why is the public collection page empty?
 
-`0.1.0` is published to the publisher PDS. Testers install `0.2.0`. The public site hides a package until the labeler approves it. Watch with `emdash-plugin info vapvarun.bsky.social listora --version 0.2.0 --watch`.
+`0.1.0` is published to the publisher PDS. Testers install `0.2.1`. The public site hides a package until the labeler approves it. Watch with `emdash-plugin info vapvarun.bsky.social listora --version 0.2.1 --watch`.
 
 ## Why publish as vapvarun if the repo is wbcomdesigns?
 

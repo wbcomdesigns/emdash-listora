@@ -67,12 +67,12 @@ Do this from `main` after the PR is merged.
 1. Confirm `package.json` version is new.
 2. Confirm `CHANGELOG.md` has that version.
 3. `npm run validate && npm run test && npm run build`
-4. Tag: `git tag v0.2.0 && git push origin main --tags`
+4. Tag: `git tag v0.2.1 && git push origin main --tags`
 5. Session: `npx emdash-plugin whoami`  
    If needed: `npx emdash-plugin login vapvarun.bsky.social`
 6. Publish: `npx emdash-plugin publish`
 7. Watch approval:  
-   `npx emdash-plugin info vapvarun.bsky.social listora --version 0.2.0 --watch`
+   `npx emdash-plugin info vapvarun.bsky.social listora --version 0.2.1 --watch`
 
 Public page after approval:  
 https://plugins.emdashcms.com/plugins/@vapvarun.bsky.social/listora

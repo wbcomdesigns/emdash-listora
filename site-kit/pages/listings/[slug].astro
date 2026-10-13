@@ -130,81 +130,81 @@ const schema = {
 				}
 			</div>
 
-			<header class="listora-detail__header">
-				<div class="listora-detail__header-top">
-					<span class="listora-badge listora-badge--type">{typeName(data.listing_type)}</span>
-					{
-						data.is_featured ? (
-							<span class="listora-badge listora-badge--featured">Featured</span>
-						) : null
-					}
-					{
-						expired ? (
-							<span class="listora-badge listora-badge--expired">Expired</span>
-						) : open === true ? (
-							<span class="listora-badge listora-badge--open" role="status">Open</span>
-						) : open === false ? (
-							<span class="listora-badge listora-badge--closed" role="status">Closed</span>
-						) : null
-					}
-					{
-						rating ? (
-							<span class="listora-stars">
-								{stars(rating)} {rating.toFixed(1)} ({reviewCount})
-							</span>
-						) : null
-					}
-				</div>
-				<h1 class="listora-detail__title">{data.title}</h1>
-				{
-					place ? (
-						<p class="listora-detail__address">
-							<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
-								<path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"></path>
-								<circle cx="12" cy="10" r="3"></circle>
-							</svg>
-							{place}
-						</p>
-					) : null
-				}
-				{data.owner_name ? <p class="listora-meta">Listed by {data.owner_name}</p> : null}
-				{data.excerpt ? <p class="listora-detail__lead">{data.excerpt}</p> : null}
-
-				<div class="listora-detail__actions">
-					<button class="listora-btn listora-btn--secondary" type="button" id="fav-btn" data-id={data.id} data-slug={slug}>
-						<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
-							<path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
-						</svg>
-						Save
-					</button>
-					<button class="listora-btn listora-btn--secondary" type="button" id="share-btn" data-title={data.title}>
-						<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
-							<path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"></path>
-							<polyline points="16 6 12 2 8 6"></polyline>
-							<line x1="12" x2="12" y1="2" y2="15"></line>
-						</svg>
-						Share
-					</button>
-					{
-						directions ? (
-							<a class="listora-btn listora-btn--secondary" href={directions} rel="noopener noreferrer" target="_blank">
-								<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
-									<polygon points="3 11 22 2 13 21 11 13 3 11"></polygon>
-								</svg>
-								Directions
-							</a>
-						) : null
-					}
-					{
-						!claimed ? (
-							<a class="listora-btn listora-btn--secondary" href="#claim-form">Claim</a>
-						) : null
-					}
-				</div>
-			</header>
-
 			<div class="listora-detail__content">
 				<div class="listora-detail__main">
+					<header class="listora-detail__header">
+						<div class="listora-detail__header-top">
+							<span class="listora-badge listora-badge--type">{typeName(data.listing_type)}</span>
+							{
+								data.is_featured ? (
+									<span class="listora-badge listora-badge--featured">Featured</span>
+								) : null
+							}
+							{
+								expired ? (
+									<span class="listora-badge listora-badge--expired">Expired</span>
+								) : open === true ? (
+									<span class="listora-badge listora-badge--open" role="status">Open</span>
+								) : open === false ? (
+									<span class="listora-badge listora-badge--closed" role="status">Closed</span>
+								) : null
+							}
+							{
+								rating ? (
+									<span class="listora-stars">
+										{stars(rating)} {rating.toFixed(1)} ({reviewCount})
+									</span>
+								) : null
+							}
+						</div>
+						<h1 class="listora-detail__title">{data.title}</h1>
+						{
+							place ? (
+								<p class="listora-detail__address">
+									<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
+										<path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"></path>
+										<circle cx="12" cy="10" r="3"></circle>
+									</svg>
+									{place}
+								</p>
+							) : null
+						}
+						{data.owner_name ? <p class="listora-meta">Listed by {data.owner_name}</p> : null}
+						{data.excerpt ? <p class="listora-detail__lead">{data.excerpt}</p> : null}
+
+						<div class="listora-detail__actions">
+							<button class="listora-btn listora-btn--secondary" type="button" id="fav-btn" data-id={data.id} data-slug={slug}>
+								<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
+									<path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
+								</svg>
+								Save
+							</button>
+							<button class="listora-btn listora-btn--secondary" type="button" id="share-btn" data-title={data.title}>
+								<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
+									<path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"></path>
+									<polyline points="16 6 12 2 8 6"></polyline>
+									<line x1="12" x2="12" y1="2" y2="15"></line>
+								</svg>
+								Share
+							</button>
+							{
+								directions ? (
+									<a class="listora-btn listora-btn--secondary" href={directions} rel="noopener noreferrer" target="_blank">
+										<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
+											<polygon points="3 11 22 2 13 21 11 13 3 11"></polygon>
+										</svg>
+										Directions
+									</a>
+								) : null
+							}
+							{
+								!claimed ? (
+									<a class="listora-btn listora-btn--secondary" href="#claim-form">Claim</a>
+								) : null
+							}
+						</div>
+					</header>
+
 					<div class="listora-tabs" role="tablist" aria-label="Listing sections">
 						<button class="listora-tab is-active" type="button" role="tab" aria-selected="true" aria-controls="tab-details" id="tab-btn-details" data-tab="details">
 							Details
@@ -327,55 +327,73 @@ const schema = {
 
 				<aside class="listora-detail__sidebar">
 					{
+						data.owner_name ? (
+							<div class="listora-detail__owner-card">
+								<h3>Listed by</h3>
+								<p class="listora-detail__owner-name">{data.owner_name}</p>
+							</div>
+						) : null
+					}
+
+					{
 						hasContact ? (
-							<div class="listora-panel">
-								<h2>Contact</h2>
-								<div class="listora-contact-list">
-									{data.phone ? (
-										<a href={`tel:${data.phone}`}>
-											<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
+							<div class="listora-detail__contact-card">
+								<h3>Contact</h3>
+								{data.phone ? (
+									<a class="listora-detail__contact-item" href={`tel:${data.phone}`}>
+										<span class="listora-detail__contact-icon listora-detail__contact-icon--phone" aria-hidden="true">
+											<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
 												<path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"></path>
 											</svg>
-											{data.phone}
-										</a>
-									) : null}
-									{website ? (
-										<a href={website} rel="noopener noreferrer">
-											<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
+										</span>
+										{data.phone}
+									</a>
+								) : null}
+								{website ? (
+									<a class="listora-detail__contact-item" href={website} rel="noopener noreferrer">
+										<span class="listora-detail__contact-icon listora-detail__contact-icon--web" aria-hidden="true">
+											<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
 												<circle cx="12" cy="12" r="10"></circle>
 												<line x1="2" x2="22" y1="12" y2="12"></line>
 												<path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
 											</svg>
-											{website.replace(/^https?:\/\//, "")}
-										</a>
-									) : null}
-									{data.email ? (
-										<a href={`mailto:${data.email}`}>
-											<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
+										</span>
+										{website.replace(/^https?:\/\//, "")}
+									</a>
+								) : null}
+								{data.email ? (
+									<a class="listora-detail__contact-item" href={`mailto:${data.email}`}>
+										<span class="listora-detail__contact-icon listora-detail__contact-icon--email" aria-hidden="true">
+											<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
 												<rect width="20" height="16" x="2" y="4" rx="2"></rect>
 												<path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"></path>
 											</svg>
-											{data.email}
-										</a>
-									) : null}
-								</div>
+										</span>
+										{data.email}
+									</a>
+								) : null}
 							</div>
 						) : null
 					}
 
 					{
 						hours.length ? (
-							<div class="listora-panel">
-								<h2>Hours</h2>
+							<div class="listora-detail__hours-card">
+								<h3>Hours</h3>
+								{open === true ? (
+									<p class="listora-detail__hours-status is-open">Open now</p>
+								) : open === false ? (
+									<p class="listora-detail__hours-status is-closed">Closed now</p>
+								) : null}
 								<table class="listora-hours-table">
 									<tbody>
 										{weekHours.map((row) => (
 											<tr class:list={{ "is-today": row.day === today }}>
-												<th scope="row">
+												<td class="listora-hours-table__day">
 													{row.label}
 													{row.day === today ? <span class="listora-sr-only"> today</span> : null}
-												</th>
-												<td class:list={{ "is-closed": row.closed }}>
+												</td>
+												<td class:list={{ "listora-hours-table__time": true, "listora-hours-table__time--closed": row.closed }}>
 													{row.closed ? "Closed" : `${row.open} - ${row.close}`}
 												</td>
 											</tr>
@@ -388,12 +406,15 @@ const schema = {
 
 					{
 						hasMap ? (
-							<div class="listora-panel">
-								<h2>Location</h2>
-								<div id="detail-map" class="listora-map" data-lat={lat} data-lng={lng} data-title={data.title}></div>
+							<div class="listora-detail__map-card">
+								<h3>Location</h3>
+								<div id="detail-map" class="listora-detail__map-embed" data-lat={lat} data-lng={lng} data-title={data.title}></div>
 								{address ? <p class="listora-detail__map-address">{address}</p> : null}
 								{directions ? (
-									<a class="listora-btn listora-btn--secondary" href={directions} rel="noopener noreferrer" target="_blank">
+									<a class="listora-btn listora-btn--secondary listora-detail__map-directions" href={directions} rel="noopener noreferrer" target="_blank">
+										<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
+											<polygon points="3 11 22 2 13 21 11 13 3 11"></polygon>
+										</svg>
 										Get directions
 									</a>
 								) : null}
@@ -401,13 +422,19 @@ const schema = {
 						) : null
 					}
 
-					<div class="listora-panel">
-						{
-							claimed ? (
-								<p class="listora-meta">This listing is claimed.</p>
-							) : (
+					{
+						claimed ? (
+							<div class="listora-detail__claimed-badge">
+								<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
+									<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+									<polyline points="22 4 12 14.01 9 11.01"></polyline>
+								</svg>
+								Claimed listing
+							</div>
+						) : (
+							<div class="listora-detail__claim-card">
 								<form id="claim-form" class="listora-form">
-									<h2>Is this your business?</h2>
+									<h3>Is this your business?</h3>
 									<p class="listora-helper">A claim goes to review. You will get email when it is decided.</p>
 									<div class="listora-field">
 										<label class="listora-label" for="claim-name">
@@ -435,9 +462,9 @@ const schema = {
 										<button class="listora-btn" type="submit">Claim listing</button>
 									</div>
 								</form>
-							)
-						}
-					</div>
+							</div>
+						)
+					}
 				</aside>
 			</div>
 		</article>
