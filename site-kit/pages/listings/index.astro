@@ -388,11 +388,14 @@ function amenityList(value: unknown): string[] {
 			params.set("lng", near.lng);
 			params.set("radius", "8");
 		}
-		const response = await fetch(`/_emdash/api/plugins/listora/search?${params}`, {
-			credentials: "same-origin",
-			headers: { "X-EmDash-Request": "1" },
-		});
-		const json = (await response.json()) as { data?: { items?: Array<Parameters<typeof cardHtml>[0]>; total?: number } };
+		const data = await api(`search?${params}`);
+		form.classList.remove("is-busy");
+		form.removeAttribute("aria-busy");
+		if (!data.ok) {
+			results.innerHTML = `<div class="listora-empty" role="alert"><h2>Search is not available right now</h2><p>${escapeHtml(data.error?.message || "Try again in a moment.")}</p></div>`;
+			return;
+		}
+		const json = { data: data as { items?: Array<Parameters<typeof cardHtml>[0]>; total?: number } };
 		const items = json.data?.items ?? [];
 		const total = json.data?.total ?? items.length;
 		results.innerHTML = items.length === 0 ? emptyHtml() : items.map((item) => cardHtml(item)).join("");

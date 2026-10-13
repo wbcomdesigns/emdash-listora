@@ -1,4 +1,4 @@
-# Handoff (2026-10-13, after 0.4.0 work)
+# Handoff (2026-10-13, after 0.4.1)
 
 Read this first in a new session. Then `AGENTS.md`, `CONTRIBUTING.md`, and `docs/website/getting-started/new-machine.md`.
 
@@ -9,7 +9,7 @@ This product is Free only. No Pro. Work is tracked as GitHub issues under the `0
 | Thing | Where |
 | --- | --- |
 | Plugin (source of truth) | this repo, `main` |
-| Registry | `@vapvarun.bsky.social/listora`. Live version is `0.3.1` |
+| Registry | `@vapvarun.bsky.social/listora`. Latest published is `0.4.1` |
 | Lab host | sibling EmDash site `emdash-local` (not this git repo) |
 | WordPress Listora | scope and visual reference only. Do not copy PHP |
 
@@ -51,6 +51,10 @@ Override lab folder with `LISTORA_LAB`. After a kit change: edit `site-kit/`, th
 2. Milestone `0.4.0` shipped paging, the Messages page, stored ratings and the kit changes for existing sites. Still open there: #23 (prove the kit on a clean second site and a preview of a live one), #20 (email the listing owner).
 3. Milestone `0.5.0`: categories and locations as filters, gallery, listing expiry, admin pages for import and settings.
 4. Milestone `Later`: type editor, reminders, health check.
+
+## How a release is verified
+
+Every case in `docs/qa/QA_CHECKLIST.md` is run in a browser as guest, subscriber and admin, and every route is traced from the kit page that calls it to its storage and its admin screen. The 0.4.1 pass did this in full and found seven problems that route-level checks had missed (contrast in dark mode, keyboard tabs, blank areas on a failed request, a function with no button). Do the full pass before publishing, not after.
 
 ## Do not do
 

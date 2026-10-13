@@ -1,3 +1,10 @@
+## 0.4.1
+
+- New: Delete my data on the account page.
+- Improve: dark mode buttons and star ratings meet contrast. Tabs work with arrow keys.
+- Fix: a failed request shows a message, never a blank area.
+- Fix: rating structured data uses the listing's own type.
+
 ## 0.4.0
 
 - New: paging on the directory, 24 listings per page.

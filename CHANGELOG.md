@@ -2,6 +2,18 @@
 
 Versions match `package.json`, the git tag, and the EmDash registry release. Newest first. Never publish a version that is not on `origin/main`.
 
+## [0.4.1] - 2026-10-13
+
+Found by walking every QA case in the browser as guest, member and admin. Copy `site-kit/` again after you update.
+
+- New      - Delete my data on the account Profile tab. The erase function existed with no button.
+- Improve  - Primary buttons stay readable in dark mode, including on hover.
+- Improve  - Star glyphs meet contrast in light mode.
+- Improve  - Listing tabs respond to the left and right arrow keys.
+- Fix      - A failed request no longer leaves a blank area: reviews, the dashboard and search each say what happened.
+- Fix      - Search no longer stays stuck in its busy state when a request fails.
+- Fix      - The rating in structured data uses the listing's own type (Restaurant, Event, Hotel and so on) and joins the page's own listing block.
+
 ## [0.4.0] - 2026-10-13
 
 Bigger directories, a Messages screen, and a kit that suits existing sites. Copy `site-kit/` again after you update, including the new `site-kit/public/vendor/` folder.

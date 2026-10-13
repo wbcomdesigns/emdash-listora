@@ -154,9 +154,9 @@ const plugin: SandboxedPlugin = {
 					id: "listora-rating",
 					graph: {
 						"@context": "https://schema.org",
-						"@type": "LocalBusiness",
-						name: event.page.pageTitle || event.page.title || undefined,
-						url: event.page.canonical || event.page.url,
+						// Same @id as the listing page's own block, so the two read as one thing.
+						"@id": `${event.page.canonical || event.page.url}#listing`,
+						"@type": asString(rating.schema) || "LocalBusiness",
 						aggregateRating: {
 							"@type": "AggregateRating",
 							ratingValue: rating.average,

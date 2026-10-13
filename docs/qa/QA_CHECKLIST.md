@@ -4,9 +4,11 @@
 
 One living list of flow-level cases for Listora on EmDash. Walk all of it before every release. When you add or fix behaviour, add or change its case in the same pull request. There are no per-release QA files.
 
-Last walk: 2026-10-13, version 0.4.0, on the lab, as guest, subscriber and admin.
+Last walk: 2026-10-13, version 0.4.1, on the lab, as guest, subscriber and admin. Every case below was run.
 
-Walked in the browser for 0.4.0: G-1, G-2, G-4, G-13 to G-17, M-2 to M-4, A-5, A-6, A-15, A-16, and no sideways scroll at 390. Checked at route level only: G-5 to G-7, G-11, G-12, M-5, M-9 to M-12, M-14, A-2 to A-4, A-8 to A-11, A-13, A-14. Carried over from the 0.3.0 walk, not repeated: G-8 to G-10, M-1, M-6 to M-8, M-13, A-1, the dark-mode and contrast checks. Not walked yet: G-3, A-7, A-12 in the browser, P-5, P-6 and P-8 by hand.
+In the browser, on the rendered pages: G-1 to G-17, M-1 to M-9, M-13, M-15, P-1 to P-8 (five pages at 1440, 768 and 390 for sideways scroll, raw ids and tap targets; contrast at 1440 and 390 in light and dark). From the signed-in browser session against the real routes, then checked on the public page: M-10 to M-12, M-14, A-1 to A-11, A-13 to A-16. The Reviews and Messages admin pages were also clicked through in the EmDash admin itself. Covered by an automated test only, because the lab cannot remove its collection: A-12.
+
+Not done by hand: a screen reader pass, right-to-left layout, and a clean second-site install.
 
 ## Setup
 
@@ -62,6 +64,7 @@ Three roles, always in this order: **guest**, **member** (subscriber role), **ad
 | M-11 | Submit nine listings inside an hour | The ninth is refused with a clear message. Works again after an hour | limits a member to eight writes |
 | M-12 | Send another member's id in a request body | Ignored. You only ever see and change your own rows | ignores a member id sent in the request |
 | M-14 | Call review, claims or favorites with the id of a draft or missing listing | "That listing is not available." Nothing is stored | refuses member actions on a listing that is not public |
+| M-15 | Profile tab, Delete my data: click once, then again | First click asks you to click again and deletes nothing. Second click deletes your reviews, claims and saved listings, and the counts drop to zero |
 | M-13 | Dashboard at 390 | Tabs are one sideways-scrolling row. Content starts above the fold | |
 
 ## Admin
@@ -107,3 +110,6 @@ Screens: archive, detail, submit, calendar, account, and the three admin pages. 
 - The featured row's listings repeat at the top of the grid
 - Primary button text in dark mode follows the site theme's own colours
 - Not yet walked: right-to-left layout, a screen reader pass, a clean second-site install
+- The contact limit is per visitor IP. On a host that passes no IP, every visitor shares one limit of 8 messages an hour
+- Admin tables show 50 rows. With more than 50 waiting, the rest appear as the first ones are handled
+- `import` and `renew` have a route and no screen yet

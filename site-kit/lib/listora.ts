@@ -194,18 +194,23 @@ export type ApiResult = { ok: boolean; error?: { code?: string; message?: string
 
 /** Call a Listora plugin route. Member routes answer SIGN_IN_REQUIRED for guests. */
 export async function api(path: string, body?: unknown, method = body ? "POST" : "GET"): Promise<ApiResult> {
-	const response = await fetch(`/_emdash/api/plugins/listora/${path}`, {
-		method,
-		credentials: "same-origin",
-		headers: { "Content-Type": "application/json", "X-EmDash-Request": "1" },
-		body: body ? JSON.stringify(body) : undefined,
-	});
-	if (response.status === 401) return { ok: false, error: { code: "SIGN_IN_REQUIRED", message: "Sign in to continue." } };
-	const json = await response.json().catch(() => null);
-	if (!response.ok || !json) {
-		return { ok: false, error: { code: "FAILED", message: json?.error?.message || "Something went wrong. Try again." } };
+	// Never throws: a dropped connection or a server error comes back as a result the page can show.
+	try {
+		const response = await fetch(`/_emdash/api/plugins/listora/${path}`, {
+			method,
+			credentials: "same-origin",
+			headers: { "Content-Type": "application/json", "X-EmDash-Request": "1" },
+			body: body ? JSON.stringify(body) : undefined,
+		});
+		if (response.status === 401) return { ok: false, error: { code: "SIGN_IN_REQUIRED", message: "Sign in to continue." } };
+		const json = await response.json().catch(() => null);
+		if (!response.ok || !json) {
+			return { ok: false, error: { code: "FAILED", message: json?.error?.message || "Something went wrong. Try again." } };
+		}
+		return json.data ?? { ok: false };
+	} catch {
+		return { ok: false, error: { code: "OFFLINE", message: "Could not reach the site. Check your connection and try again." } };
 	}
-	return json.data ?? { ok: false };
 }
 
 /** Show a result next to a form: success text, the API's error, or a sign-in link for guests. */
