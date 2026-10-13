@@ -1,0 +1,479 @@
+---
+import { getEmDashCollection } from "emdash";
+import { Image } from "emdash/ui";
+import Base from "../../layouts/Base.astro";
+import {
+	LISTING_TYPES,
+	asNumber,
+	coverUrl,
+	isOpenNow,
+	matchesPlace,
+	parseHours,
+	placeOf,
+	sortListings,
+	stars,
+	typeName,
+} from "../../lib/listora";
+import "../../styles/listora-ui.css";
+
+const type = Astro.url.searchParams.get("type") || "";
+const q = Astro.url.searchParams.get("q") || "";
+const location = Astro.url.searchParams.get("location") || "";
+const view = Astro.url.searchParams.get("view") || "grid";
+const sort = Astro.url.searchParams.get("sort") || "featured";
+
+const { entries, cacheHint } = await getEmDashCollection("listings", {
+	orderBy: { published_at: "desc" },
+	limit: 80,
+});
+if (Astro.cache?.enabled) Astro.cache.set(cacheHint);
+
+const published = entries.filter((entry) => entry.data.listing_status !== "expired");
+const filtered = sortListings(
+	published.filter((entry) => {
+		if (type && entry.data.listing_type !== type) return false;
+		if (!matchesPlace(entry.data, location)) return false;
+		if (!q) return true;
+		const hay = `${entry.data.title} ${entry.data.excerpt} ${placeOf(entry.data)} ${entry.data.listing_type}`.toLowerCase();
+		return hay.includes(q.toLowerCase());
+	}),
+	sort,
+);
+const featured = published.filter((entry) => entry.data.is_featured);
+const querySuffix = [
+	type ? `type=${encodeURIComponent(type)}` : "",
+	q ? `q=${encodeURIComponent(q)}` : "",
+	location ? `location=${encodeURIComponent(location)}` : "",
+	sort !== "featured" ? `sort=${encodeURIComponent(sort)}` : "",
+]
+	.filter(Boolean)
+	.join("&");
+const withQuery = (extra: string) => `/listings/?${[extra, querySuffix].filter(Boolean).join("&")}`;
+
+function amenityLabel(item: string): string {
+	return item.replace(/[-_]/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function amenityList(value: unknown): string[] {
+	const raw = Array.isArray(value)
+		? value.map(String)
+		: typeof value === "string" && value.trim()
+			? (() => {
+					try {
+						const parsed = JSON.parse(value);
+						return Array.isArray(parsed) ? parsed.map(String) : value.split(",");
+					} catch {
+						return value.split(",");
+					}
+				})()
+			: [];
+	return raw.map((item) => amenityLabel(item.trim())).filter(Boolean).slice(0, 3);
+}
+---
+
+<Base title="Listings" description="Browse the Listora directory. Search by type, place, or name.">
+	<div class="listora-block">
+		<header class="listora-page-head">
+			<div>
+				<h1>Listings</h1>
+				<p id="listora-count">{filtered.length === 1 ? "1 listing" : `${filtered.length} listings`}</p>
+			</div>
+			<a class="listora-btn" href="/listings/submit/">Add a listing</a>
+		</header>
+
+		<form class="listora-search" role="search" id="listora-search-form">
+			<div class="listora-search__bar">
+				<div class="listora-search__field listora-search__field--keyword">
+					<label class="listora-sr-only" for="listora-q">Search</label>
+					<svg class="listora-search__icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
+						<circle cx="11" cy="11" r="8"></circle>
+						<path d="m21 21-4.3-4.3"></path>
+					</svg>
+					<input
+						id="listora-q"
+						class="listora-input listora-search__input"
+						type="search"
+						name="q"
+						value={q}
+						placeholder="Search listings"
+						autocomplete="off"
+					/>
+					<button class="listora-search__clear" type="button" id="listora-clear" hidden={q === ""} aria-label="Clear search">
+						<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+							<path d="M18 6 6 18"></path>
+							<path d="m6 6 12 12"></path>
+						</svg>
+					</button>
+				</div>
+				<div class="listora-search__field listora-search__field--location">
+					<label class="listora-sr-only" for="listora-location">Location</label>
+					<svg class="listora-search__icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
+						<path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"></path>
+						<circle cx="12" cy="10" r="3"></circle>
+					</svg>
+					<input
+						id="listora-location"
+						class="listora-input listora-search__input"
+						type="text"
+						name="location"
+						value={location}
+						placeholder="City or neighborhood"
+						autocomplete="off"
+					/>
+					<button class="listora-search__near-me" type="button" id="listora-near" aria-label="Find listings near your location">
+						<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+							<polygon points="3 11 22 2 13 21 11 13 3 11"></polygon>
+						</svg>
+					</button>
+				</div>
+				<button class="listora-btn listora-search__submit" type="submit">
+					<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+						<circle cx="11" cy="11" r="8"></circle>
+						<path d="m21 21-4.3-4.3"></path>
+					</svg>
+					<span>Search</span>
+				</button>
+			</div>
+			<div class="listora-chips" id="listora-types">
+				<a class:list={{ "listora-chip": true, "is-active": !type }} href="/listings/">All</a>
+				{
+					LISTING_TYPES.map((item) => (
+						<a
+							class:list={{ "listora-chip": true, "is-active": type === item.slug }}
+							href={`/listings/?type=${item.slug}`}
+							data-type={item.slug}
+						>
+							{item.name}
+						</a>
+					))
+				}
+			</div>
+		</form>
+
+		{
+			featured.length > 0 && !q && !type && !location ? (
+				<section class="listora-featured" aria-label="Featured listings">
+					<h2 class="listora-meta">Featured</h2>
+					<div class="listora-grid">
+						{featured.slice(0, 3).map((listing) => (
+							<article class="listora-card">
+								<div class="listora-card-media">
+									{listing.data.featured_image ? (
+										<Image image={listing.data.featured_image} alt="" />
+									) : (
+										<img src={coverUrl(String(listing.id), listing.data.featured_image, String(listing.data.listing_type || ""))} alt="" width="800" height="500" />
+									)}
+									<span class="listora-badge">{typeName(listing.data.listing_type)}</span>
+									<span class="listora-badge listora-badge--featured">Featured</span>
+								</div>
+								<div class="listora-card-body">
+									<h3>
+										<a href={`/listings/${listing.id}/`}>{listing.data.title}</a>
+									</h3>
+									<p class="listora-meta">{placeOf(listing.data)}</p>
+								</div>
+							</article>
+						))}
+					</div>
+				</section>
+			) : null
+		}
+
+		<div class="listora-toolbar">
+			<div id="listora-toolbar-count">{filtered.length === 1 ? "1 result" : `${filtered.length} results`}</div>
+			<div class="listora-toolbar__actions">
+				<label class="listora-sr-only" for="listora-sort">Sort</label>
+				<select class="listora-sort" id="listora-sort" name="sort">
+					<option value="featured" selected={sort === "featured"}>Featured</option>
+					<option value="rating" selected={sort === "rating"}>Rating</option>
+					<option value="title" selected={sort === "title"}>Title</option>
+				</select>
+				<div class="listora-view-toggle">
+					<a class:list={{ "is-active": view !== "list" }} href={withQuery("view=grid")}>Grid</a>
+					<a class:list={{ "is-active": view === "list" }} href={withQuery("view=list")}>List</a>
+				</div>
+				<a class="listora-btn listora-btn--ghost" href="/listings/calendar/">Calendar</a>
+			</div>
+		</div>
+
+		<div id="listora-results" class:list={{ "listora-grid": true, "is-list": view === "list" }}>
+			{
+				filtered.length === 0 ? (
+					<div class="listora-empty">
+						<div class="listora-empty__icon" aria-hidden="true">
+							<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
+								<circle cx="11" cy="11" r="8"></circle>
+								<path d="m21 21-4.3-4.3"></path>
+							</svg>
+						</div>
+						<h2>No listings match</h2>
+						<p>Try another type or city. You can also add a listing.</p>
+						<a class="listora-btn" href="/listings/submit/">Add a listing</a>
+					</div>
+				) : (
+					filtered.map((listing) => {
+						const hours = parseHours(listing.data.hours);
+						const open = hours.length ? isOpenNow(hours, String(listing.data.timezone || "America/New_York")) : null;
+						const rating = asNumber(listing.data.rating_avg);
+						const amenities = amenityList(listing.data.amenities);
+						const owner = String(listing.data.owner_name || "");
+						return (
+							<article class="listora-card" data-slug={listing.id} data-type={listing.data.listing_type} data-city={listing.data.city} data-lat={listing.data.lat} data-lng={listing.data.lng}>
+								<div class="listora-card-media">
+									{listing.data.featured_image ? (
+										<Image image={listing.data.featured_image} alt="" />
+									) : (
+										<img src={coverUrl(String(listing.id), listing.data.featured_image, String(listing.data.listing_type || ""))} alt="" width="800" height="500" />
+									)}
+									<span class="listora-badge">{typeName(listing.data.listing_type)}</span>
+									{listing.data.is_featured ? <span class="listora-badge listora-badge--featured">Featured</span> : null}
+									{rating ? <span class="listora-card__rating">{stars(rating)} {rating.toFixed(1)}</span> : null}
+									<button class="listora-card__favorite" type="button" data-favorite={listing.id} aria-label={`Save ${listing.data.title}`}>
+										<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
+											<path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"></path>
+										</svg>
+									</button>
+								</div>
+								<div class="listora-card-body">
+									<h2>
+										<a href={`/listings/${listing.id}/`}>{listing.data.title}</a>
+									</h2>
+									<p class="listora-meta">
+										<span>{placeOf(listing.data)}</span>
+										{open === true ? <span class="listora-open">Open</span> : null}
+										{open === false ? <span class="listora-closed">Closed</span> : null}
+									</p>
+									{owner ? <p class="listora-meta">Listed by {owner}</p> : null}
+									{amenities.length ? (
+										<p class="listora-card__features">
+											{amenities.map((item) => <span>{item}</span>)}
+										</p>
+									) : null}
+									{listing.data.excerpt ? <p>{listing.data.excerpt}</p> : null}
+								</div>
+							</article>
+						);
+					})
+				)
+			}
+		</div>
+
+		<div class="listora-skeletons" aria-hidden="true">
+			<div class="listora-skeleton"></div>
+			<div class="listora-skeleton"></div>
+			<div class="listora-skeleton"></div>
+		</div>
+
+		<div id="listora-map" class="listora-map" hidden></div>
+	</div>
+</Base>
+
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script>
+	const form = document.getElementById("listora-search-form") as HTMLFormElement | null;
+	const q = document.getElementById("listora-q") as HTMLInputElement | null;
+	const locationInput = document.getElementById("listora-location") as HTMLInputElement | null;
+	const sortSelect = document.getElementById("listora-sort") as HTMLSelectElement | null;
+	const results = document.getElementById("listora-results");
+	const count = document.getElementById("listora-count");
+	const toolbar = document.getElementById("listora-toolbar-count");
+	const mapEl = document.getElementById("listora-map");
+	const featuredEl = document.querySelector(".listora-featured");
+	const clearBtn = document.getElementById("listora-clear") as HTMLButtonElement | null;
+	let activeType = new URLSearchParams(location.search).get("type") || "";
+	let near: { lat: string; lng: string } | null = null;
+
+	const TYPE_COVERS: Record<string, string> = {
+		business: "photo-1441986300917-64674bd600d8",
+		restaurant: "photo-1414235077428-338989a2e8c0",
+		"real-estate": "photo-1568605114967-8130f3a36994",
+		hotel: "photo-1566073771259-6a8506099945",
+		event: "photo-1540575467063-178a50c2df87",
+		job: "photo-1521737711867-e3b97375f902",
+		healthcare: "photo-1519494026892-80bbd2d6fd0d",
+		education: "photo-1503676260728-1c00da094a0b",
+		place: "photo-1449824913935-59a10b8d2000",
+		classified: "photo-1556742049-0cfed4f6a45d",
+	};
+
+	function cover(slug: string, type: string) {
+		const id = TYPE_COVERS[type] || TYPE_COVERS.business;
+		return `https://images.unsplash.com/${id}?auto=format&fit=crop&w=800&h=500&q=80&sig=${encodeURIComponent(slug)}`;
+	}
+
+	function escapeHtml(value: string) {
+		return value.replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char] || char);
+	}
+
+	function cardHtml(item: {
+		slug: string;
+		title: string;
+		listing_type: string;
+		type_name: string;
+		city: string;
+		country: string;
+		excerpt: string;
+		is_featured: boolean;
+		rating_avg: number;
+		open_label: string;
+		owner_name?: string;
+		amenities?: string[];
+		lat?: number;
+		lng?: number;
+	}) {
+		const place = [item.city, item.country].filter(Boolean).join(", ");
+		const amenities = (item.amenities || []).slice(0, 3).map((row) =>
+			row.replace(/[-_]/g, " ").replace(/\b\w/g, (char) => char.toUpperCase()),
+		);
+		return `<article class="listora-card" data-slug="${escapeHtml(item.slug)}" data-lat="${item.lat ?? ""}" data-lng="${item.lng ?? ""}">
+			<div class="listora-card-media">
+				<img src="${cover(item.slug, item.listing_type)}" alt="" width="800" height="500" />
+				<span class="listora-badge">${escapeHtml(item.type_name)}</span>
+				${item.is_featured ? '<span class="listora-badge listora-badge--featured">Featured</span>' : ""}
+				${item.rating_avg ? `<span class="listora-card__rating">${"★".repeat(Math.max(1, Math.round(item.rating_avg)))} ${item.rating_avg.toFixed(1)}</span>` : ""}
+				<button class="listora-card__favorite" type="button" data-favorite="${escapeHtml(item.slug)}" aria-label="Save ${escapeHtml(item.title)}">
+					<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"></path></svg>
+				</button>
+			</div>
+			<div class="listora-card-body">
+				<h2><a href="/listings/${escapeHtml(item.slug)}/">${escapeHtml(item.title)}</a></h2>
+				<p class="listora-meta">
+					<span>${escapeHtml(place)}</span>
+					${item.open_label ? `<span class="${item.open_label === "Open" ? "listora-open" : "listora-closed"}">${escapeHtml(item.open_label)}</span>` : ""}
+				</p>
+				${item.owner_name ? `<p class="listora-meta">Listed by ${escapeHtml(item.owner_name)}</p>` : ""}
+				${amenities.length ? `<p class="listora-card__features">${amenities.map((row) => `<span>${escapeHtml(row)}</span>`).join("")}</p>` : ""}
+				${item.excerpt ? `<p>${escapeHtml(item.excerpt)}</p>` : ""}
+			</div>
+		</article>`;
+	}
+
+	function emptyHtml() {
+		return `<div class="listora-empty">
+			<div class="listora-empty__icon" aria-hidden="true"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.3-4.3"></path></svg></div>
+			<h2>No listings match</h2>
+			<p>Try another type or city. You can also add a listing.</p>
+			<a class="listora-btn" href="/listings/submit/">Add a listing</a>
+		</div>`;
+	}
+
+	async function runSearch(extra: Record<string, string> = {}) {
+		if (!results || !form) return;
+		form.classList.add("is-busy");
+		form.setAttribute("aria-busy", "true");
+		const params = new URLSearchParams({
+			q: q?.value || "",
+			location: locationInput?.value || "",
+			listing_type: activeType,
+			sort: sortSelect?.value || "featured",
+			...extra,
+		});
+		if (near) {
+			params.set("lat", near.lat);
+			params.set("lng", near.lng);
+			params.set("radius", "8");
+		}
+		const response = await fetch(`/_emdash/api/plugins/listora/search?${params}`, {
+			credentials: "same-origin",
+			headers: { "X-EmDash-Request": "1" },
+		});
+		const json = (await response.json()) as { data?: { items?: Array<Parameters<typeof cardHtml>[0]> } };
+		const items = json.data?.items ?? [];
+		results.innerHTML = items.length === 0 ? emptyHtml() : items.map((item) => cardHtml(item)).join("");
+		if (count) count.textContent = items.length === 1 ? "1 listing" : `${items.length} listings`;
+		if (toolbar) toolbar.textContent = items.length === 1 ? "1 result" : `${items.length} results`;
+		if (featuredEl instanceof HTMLElement) {
+			featuredEl.hidden = Boolean(activeType || q?.value || locationInput?.value || near);
+		}
+		form.classList.remove("is-busy");
+		form.removeAttribute("aria-busy");
+		if (clearBtn) clearBtn.hidden = !(q?.value || "");
+	}
+
+	q?.addEventListener("input", () => {
+		if (clearBtn) clearBtn.hidden = !q.value;
+		window.clearTimeout((q as HTMLInputElement & { t?: number }).t);
+		(q as HTMLInputElement & { t?: number }).t = window.setTimeout(() => runSearch(), 220);
+	});
+
+	locationInput?.addEventListener("input", () => {
+		window.clearTimeout((locationInput as HTMLInputElement & { t?: number }).t);
+		(locationInput as HTMLInputElement & { t?: number }).t = window.setTimeout(() => runSearch(), 220);
+	});
+
+	form?.addEventListener("submit", (event) => {
+		event.preventDefault();
+		runSearch();
+	});
+
+	clearBtn?.addEventListener("click", () => {
+		if (q) q.value = "";
+		runSearch();
+		q?.focus();
+	});
+
+	sortSelect?.addEventListener("change", () => runSearch());
+
+	document.getElementById("listora-types")?.addEventListener("click", (event) => {
+		const link = (event.target as HTMLElement).closest("a[data-type], a.listora-chip");
+		if (!link) return;
+		event.preventDefault();
+		activeType = (link as HTMLElement).dataset.type || "";
+		document.querySelectorAll("#listora-types .listora-chip").forEach((chip) => chip.classList.remove("is-active"));
+		link.classList.add("is-active");
+		runSearch();
+	});
+
+	document.getElementById("listora-near")?.addEventListener("click", () => {
+		navigator.geolocation?.getCurrentPosition(
+			(pos) => {
+				near = { lat: String(pos.coords.latitude), lng: String(pos.coords.longitude) };
+				runSearch();
+			},
+			() => {
+				near = { lat: "40.758", lng: "-73.985" };
+				if (locationInput) locationInput.value = "New York";
+				runSearch();
+			},
+		);
+	});
+
+	results?.addEventListener("click", async (event) => {
+		const button = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-favorite]");
+		if (!button) return;
+		event.preventDefault();
+		const listingId = button.dataset.favorite;
+		if (!listingId) return;
+		const on = button.classList.contains("is-on");
+		await fetch("/_emdash/api/plugins/listora/favorites", {
+			method: on ? "DELETE" : "POST",
+			credentials: "same-origin",
+			headers: { "Content-Type": "application/json", "X-EmDash-Request": "1" },
+			body: JSON.stringify({ listingId }),
+		});
+		button.classList.toggle("is-on", !on);
+	});
+
+	if (mapEl) {
+		const points = [...document.querySelectorAll<HTMLElement>("[data-lat]")].flatMap((node) => {
+			const lat = Number(node.dataset.lat);
+			const lng = Number(node.dataset.lng);
+			if (!Number.isFinite(lat) || !Number.isFinite(lng)) return [];
+			return [{ lat, lng, title: node.querySelector("h2")?.textContent ?? "" }];
+		});
+		if (points.length) {
+			mapEl.hidden = false;
+			const leaflet = document.createElement("script");
+			leaflet.src = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
+			leaflet.onload = () => {
+				const L = (window as unknown as { L: { map: Function; tileLayer: Function; marker: Function } }).L;
+				const map = L.map(mapEl).setView([points[0].lat, points[0].lng], 12);
+				L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+					attribution: "&copy; OpenStreetMap",
+				}).addTo(map);
+				for (const point of points) L.marker([point.lat, point.lng]).addTo(map).bindPopup(point.title);
+			};
+			document.body.append(leaflet);
+		}
+	}
+</script>

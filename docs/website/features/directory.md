@@ -6,11 +6,11 @@ Visitors open `/listings/`, filter, and open a listing. Data comes from `listing
 
 ## What works in 0.1.0
 
-- Type chips for all 10 types
-- Text search and a Near Me control
-- Grid and list toggle, result count
+- Command search: keyword, location, Near me, Search
+- Type chips for all 10 Free types
+- Grid and list toggle, result count, Featured / Rating / Title sort
 - Featured row (first three featured listings, not a carousel)
-- Cards with photo, type, city, rating when those fields exist
+- Cards with photo, type, city, rating, owner, amenity chips, Save
 - Detail tabs, hours Open/Closed, services, JSON-LD
 - OSM map on archive and detail
 - Calendar at `/listings/calendar/`
@@ -18,6 +18,8 @@ Visitors open `/listings/`, filter, and open a listing. Data comes from `listing
 
 ## What is still thin
 
-WordPress search is command-style, with Near Me, advanced facets (category, feature, price, rating), skeletons, and map drag that re-queries. The lab search is a first pass. Cards still miss a full feature chip row and owner treatment. Featured is a static row, not a carousel with arrows.
+Skeletons show while search is busy. Map drag does not re-query yet. Featured is a static row, not a carousel with arrows. Category icon grid is still missing.
+
+Do not add Advanced Search, saved searches, Compare, or quick view. Skip. No Pro plan in this pass.
 
 Treat this page as the job list. Treat [Directory screens](../how-to/directory-screens.md) as the chrome list.

@@ -1,5 +1,7 @@
 import type { PluginContext } from "emdash/plugin";
 
+import { getOnboardState, loadSampleDirectory } from "./lib/onboard";
+
 const LISTINGS = "listings";
 
 export type BlockMap = Record<string, unknown> & { type: string };
@@ -92,6 +94,9 @@ export async function renderQueue(
 		};
 	});
 
+	const onboard = await getOnboardState(ctx);
+	const onboardBlocks = renderOnboardBlocks(onboard);
+
 	const queueBlocks: BlockMap[] =
 		rows.length === 0
 			? [
@@ -120,6 +125,7 @@ export async function renderQueue(
 	return {
 		blocks: [
 			{ type: "header", text: "Listora" },
+			...onboardBlocks,
 			{
 				type: "section",
 				text: "Moderate directory submissions and publish listings.",
@@ -322,6 +328,83 @@ async function renderClaimQueue(
 	};
 }
 
+function renderOnboardBlocks(onboard: Awaited<ReturnType<typeof getOnboardState>>): BlockMap[] {
+	if (onboard.ready) {
+		return [
+			{
+				type: "context",
+				text: "Sample directory is ready. Copy site-kit pages if /listings/ is still a 404.",
+			},
+		];
+	}
+
+	const missing = onboard.hasCollection
+		? "The listings collection is ready. Load sample data so the first visit shows real NYC cards, reviews, and a claim."
+		: "Create a listings collection on this site first. Then load sample data. Copy site-kit pages so /listings/ exists.";
+
+	return [
+		{
+			type: "banner",
+			title: "Get a finished first look",
+			description: missing,
+			variant: onboard.hasCollection ? "default" : "alert",
+		},
+		{
+			type: "fields",
+			fields: [
+				{ label: "Listings collection", value: onboard.hasCollection ? "Ready" : "Missing" },
+				{ label: "Published listings", value: String(onboard.listingCount) },
+				{ label: "Sample data", value: onboard.sampleLoaded ? "Loaded" : "Not loaded" },
+			],
+		},
+		{
+			type: "actions",
+			elements: [
+				{
+					type: "button",
+					action_id: "load_sample",
+					label: "Load sample directory",
+					style: "primary",
+					confirm: {
+						title: "Load sample listings?",
+						text: "Adds 12 NYC listings, reviews, favorites, and a pending claim. Safe to run more than once.",
+						confirm: "Load sample data",
+						deny: "Cancel",
+					},
+				},
+			],
+		},
+		{
+			type: "context",
+			text: "After load: copy site-kit CSS, pages, and menu links. Open /listings/.",
+		},
+	];
+}
+
+export async function renderSetup(
+	ctx: PluginContext,
+	extra?: Pick<BlockResponse, "toast">,
+): Promise<BlockResponse> {
+	const onboard = await getOnboardState(ctx);
+	return {
+		blocks: [
+			{ type: "header", text: "Get started" },
+			{
+				type: "section",
+				text: "Listora is the engine. Sample data fills the directory so the first visit looks finished.",
+			},
+			...renderOnboardBlocks(onboard),
+			{
+				type: "empty",
+				title: "Then copy the site kit",
+				description:
+					"Install does not create /listings/. Copy site-kit/listora-ui.css, site-kit/lib/listora.ts, and site-kit/pages/ onto the EmDash site. Add menu links for Listings, Submit, Calendar, and Account.",
+			},
+		],
+		toast: extra?.toast,
+	};
+}
+
 export async function handleAdmin(
 	input: unknown,
 	ctx: PluginContext,
@@ -329,6 +412,18 @@ export async function handleAdmin(
 	const raw = asRecord(input);
 	const type = asString(raw.type);
 	const page = asString(raw.page);
+
+	if (type === "block_action" && asString(raw.action_id) === "load_sample") {
+		const result = await loadSampleDirectory(ctx);
+		const extra = {
+			toast: {
+				message: result.message,
+				type: result.ok ? ("success" as const) : ("error" as const),
+			},
+		};
+		if (page.includes("setup") || page.includes("started")) return renderSetup(ctx, extra);
+		return renderQueue(ctx, extra);
+	}
 
 	if (type === "form_submit" && asString(raw.action_id) === "save_settings") {
 		const values = asRecord(raw.values);
@@ -386,5 +481,6 @@ export async function handleAdmin(
 
 	if (page.includes("reviews")) return renderReviewQueue(ctx);
 	if (page.includes("claims")) return renderClaimQueue(ctx);
+	if (page.includes("setup") || page.includes("started")) return renderSetup(ctx);
 	return renderQueue(ctx);
 }

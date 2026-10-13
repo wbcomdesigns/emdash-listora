@@ -10,7 +10,7 @@ Do not add Pro jobs. Do not add native-plugin features. Do not restyle listings 
 
 ### 1. Make the kit the source of screens
 
-Move lab markup into `site-kit/` so a second site can copy it. Today CSS is in the kit. Pages still live only on `emdash-local`. Target:
+Pages are now in `site-kit/pages/`. A second site still has to copy them. Next is prove that copy on a clean site. Target:
 
 ```text
 site-kit/
@@ -46,14 +46,14 @@ Docs stay without product screenshots until the lab looks like a model directory
 
 Do not ship a plugin route change without the screen that uses it. If you add a facet, the archive toolbar ships in the same PR.
 
-## Suggested first PR
+## Suggested next PR
 
-1. Ship form presentation on submit, review, contact, and claim. See [Form presentation](form-presentation.md).
-2. Extract Card + Grid + Search from the lab into `site-kit/`.
-3. Rebuild `/listings/` to use them.
-4. Empty and skeleton states.
-5. Update this inventory and `CHANGELOG.md` under Unreleased.
-6. Do not publish a new registry version until a visitor can see the difference.
+1. Extract Card + Grid + Search from the lab into `site-kit/`.
+2. Rebuild `/listings/` to consume those kit pieces.
+3. Featured carousel and category icon grid (Free chrome only).
+4. Update this inventory and `CHANGELOG.md` under Unreleased.
+5. Do not publish a new registry version until a visitor can see the difference.
+6. Do not add Pro jobs.
 
 ## Planning files
 

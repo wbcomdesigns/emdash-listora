@@ -6,13 +6,17 @@
 
 No. EmDash does not load PHP. This TypeScript plugin is the port. WordPress Listora stays its own product.
 
+## Does the plugin load sample listings on install?
+
+No. Health does not create listings. Open Admin → Get started, create the `listings` collection if it is missing, then click **Load sample directory**. Copy the site kit so `/listings/` exists.
+
 ## Does a site get pages when they install from the registry?
 
 No. They get routes, storage, and Block Kit admin. They still copy the site kit (CSS, seed, pages) into the Astro site.
 
 ## Why is the public collection page empty?
 
-`0.1.0` is published to the publisher PDS. The public site hides a package until the labeler approves it. Watch with `emdash-plugin info vapvarun.bsky.social listora --version 0.1.0 --watch`.
+`0.1.0` is published to the publisher PDS. Testers install `0.2.0`. The public site hides a package until the labeler approves it. Watch with `emdash-plugin info vapvarun.bsky.social listora --version 0.2.0 --watch`.
 
 ## Why publish as vapvarun if the repo is wbcomdesigns?
 

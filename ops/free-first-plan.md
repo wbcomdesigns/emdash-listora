@@ -1,6 +1,6 @@
 # Free first: can we do it
 
-Yes. Cover WordPress Listora **Free** on EmDash first. Park every Pro-only catalog row.
+Yes. Cover WordPress Listora **Free** on EmDash until it is stable. No Pro plan in this pass.
 
 What Free actually ships is in `ops/listora-as-built.md` (read from wb-listora 1.9.0). That file wins over the marketing catalog when they differ.
 
@@ -10,7 +10,7 @@ The engine already works on localhost:4321. The gap is Listora presentation plus
 
 **In:** catalog tier `Free` or `Free + Pro`, Free baseline only.
 
-**Out until a later Pro pass:** Google Maps, Places import, advanced search, saved searches, infinite scroll, quick view, compare, multi-criteria reviews, photo reviews, SEO landing pages, lead forms, needs, verification badges, BuddyPress, credits, plans, coupons, payment webhooks, moderators, audit log, analytics, digest, coming soon, outgoing webhooks, white label, licence.
+**Skip (no Pro plan in this pass):** Google Maps, Places import, advanced search, saved searches, infinite scroll, quick view, compare, multi-criteria reviews, photo reviews, SEO landing pages, lead forms, needs, verification badges, BuddyPress, credits, plans, coupons, payment webhooks, moderators, audit log, analytics, digest, coming soon, outgoing webhooks, white label, licence.
 
 **Never:** Gutenberg, WP-CLI, WP App Sign-In, PHP hooks.
 

@@ -1,0 +1,47 @@
+---
+import { getEmDashCollection } from "emdash";
+import Base from "../../layouts/Base.astro";
+import "../../styles/listora-ui.css";
+
+const { entries, cacheHint } = await getEmDashCollection("listings", {
+	limit: 80,
+	where: { listing_type: "event" },
+});
+if (Astro.cache?.enabled) Astro.cache.set(cacheHint);
+const events = entries.filter((entry) => entry.data.event_start);
+---
+
+<Base title="Listing calendar" description="Upcoming events in the Listora directory.">
+	<div class="listora-block">
+		<header class="listora-page-head">
+			<div>
+				<h1>Calendar</h1>
+				<p>{events.length} upcoming events</p>
+			</div>
+			<a class="listora-btn listora-btn--ghost" href="/listings/">Directory</a>
+		</header>
+		{
+			events.length === 0 ? (
+				<div class="listora-empty">
+					<h2>No events yet</h2>
+					<p>Event listings with a start date appear here.</p>
+					<a class="listora-btn" href="/listings/submit/">Add an event</a>
+				</div>
+			) : (
+				<div class="listora-grid is-list">
+					{events.map((event) => (
+						<article class="listora-card">
+							<div class="listora-card-body">
+								<p class="listora-meta">{event.data.event_start}</p>
+								<h2>
+									<a href={`/listings/${event.id}/`}>{event.data.title}</a>
+								</h2>
+								<p>{event.data.city}</p>
+							</div>
+						</article>
+					))}
+				</div>
+			)
+		}
+	</div>
+</Base>

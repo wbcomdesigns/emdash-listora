@@ -6,7 +6,7 @@ Base: `/_emdash/api/plugins/listora/<name>`. Public routes are internet-facing. 
 
 | Route | Public | Job |
 | --- | --- | --- |
-| `health` | yes | Version, collection present, pending count, demo seed |
+| `health` | yes | Version, collection present, pending count. Demo storage seeds only if Golden Fork already exists |
 | `types` | yes | 10 listing types |
 | `listings` | yes | Published listings, filters |
 | `search` | yes | Query, type, geo, suggest |
@@ -24,6 +24,6 @@ Base: `/_emdash/api/plugins/listora/<name>`. Public routes are internet-facing. 
 
 Hook: `content:afterSave` indexes a listing save into `storage.events`.
 
-Tests live in `tests/plugin.test.ts` (health, submit title, admin queue, types, honeypot, empty search, seeded reviews). Add a test when you add a route.
+Tests live in `tests/plugin.test.ts` (health, submit title, admin queue, Get started, load-sample toast when the collection is missing, types, honeypot, empty search, no auto reviews on an empty host). Add a test when you add a route.
 
 `listPublished` wraps `content.list` in try/catch. An empty test D1 has no `ec_listings` table.

@@ -8,16 +8,14 @@ Source: [wbcomdesigns/emdash-listora](https://github.com/wbcomdesigns/emdash-lis
 
 ## What v0.1 does
 
-The plugin is the engine (routes, storage, hooks, Block Kit admin). People use the site pages.
+The plugin is the engine (routes, storage, hooks, Block Kit admin). It does not create `/listings/` pages on install. Copy [site-kit](site-kit/README.md) onto the EmDash site after install.
 
-- Public pages on the local site: `/listings/`, `/listings/{slug}/`, `/listings/submit/`
-- Admin queue: `/_emdash/admin` then Listora (approve, reject, settings)
+- Engine: search, submit, reviews, claims, favorites, contact, import, privacy, renew
+- Admin: `/_emdash/admin` then Get started, Listora queue, reviews, claims
+- Kit pages (you copy): `/listings/`, `/listings/{slug}/`, `/listings/submit/`, `/listings/calendar/`, `/account/`
 - `GET /_emdash/api/plugins/listora/health`
-- `GET /_emdash/api/plugins/listora/listings` (published only)
-- `POST /_emdash/api/plugins/listora/submit` (creates a `listings` draft)
-- `content:afterSave` index in plugin storage when a listing is saved
 
-The `listings` collection and taxonomies live in the local site seed (`~/code/emdash-local/seed/seed.json`). Free screens: archive, detail, submit wizard, calendar, owner dashboard. Plugin routes cover search, reviews, claims, favorites, contact, import, privacy, and renew.
+Testers install `@vapvarun.bsky.social/listora@0.2.0` only. Ignore `0.1.0`. GitHub tag, `package.json`, and the registry version are the same number.
 
 ## Docs
 

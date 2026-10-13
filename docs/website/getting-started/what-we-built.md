@@ -14,7 +14,7 @@ The local lab (`~/code/emdash-local`, `http://localhost:4321`) passed `scripts/p
 - 10 Free listing types
 - 33 NYC listings (general pack plus missing types), plus reviews, a pending claim, and favorites in plugin storage
 - Public lab pages: archive, detail, submit wizard, calendar, owner account
-- Admin pages: listings queue, reviews, claims
+- Admin pages: Get started, listings queue, reviews, claims
 - Registry publish from this Mac (listing waits on labeler approval)
 
 ## Engine (this repo)
@@ -41,7 +41,7 @@ That gap is the next work. See [Improve the screens](../how-to/improve-the-scree
 
 - WordPress PHP, Gutenberg blocks, Interactivity API, WP-CLI
 - Native EmDash plugin (React admin, Portable Text, page fragments)
-- Credits, plans, Google Maps, Needs, Compare, quick view, SEO landings (Pro, parked)
+- Credits, plans, Google Maps, Needs, Compare, quick view, SEO landings, lead forms, verification (skip, no Pro plan in this pass)
 - GitHub Actions provenance (optional later)
 
 ## How to learn the decisions

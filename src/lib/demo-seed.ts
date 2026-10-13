@@ -175,20 +175,30 @@ const REVIEWS: ReviewSeed[] = [
 	},
 ];
 
-export async function ensureDemoSeed(ctx: PluginContext): Promise<{ seeded: boolean }> {
-	const already = await ctx.kv.get<string>("demo_seeded_v2");
-	if (already === "1") return { seeded: false };
+function listingId(ids: Record<string, string> | undefined, key: string): string {
+	return ids?.[key] || key;
+}
 
+export async function seedRelatedStorage(
+	ctx: PluginContext,
+	ids?: Record<string, string>,
+): Promise<void> {
 	const createdAt = nowIso();
 	await ctx.storage.reviews.putMany(
 		REVIEWS.map((review) => ({
 			id: review.id,
-			data: { ...review, createdAt, owner_reply: "" },
+			data: {
+				...review,
+				listingId: listingId(ids, review.listingId),
+				createdAt,
+				owner_reply: "",
+			},
 		})),
 	);
 
+	const casaId = listingId(ids, "listing-casa-miguel");
 	await ctx.storage.claims.put("claim-casa-miguel", {
-		listingId: "listing-casa-miguel",
+		listingId: casaId,
 		member_id: DEMO_MEMBER,
 		name: "Miguel Santos",
 		email: "miguel@example.com",
@@ -197,13 +207,20 @@ export async function ensureDemoSeed(ctx: PluginContext): Promise<{ seeded: bool
 		createdAt,
 	});
 
+	const favoriteKeys = [
+		"listing-golden-fork",
+		"listing-sakura-house",
+		"listing-greenwich-hotel",
+		"listing-fitlab",
+	];
 	await ctx.storage.favorites.putMany(
-		["listing-golden-fork", "listing-sakura-house", "listing-greenwich-hotel", "listing-fitlab"].map(
-			(listingId) => ({
-				id: `${DEMO_MEMBER}:${listingId}`,
-				data: { member_id: DEMO_MEMBER, listingId, createdAt },
-			}),
-		),
+		favoriteKeys.map((key) => {
+			const listingIdValue = listingId(ids, key);
+			return {
+				id: `${DEMO_MEMBER}:${listingIdValue}`,
+				data: { member_id: DEMO_MEMBER, listingId: listingIdValue, createdAt },
+			};
+		}),
 	);
 
 	await ctx.storage.blocked.put("blocked-spam", {
@@ -239,6 +256,15 @@ export async function ensureDemoSeed(ctx: PluginContext): Promise<{ seeded: bool
 
 	await ctx.kv.set("demo_seeded_v2", "1");
 	ctx.log.info("Listora demo storage seeded", { reviews: REVIEWS.length });
+}
+
+export async function ensureDemoSeed(
+	ctx: PluginContext,
+	ids?: Record<string, string>,
+): Promise<{ seeded: boolean }> {
+	const already = await ctx.kv.get<string>("demo_seeded_v2");
+	if (already === "1") return { seeded: false };
+	await seedRelatedStorage(ctx, ids);
 	return { seeded: true };
 }
 

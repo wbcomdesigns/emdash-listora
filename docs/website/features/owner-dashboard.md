@@ -13,4 +13,4 @@ Lab page: `/account/`. Data: `dashboard`, plus `favorites`, `privacy`, `renew`, 
 
 ## What is still thin
 
-WordPress dashboard is a left nav (tabs on small screens): Overview, My Listings, Reviews, Claims, Favorites, Profile. Lab account is one page. Real member identity from EmDash auth is not wired. Email send is logged; host mail may be unavailable locally.
+WordPress Free dashboard is a left nav (tabs on small screens): Overview, My Listings, Reviews, Claims, Favorites, Profile. No Credits tab. Lab account is one page. Real member identity from EmDash auth is not wired. Email send is logged; host mail may be unavailable locally.

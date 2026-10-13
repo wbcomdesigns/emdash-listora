@@ -48,7 +48,7 @@ Banned: placeholder-as-label, inline `style` on fields, `alert()`, a lone top ba
 | Form | Page | Must show |
 | --- | --- | --- |
 | Submit wizard | `/listings/submit/` | Five named steps, Back / Continue, title error, duplicate warning, terms check, success status |
-| Directory search | `/listings/` | Visible "Search" label or `sr-only` label, not placeholder-only |
+| Directory search | `/listings/` | Command bar: `sr-only` Search and Location labels, Near me, Search submit, type chips. No Advanced Search |
 | Review | listing detail | Stars, title, body, inline errors |
 | Contact | listing detail | Name, email, message, honeypot |
 | Claim | listing detail | Name, email, proof |
@@ -59,6 +59,8 @@ Wizard steps use the real names: Type, Basics, Details, Categories, Preview. Not
 Type is a radio card grid (`.listora-type-card`), not a lone select. Each step sits in `.listora-form-section`. Related fields use `.listora-form-grid` (two columns, one column under 1024px). Every control uses `.listora-input`.
 
 Preview must look like a `listora-card`, not a dump of raw fields.
+
+Do not add Pro fields or controls to these forms. Off: Compare, Needs, credits, Google Places, lead-form extras, verification, photo reviews, saved searches. The type cards are the 10 Free defaults. They are not a Pro catalog.
 
 ## States
 
@@ -93,5 +95,6 @@ Block Kit pages follow Pattern C (queue) and later Pattern A (settings sidebar).
 - [ ] Light and dark both readable (AA)
 - [ ] 390px and 1440px
 - [ ] No marketing gradients, Inter-as-default, or three equal promo cards on the form
+- [ ] No Compare, Needs, credits, verification, or other Pro controls
 
 When a form changes, update this page and [Directory screens](directory-screens.md) in the same PR.

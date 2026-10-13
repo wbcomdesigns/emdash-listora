@@ -1,0 +1,40 @@
+{
+  "product": "Listora for EmDash",
+  "version": "0.2.0",
+  "tier": "free",
+  "labBase": "http://localhost:4321",
+  "pluginSlug": "listora",
+  "registryId": "@vapvarun.bsky.social/listora",
+  "publisherDid": "did:plc:2o6axbe264shvyedyhycyhya",
+  "labPages": [
+    "/listings/",
+    "/listings/the-golden-fork/",
+    "/listings/submit/",
+    "/listings/calendar/",
+    "/account/"
+  ],
+  "adminPages": [
+    "/_emdash/admin/plugins/listora/setup",
+    "/_emdash/admin/plugins/listora/queue",
+    "/_emdash/admin/plugins/listora/reviews",
+    "/_emdash/admin/plugins/listora/claims"
+  ],
+  "publicRoutes": [
+    "health",
+    "types",
+    "listings",
+    "search",
+    "submit",
+    "duplicate",
+    "reviews",
+    "claims",
+    "favorites",
+    "contact"
+  ],
+  "privateRoutes": ["dashboard", "import", "privacy", "renew", "admin"],
+  "personas": ["visitor", "owner", "admin"],
+  "viewports": [1440, 390],
+  "skipPro": true,
+  "prove": "./scripts/prove-lab.sh --all",
+  "tests": "npm test"
+}

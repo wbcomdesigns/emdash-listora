@@ -1,0 +1,377 @@
+---
+import Base from "../../layouts/Base.astro";
+import { LISTING_TYPES } from "../../lib/listora";
+import "../../styles/listora-ui.css";
+---
+
+<Base
+	title="Add a listing"
+	description="Submit a directory listing in five steps. New listings stay in review until they are published."
+>
+	<div class="listora-block">
+		<header class="listora-page-head">
+			<div>
+				<h1>Add a listing</h1>
+				<p>Type, basics, details, categories, then a card preview.</p>
+			</div>
+			<a class="listora-btn listora-btn--ghost" href="/listings/">All listings</a>
+		</header>
+
+		<ol class="listora-wizard-steps" id="wizard-steps">
+			<li><button type="button" data-step="1" aria-current="step">Type</button></li>
+			<li><button type="button" data-step="2">Basics</button></li>
+			<li><button type="button" data-step="3">Details</button></li>
+			<li><button type="button" data-step="4">Categories</button></li>
+			<li><button type="button" data-step="5">Preview</button></li>
+		</ol>
+
+		<div id="listora-status" class="listora-status" hidden></div>
+		<p id="dup-warning" class="listora-status" data-tone="error" hidden></p>
+
+		<form id="listora-submit" class="listora-form" novalidate>
+			<div class="listora-honeypot">
+				<label>Company website<input name="company_website" tabindex="-1" autocomplete="off" /></label>
+			</div>
+
+			<section class="listora-form-section" data-panel="1">
+				<h2>What are you listing?</h2>
+				<p class="listora-helper" id="type-help">Pick one type. Extra fields change on the Details step.</p>
+				<div class="listora-type-grid" role="radiogroup" aria-labelledby="type-help">
+					{
+						LISTING_TYPES.map((item, index) => (
+							<label class="listora-type-card">
+								<input
+									type="radio"
+									name="listing_type"
+									value={item.slug}
+									checked={index === 0}
+								/>
+								<span class="listora-type-card__name">{item.name}</span>
+								<span class="listora-type-card__hint">{item.hint}</span>
+							</label>
+						))
+					}
+				</div>
+			</section>
+
+			<section class="listora-form-section" data-panel="2" hidden>
+				<h2>Basics</h2>
+				<p class="listora-helper">Name and place first. Contact comes next.</p>
+				<div class="listora-field">
+					<label class="listora-label" for="title">
+						Listing title <span class="listora-req">(required)</span>
+					</label>
+					<input
+						id="title"
+						class="listora-input"
+						name="title"
+						maxlength="200"
+						required
+						autocomplete="organization"
+						aria-required="true"
+						aria-describedby="title-help title-error"
+					/>
+					<p class="listora-helper" id="title-help">Use the public business name.</p>
+					<p class="listora-field-error" id="title-error" hidden>Enter a title.</p>
+				</div>
+				<div class="listora-field">
+					<label class="listora-label" for="excerpt">Short summary</label>
+					<textarea id="excerpt" class="listora-input" name="excerpt" rows="2" maxlength="280" aria-describedby="excerpt-help"></textarea>
+					<p class="listora-helper" id="excerpt-help">Shown on cards. 280 characters or fewer.</p>
+				</div>
+				<div class="listora-field">
+					<label class="listora-label" for="description">Description</label>
+					<textarea id="description" class="listora-input" name="description" rows="5" aria-describedby="description-help"></textarea>
+					<p class="listora-helper" id="description-help">What a visitor should know before they arrive.</p>
+				</div>
+				<div class="listora-form-grid">
+					<div class="listora-field">
+						<label class="listora-label" for="city">City</label>
+						<input id="city" class="listora-input" name="city" autocomplete="address-level2" />
+					</div>
+					<div class="listora-field">
+						<label class="listora-label" for="address">Street address</label>
+						<input id="address" class="listora-input" name="address" autocomplete="street-address" />
+					</div>
+				</div>
+			</section>
+
+			<section class="listora-form-section" data-panel="3" hidden>
+				<h2>Details</h2>
+				<p class="listora-helper">Phone, web, and fields for this listing type.</p>
+				<div class="listora-form-grid">
+					<div class="listora-field">
+						<label class="listora-label" for="phone">Phone</label>
+						<input id="phone" class="listora-input" name="phone" type="tel" autocomplete="tel" />
+					</div>
+					<div class="listora-field">
+						<label class="listora-label" for="email">Email</label>
+						<input id="email" class="listora-input" name="email" type="email" autocomplete="email" />
+					</div>
+				</div>
+				<div class="listora-field">
+					<label class="listora-label" for="website">Website</label>
+					<input id="website" class="listora-input" name="website" type="url" aria-describedby="website-help" />
+					<p class="listora-helper" id="website-help">Full URL, including https.</p>
+				</div>
+				<div class="listora-form-grid">
+					<div class="listora-field">
+						<label class="listora-label" for="owner_name">Listed by</label>
+						<input id="owner_name" class="listora-input" name="owner_name" />
+					</div>
+					<div class="listora-field">
+						<label class="listora-label" for="amenities">Amenities</label>
+						<input id="amenities" class="listora-input" name="amenities" aria-describedby="amenities-help" />
+						<p class="listora-helper" id="amenities-help">Comma-separated, such as wifi, parking, outdoor.</p>
+					</div>
+				</div>
+				<div id="type-fields"></div>
+			</section>
+
+			<section class="listora-form-section" data-panel="4" hidden>
+				<h2>Categories</h2>
+				<p class="listora-helper">Help people filter this listing.</p>
+				<div class="listora-field">
+					<label class="listora-label" for="category">Category</label>
+					<select id="category" class="listora-input" name="category">
+						<option value="fine-dining">Fine Dining</option>
+						<option value="casual">Casual</option>
+						<option value="services">Services</option>
+						<option value="retail">Retail</option>
+						<option value="apartment">Apartment</option>
+					</select>
+				</div>
+				<div class="listora-form-grid">
+					<div class="listora-field">
+						<label class="listora-label" for="country">Country</label>
+						<input id="country" class="listora-input" name="country" value="US" autocomplete="country" />
+					</div>
+					<div class="listora-field">
+						<label class="listora-label" for="state">State</label>
+						<input id="state" class="listora-input" name="state" value="NY" autocomplete="address-level1" />
+					</div>
+				</div>
+			</section>
+
+			<section class="listora-form-section" data-panel="5" hidden>
+				<h2>Preview</h2>
+				<p class="listora-helper">This is how the listing card will read.</p>
+				<div id="preview"></div>
+				<div class="listora-field">
+					<div class="listora-check">
+						<input id="agree_terms" name="agree_terms" type="checkbox" value="true" aria-describedby="agree-error" />
+						<label class="listora-label" for="agree_terms">I confirm this listing is accurate.</label>
+					</div>
+					<p class="listora-field-error" id="agree-error" hidden>Confirm the listing is accurate before you submit.</p>
+				</div>
+			</section>
+
+			<div class="listora-actions">
+				<button class="listora-btn listora-btn--ghost" type="button" id="back-btn" hidden>Back</button>
+				<button class="listora-btn" type="button" id="next-btn">Continue</button>
+				<button class="listora-btn" type="submit" id="submit-btn" hidden>Submit for review</button>
+			</div>
+		</form>
+	</div>
+</Base>
+
+<script>
+	const form = document.getElementById("listora-submit") as HTMLFormElement;
+	let step = 1;
+	const typeFields: Record<string, Array<{ key: string; label: string; help: string }>> = {
+		restaurant: [
+			{ key: "cuisine", label: "Cuisine", help: "Italian, Korean, and so on." },
+			{ key: "price_range", label: "Price range", help: "Use $ to $$$." },
+		],
+		hotel: [{ key: "star_rating", label: "Stars", help: "1 to 5." }],
+		"real-estate": [
+			{ key: "beds", label: "Bedrooms", help: "Whole number." },
+			{ key: "price", label: "Price", help: "Asking or nightly rate." },
+		],
+		event: [
+			{ key: "event_start", label: "Starts", help: "Date and time." },
+			{ key: "event_end", label: "Ends", help: "Date and time." },
+		],
+		job: [
+			{ key: "salary", label: "Salary", help: "Range is fine." },
+			{ key: "job_type", label: "Job type", help: "Full-time, contract, or intern." },
+		],
+		healthcare: [{ key: "specialty", label: "Specialty", help: "What the practice treats." }],
+		education: [{ key: "program", label: "Program", help: "Course or school name." }],
+		classified: [{ key: "asking_price", label: "Asking price", help: "What you want for the item." }],
+		place: [{ key: "place_kind", label: "Kind of place", help: "Park, museum, or trail." }],
+		business: [{ key: "year_founded", label: "Year founded", help: "Four digits if you know it." }],
+	};
+
+	function setFieldError(id: string, errorId: string, show: boolean) {
+		const input = document.getElementById(id) as HTMLInputElement | null;
+		const error = document.getElementById(errorId);
+		input?.classList.toggle("is-invalid", show);
+		input?.setAttribute("aria-invalid", show ? "true" : "false");
+		if (error) error.hidden = !show;
+		if (show) input?.focus();
+	}
+
+	function showStep(next: number) {
+		step = next;
+		form.querySelectorAll<HTMLElement>("[data-panel]").forEach((panel) => {
+			panel.hidden = Number(panel.dataset.panel) !== step;
+		});
+		document.querySelectorAll<HTMLButtonElement>("#wizard-steps button").forEach((node) => {
+			if (Number(node.dataset.step) === step) node.setAttribute("aria-current", "step");
+			else node.removeAttribute("aria-current");
+		});
+		(document.getElementById("back-btn") as HTMLButtonElement).hidden = step === 1;
+		(document.getElementById("next-btn") as HTMLButtonElement).hidden = step === 5;
+		(document.getElementById("submit-btn") as HTMLButtonElement).hidden = step !== 5;
+		if (step === 5) renderPreview();
+	}
+
+	function renderTypeFields() {
+		const type = String(new FormData(form).get("listing_type") || "business");
+		const box = document.getElementById("type-fields");
+		if (!box) return;
+		box.innerHTML = (typeFields[type] ?? [])
+			.map(
+				(field) =>
+					`<div class="listora-field"><label class="listora-label" for="${field.key}">${field.label}</label><input id="${field.key}" class="listora-input" name="${field.key}" aria-describedby="${field.key}-help" /><p class="listora-helper" id="${field.key}-help">${field.help}</p></div>`,
+			)
+			.join("");
+	}
+
+	function renderPreview() {
+		const data = Object.fromEntries(new FormData(form).entries());
+		const preview = document.getElementById("preview");
+		const type = String(data.listing_type || "business");
+		if (preview) {
+			preview.innerHTML = `<article class="listora-card"><div class="listora-card-body"><p class="listora-meta"><span class="listora-badge listora-badge--type">${type}</span></p><h2>${data.title || "Untitled"}</h2><p class="listora-meta">${data.city || "City not set"}</p><p>${data.excerpt || "No summary yet."}</p></div></article>`;
+		}
+	}
+
+	async function checkDuplicate(title: string) {
+		const warning = document.getElementById("dup-warning");
+		if (!warning || !title.trim()) return;
+		const response = await fetch(
+			`/_emdash/api/plugins/listora/duplicate?title=${encodeURIComponent(title)}`,
+			{ credentials: "same-origin", headers: { "X-EmDash-Request": "1" } },
+		);
+		const json = await response.json();
+		const matches = json.data?.matches ?? [];
+		warning.hidden = matches.length === 0;
+		warning.innerHTML =
+			matches.length === 0
+				? ""
+				: `A listing named <a href="/listings/${matches[0].slug}/">${matches[0].title}</a> already exists.`;
+	}
+
+	form.querySelectorAll<HTMLInputElement>('input[name="listing_type"]').forEach((input) => {
+		input.addEventListener("change", renderTypeFields);
+	});
+	document.getElementById("title")?.addEventListener("blur", (event) => {
+		checkDuplicate((event.target as HTMLInputElement).value);
+	});
+	document.querySelectorAll<HTMLButtonElement>("#wizard-steps button").forEach((button) => {
+		button.addEventListener("click", () => {
+			const target = Number(button.dataset.step);
+			if (target > 2 && !(document.getElementById("title") as HTMLInputElement).value.trim()) {
+				showStep(2);
+				setFieldError("title", "title-error", true);
+				return;
+			}
+			showStep(target);
+		});
+	});
+	document.getElementById("next-btn")?.addEventListener("click", () => {
+		if (step === 2 && !(document.getElementById("title") as HTMLInputElement).value.trim()) {
+			setFieldError("title", "title-error", true);
+			return;
+		}
+		setFieldError("title", "title-error", false);
+		showStep(Math.min(5, step + 1));
+	});
+	document.getElementById("back-btn")?.addEventListener("click", () => showStep(Math.max(1, step - 1)));
+	renderTypeFields();
+
+	form.addEventListener("submit", async (event) => {
+		event.preventDefault();
+		const data = new FormData(form);
+		const title = String(data.get("title") ?? "").trim();
+		if (!title) {
+			showStep(2);
+			setFieldError("title", "title-error", true);
+			return;
+		}
+		if (data.get("agree_terms") !== "true") {
+			showStep(5);
+			setFieldError("agree_terms", "agree-error", true);
+			return;
+		}
+		setFieldError("agree_terms", "agree-error", false);
+		const status = document.getElementById("listora-status");
+		const button = document.getElementById("submit-btn") as HTMLButtonElement;
+		button.disabled = true;
+		form.setAttribute("aria-busy", "true");
+		try {
+			const response = await fetch("/_emdash/api/plugins/listora/submit", {
+				method: "POST",
+				credentials: "same-origin",
+				headers: { "Content-Type": "application/json", "X-EmDash-Request": "1" },
+				body: JSON.stringify({
+					title,
+					listing_type: String(data.get("listing_type") ?? "business"),
+					excerpt: String(data.get("excerpt") ?? ""),
+					description: String(data.get("description") ?? ""),
+					phone: String(data.get("phone") ?? ""),
+					email: String(data.get("email") ?? ""),
+					website: String(data.get("website") ?? ""),
+					address: String(data.get("address") ?? ""),
+					city: String(data.get("city") ?? ""),
+					state: String(data.get("state") ?? ""),
+					country: String(data.get("country") ?? ""),
+					owner_name: String(data.get("owner_name") ?? ""),
+					amenities: String(data.get("amenities") ?? ""),
+					cuisine: String(data.get("cuisine") ?? ""),
+					price_range: String(data.get("price_range") ?? ""),
+					event_start: String(data.get("event_start") ?? ""),
+					event_end: String(data.get("event_end") ?? ""),
+					agree_terms: data.get("agree_terms") === "true",
+					company_website: String(data.get("company_website") ?? ""),
+					type_fields: {
+						year_founded: String(data.get("year_founded") ?? ""),
+						star_rating: String(data.get("star_rating") ?? ""),
+						beds: String(data.get("beds") ?? ""),
+						price: String(data.get("price") ?? ""),
+						salary: String(data.get("salary") ?? ""),
+						job_type: String(data.get("job_type") ?? ""),
+						specialty: String(data.get("specialty") ?? ""),
+						program: String(data.get("program") ?? ""),
+						asking_price: String(data.get("asking_price") ?? ""),
+						place_kind: String(data.get("place_kind") ?? ""),
+					},
+				}),
+			});
+			const json = await response.json();
+			if (!response.ok || json.success === false || json.data?.ok === false) {
+				throw new Error(json.data?.error?.message || json.error?.message || "Could not submit.");
+			}
+			form.reset();
+			showStep(1);
+			if (status) {
+				status.hidden = false;
+				status.dataset.tone = "success";
+				status.textContent = json.data?.pendingReview
+					? "Thanks. Your listing is in review and will appear after it is published."
+					: "Thanks. Your listing was submitted.";
+			}
+		} catch (error) {
+			if (status) {
+				status.hidden = false;
+				status.dataset.tone = "error";
+				status.textContent = error instanceof Error ? error.message : "Could not submit.";
+			}
+		} finally {
+			button.disabled = false;
+			form.removeAttribute("aria-busy");
+		}
+	});
+</script>
