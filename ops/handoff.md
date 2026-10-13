@@ -1,4 +1,4 @@
-# Handoff (2026-10-14, 0.5.0 built and QA walked)
+# Handoff (2026-10-14, after 0.5.0)
 
 Read this first in a new session. Then `AGENTS.md`, `CONTRIBUTING.md`, and `docs/website/getting-started/new-machine.md`.
 
@@ -9,7 +9,7 @@ This product is Free only. No Pro. Work is tracked as GitHub issues under the `0
 | Thing | Where |
 | --- | --- |
 | Plugin (source of truth) | this repo, `main` |
-| Registry | `@vapvarun.bsky.social/listora`. Latest published is `0.4.1` |
+| Registry | `@vapvarun.bsky.social/listora`. Latest published is `0.5.0` (2026-10-14) |
 | Lab host | sibling EmDash site `emdash-local` (not this git repo) |
 | WordPress Listora | scope and visual reference only. Do not copy PHP |
 
@@ -47,7 +47,13 @@ Override lab folder with `LISTORA_LAB`. After a kit change: edit `site-kit/`, th
 
 ## Next, in order
 
-The 0.5.0 plan is locked. Read `PLAN.md`: it holds every owner decision, the order of work, and how to take a task. Work happens on the `0.5.0` branch (PR #49), never on `main`. Built so far on that branch: #23, #20, #26, #24, #27 (Settings page, queue page, dashboard card). A dashboard card asks the admin route with `{ type: "page_load", page: "widget:<id>" }`. Also built: #38, #44, #45, #43, #42, #40, #41, #25, #46 (import and export on the kit page `/listings/import/`, see PLAN.md corrections). #47 built (`scripts/add-to-site.sh` + `docs/website/getting-started/install.md`, proven on a fresh blog-template site at `~/code/emdash-lab-guide`, port 4323). #50 built: the in-text block is site code in `site-kit/blocks/` (a native plugin with site-local entry paths), proven on the lab, registry plugin untouched. #48: an independent QA pass was run on 2026-10-14 and its findings fixed (see the top of `docs/qa/QA_CHECKLIST.md` and its Known gaps). The knowxtheme.com preview was dropped: that site runs EmDash 1.1 and a preview shares the live database. Left for #48: the security review of the final commit, then merge, tag, publish (full QA, preview on knowxtheme.com, release).
+0.5.0 is released: merged to `main`, tagged `v0.5.0`, published to the registry and on GitHub releases. `PLAN.md` holds every owner decision behind it and its corrections. `docs/qa/QA_CHECKLIST.md` says how it was walked and lists the known gaps honestly.
+
+1. Check the listing passed: `npx emdash-plugin info vapvarun.bsky.social listora --version 0.5.0`. Then open the public page and look at the icon, banner and five screenshots.
+2. Nothing else is planned. Issue #28 (type editor, reminders, health check) stays under Later until the owner picks it.
+3. Worth proving when a site allows it, none of it blocking: a 100-row import and the scheduled tasks on a Cloudflare-hosted site, owner photos on R2, real mail delivery, and the kit on a live site once one runs EmDash 1.2 (never on a preview that shares the live database).
+
+How 0.5.0 was checked, for the next release to copy: an independent agent walked the whole checklist in a browser and looked at every screenshot (it found 22 points, including that listing pages never showed the extra fields of their type), then an independent review read the new code (no security hole, six practical fixes). The builder fixed and re-checked each. The automatic security review that used to follow each push did not arrive for the last pushes, so do not wait on it: ask for an independent review.
 
 ## How a release is verified
 
