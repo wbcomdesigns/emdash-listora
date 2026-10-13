@@ -66,17 +66,30 @@ After the bump, add a `CHANGELOG.md` entry under `[Unreleased]`, then move it un
 
 `package.json` version, the `CHANGELOG.md` heading, the git tag `vX.Y.Z`, and the registry package must be the same number. Do not leave GitHub ahead of the registry, or the other way around.
 
-Do this from `main` after the PR is merged.
+A registry release cannot be changed or removed. Every check runs before `publish`, never after.
 
-1. Confirm `package.json` version is new.
-2. Confirm `CHANGELOG.md` has that version, and put its short form at the top of `docs/registry/changelog.md` (the registry caps that section at 2000 characters).
-3. `npm run validate && npm run test && npm run build`
-4. Tag: `git tag v0.2.1 && git push origin main --tags`
-5. Session: `npx emdash-plugin whoami`  
-   If needed: `npx emdash-plugin login vapvarun.bsky.social`
-6. Publish: `npx emdash-plugin publish`
-7. Watch approval:  
-   `npx emdash-plugin info vapvarun.bsky.social listora --version 0.2.1 --watch`
+### Before you merge
+
+1. `npm test` and `npm run build`.
+2. `./scripts/reset-lab.sh` then `./scripts/prove-lab.sh --all`.
+3. Walk [docs/qa/QA_CHECKLIST.md](docs/qa/QA_CHECKLIST.md) in a browser as guest, member (`./scripts/lab-role.sh subscriber`) and admin, at 1440, 768 and 390, in light and dark. Update its "Last walk" line honestly.
+4. Wait for the automatic security review of the last pushed commit and fix what it finds. Do not tag while a review is outstanding.
+5. Same version in `package.json`, `package-lock.json`, `CHANGELOG.md`, the top of `docs/registry/changelog.md` (the registry caps that section at 2000 characters) and a new `docs/website/whats-new/` page.
+6. If screens changed, retake `images/screenshot-*.jpg` from a freshly reset lab. No test data in them.
+7. `npm run bundle` stays under 256 KB, 128 KB per file, 20 files.
+
+### Publish, from `main` after the PR is merged
+
+1. `npm test && npm run build` on `main`.
+2. Tag: `git tag vX.Y.Z && git push origin vX.Y.Z`
+3. Session: `npx emdash-plugin whoami`. If needed: `npx emdash-plugin login vapvarun.bsky.social`
+4. Publish: `npx emdash-plugin publish`
+5. Profile: `npx emdash-plugin update-package` (dry run), then `--yes`. `publish` does not update the name, description, keywords or sections of an existing package.
+6. GitHub release: `gh release create vX.Y.Z` with that version's changelog section.
+7. Status: `npx emdash-plugin info vapvarun.bsky.social listora --version X.Y.Z`. A new release stays off the public page until its listing check passes. `pending` with no reason code means not assessed yet.
+8. Open the public page and look at the icon, banner and screenshots. Comment on the milestone's progress-log issue. Rewrite `ops/handoff.md`. Reset the lab.
+
+A review finding that arrives after publish gets a patch release only if a site owner is exposed. Otherwise file an issue for the next milestone, so GitHub and the registry stay on the same version.
 
 Public page after approval:  
 https://plugins.emdashcms.com/plugins/@vapvarun.bsky.social/listora
