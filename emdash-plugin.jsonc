@@ -14,7 +14,7 @@
 	"allowedHosts": [],
 	"storage": {
 		"submissions": {
-			"indexes": ["status", "createdAt", "title"]
+			"indexes": ["status", "createdAt", "title", "member_id"]
 		},
 		"events": {
 			"indexes": ["savedAt", "contentId", "collection"]

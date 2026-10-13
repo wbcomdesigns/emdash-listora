@@ -9,7 +9,10 @@ const { entries, cacheHint } = await getEmDashCollection("listings", {
 	where: { listing_type: "event" },
 });
 if (Astro.cache?.enabled) Astro.cache.set(cacheHint);
-const events = entries.filter((entry) => entry.data.event_start);
+const today = new Date().toISOString().slice(0, 10);
+const events = entries
+	.filter((entry) => String(entry.data.event_end || entry.data.event_start || "").slice(0, 10) >= today)
+	.sort((a, b) => String(a.data.event_start).localeCompare(String(b.data.event_start)));
 ---
 
 <Base title="Listing calendar" description="Upcoming events in the Listora directory.">
@@ -24,7 +27,7 @@ const events = entries.filter((entry) => entry.data.event_start);
 		{
 			events.length === 0 ? (
 				<div class="listora-empty">
-					<h2>No events yet</h2>
+					<h2>No upcoming events</h2>
 					<p>Event listings with a start date appear here.</p>
 					<a class="listora-btn" href="/listings/submit/">Add an event</a>
 				</div>

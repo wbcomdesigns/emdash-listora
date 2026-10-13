@@ -59,3 +59,12 @@ export async function filterListings(
 
 	return { items, total: items.length };
 }
+
+/** Publish a listing's current revision. False when the host cannot publish. */
+export async function publishNow(ctx: PluginContext, id: string): Promise<boolean> {
+	if (!ctx.content?.getVersioned || !ctx.content.publish) return false;
+	const versioned = await ctx.content.getVersioned(LISTINGS, id);
+	if (!versioned) return false;
+	await ctx.content.publish(LISTINGS, id, { _rev: versioned._rev });
+	return true;
+}

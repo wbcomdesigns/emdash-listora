@@ -2,6 +2,9 @@
 import Base from "../../layouts/Base.astro";
 import { LISTING_TYPES } from "../../lib/listora";
 import "../../styles/listora-ui.css";
+
+const user = Astro.locals.user;
+const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.pathname)}`;
 ---
 
 <Base
@@ -17,6 +20,17 @@ import "../../styles/listora-ui.css";
 			<a class="listora-btn listora-btn--ghost" href="/listings/">All listings</a>
 		</header>
 
+		{
+			user ? null : (
+				<div class="listora-empty">
+					<h2>Sign in to add a listing</h2>
+					<p>An account lets you edit, renew and track your listing later.</p>
+					<a class="listora-btn" href={loginUrl}>Sign in</a>
+				</div>
+			)
+		}
+		{user ? (
+		<Fragment>
 		<ol class="listora-wizard-steps" id="wizard-steps">
 			<li><button type="button" data-step="1" aria-current="step">Type</button></li>
 			<li><button type="button" data-step="2">Basics</button></li>
@@ -172,11 +186,18 @@ import "../../styles/listora-ui.css";
 				<button class="listora-btn" type="submit" id="submit-btn" hidden>Submit for review</button>
 			</div>
 		</form>
+		</Fragment>
+		) : null}
 	</div>
 </Base>
 
 <script>
-	const form = document.getElementById("listora-submit") as HTMLFormElement;
+	import { api, esc } from "../../lib/listora";
+
+	const form = document.getElementById("listora-submit") as HTMLFormElement | null;
+	if (form) wizard(form);
+
+	function wizard(form: HTMLFormElement) {
 	let step = 1;
 	const typeFields: Record<string, Array<{ key: string; label: string; help: string }>> = {
 		restaurant: [
@@ -244,24 +265,20 @@ import "../../styles/listora-ui.css";
 		const preview = document.getElementById("preview");
 		const type = String(data.listing_type || "business");
 		if (preview) {
-			preview.innerHTML = `<article class="listora-card"><div class="listora-card-body"><p class="listora-meta"><span class="listora-badge listora-badge--type">${type}</span></p><h2>${data.title || "Untitled"}</h2><p class="listora-meta">${data.city || "City not set"}</p><p>${data.excerpt || "No summary yet."}</p></div></article>`;
+			preview.innerHTML = `<article class="listora-card"><div class="listora-card-body"><p class="listora-meta"><span class="listora-badge listora-badge--type">${esc(type)}</span></p><h2>${esc(data.title || "Untitled")}</h2><p class="listora-meta">${esc(data.city || "City not set")}</p><p>${esc(data.excerpt || "No summary yet.")}</p></div></article>`;
 		}
 	}
 
 	async function checkDuplicate(title: string) {
 		const warning = document.getElementById("dup-warning");
 		if (!warning || !title.trim()) return;
-		const response = await fetch(
-			`/_emdash/api/plugins/listora/duplicate?title=${encodeURIComponent(title)}`,
-			{ credentials: "same-origin", headers: { "X-EmDash-Request": "1" } },
-		);
-		const json = await response.json();
-		const matches = json.data?.matches ?? [];
+		const data = await api(`duplicate?title=${encodeURIComponent(title)}`);
+		const matches = (data.matches ?? []) as Array<{ slug: string; title: string }>;
 		warning.hidden = matches.length === 0;
 		warning.innerHTML =
 			matches.length === 0
 				? ""
-				: `A listing named <a href="/listings/${matches[0].slug}/">${matches[0].title}</a> already exists.`;
+				: `A listing named <a href="/listings/${esc(matches[0].slug)}/">${esc(matches[0].title)}</a> already exists.`;
 	}
 
 	form.querySelectorAll<HTMLInputElement>('input[name="listing_type"]').forEach((input) => {
@@ -312,11 +329,7 @@ import "../../styles/listora-ui.css";
 		button.disabled = true;
 		form.setAttribute("aria-busy", "true");
 		try {
-			const response = await fetch("/_emdash/api/plugins/listora/submit", {
-				method: "POST",
-				credentials: "same-origin",
-				headers: { "Content-Type": "application/json", "X-EmDash-Request": "1" },
-				body: JSON.stringify({
+			const result = await api("submit", {
 					title,
 					listing_type: String(data.get("listing_type") ?? "business"),
 					excerpt: String(data.get("excerpt") ?? ""),
@@ -348,18 +361,14 @@ import "../../styles/listora-ui.css";
 						asking_price: String(data.get("asking_price") ?? ""),
 						place_kind: String(data.get("place_kind") ?? ""),
 					},
-				}),
-			});
-			const json = await response.json();
-			if (!response.ok || json.success === false || json.data?.ok === false) {
-				throw new Error(json.data?.error?.message || json.error?.message || "Could not submit.");
-			}
+				});
+			if (!result.ok) throw new Error(result.error?.message || "Could not submit.");
 			form.reset();
 			showStep(1);
 			if (status) {
 				status.hidden = false;
 				status.dataset.tone = "success";
-				status.textContent = json.data?.pendingReview
+				status.textContent = result.pendingReview
 					? "Thanks. Your listing is in review and will appear after it is published."
 					: "Thanks. Your listing was submitted.";
 			}
@@ -374,4 +383,5 @@ import "../../styles/listora-ui.css";
 			form.removeAttribute("aria-busy");
 		}
 	});
+	}
 </script>

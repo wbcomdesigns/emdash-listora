@@ -23,7 +23,7 @@
 		"build": "emdash-plugin build",
 		"dev": "emdash-plugin dev",
 		"typecheck": "tsc --noEmit",
-		"test": "emdash-plugin validate && vitest run",
+		"test": "emdash-plugin validate && tsc --noEmit && vitest run",
 		"bundle": "emdash-plugin bundle",
 		"login": "emdash-plugin login",
 		"publish": "emdash-plugin publish",

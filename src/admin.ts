@@ -1,8 +1,9 @@
 import type { PluginContext } from "emdash/plugin";
 
+import { publishNow } from "./lib/listings-query";
 import { getOnboardState, loadSampleDirectory } from "./lib/onboard";
-
-const LISTINGS = "listings";
+import { LISTING_TYPES, LISTINGS } from "./lib/types";
+import { asBoolean, asNumber, asRecord, asString, rows } from "./lib/util";
 
 export type BlockMap = Record<string, unknown> & { type: string };
 
@@ -20,20 +21,6 @@ type SubmissionRow = {
 	createdAt?: string;
 };
 
-function asRecord(input: unknown): Record<string, unknown> {
-	return input !== null && typeof input === "object" && !Array.isArray(input)
-		? (input as Record<string, unknown>)
-		: {};
-}
-
-function asString(value: unknown): string {
-	return typeof value === "string" ? value.trim() : "";
-}
-
-function asBoolean(value: unknown): boolean {
-	return value === true || value === "true" || value === 1 || value === "1";
-}
-
 function localeFor(ctx: PluginContext): string {
 	return ctx.site.locale || "en";
 }
@@ -41,8 +28,10 @@ function localeFor(ctx: PluginContext): string {
 async function loadSettings(ctx: PluginContext): Promise<{
 	requireModeration: boolean;
 	defaultListingType: string;
+	spamKeywords: string;
 }> {
 	return {
+		spamKeywords: (await ctx.settings.get<string>("spam_keywords")) ?? "viagra, crypto pump",
 		requireModeration: (await ctx.settings.get<boolean>("require_moderation")) !== false,
 		defaultListingType: (await ctx.settings.get<string>("default_listing_type")) || "business",
 	};
@@ -157,18 +146,14 @@ export async function renderQueue(
 						action_id: "default_listing_type",
 						label: "Default listing type",
 						initial_value: settings.defaultListingType,
-						options: [
-							{ label: "Business", value: "business" },
-							{ label: "Restaurant", value: "restaurant" },
-							{ label: "Real estate", value: "real-estate" },
-							{ label: "Hotel", value: "hotel" },
-							{ label: "Event", value: "event" },
-							{ label: "Job", value: "job" },
-							{ label: "Healthcare", value: "healthcare" },
-							{ label: "Education", value: "education" },
-							{ label: "Place", value: "place" },
-							{ label: "Classified", value: "classified" },
-						],
+						options: LISTING_TYPES.map((type) => ({ label: type.name, value: type.slug })),
+					},
+					{
+						type: "text_input",
+						action_id: "spam_keywords",
+						label: "Spam keywords",
+						help_text: "Comma-separated words that reject a submission.",
+						initial_value: settings.spamKeywords,
 					},
 				],
 				submit: { label: "Save settings", action_id: "save_settings" },
@@ -189,6 +174,7 @@ async function reviewListing(
 
 	const existing = (await ctx.storage.submissions.get(listingId)) as SubmissionRow | null;
 	const next: SubmissionRow = {
+		...existing,
 		listingId,
 		title: existing?.title ?? listingId,
 		listing_type: existing?.listing_type,
@@ -206,21 +192,14 @@ async function reviewListing(
 		return renderQueue(ctx, { toast: { message: "Unknown review action.", type: "error" } });
 	}
 
-	if (!ctx.content?.getVersioned || !ctx.content.publish) {
+	if (!(await publishNow(ctx, listingId))) {
 		return renderQueue(ctx, {
 			toast: {
-				message: "Publish is not available. Open the listing in admin and publish it there.",
+				message: "Could not publish. Open the listing in admin and publish it there.",
 				type: "error",
 			},
 		});
 	}
-
-	const versioned = await ctx.content.getVersioned(LISTINGS, listingId);
-	if (!versioned) {
-		return renderQueue(ctx, { toast: { message: "Listing was not found.", type: "error" } });
-	}
-
-	await ctx.content.publish(LISTINGS, listingId, { _rev: versioned._rev });
 	await ctx.storage.submissions.put(listingId, { ...next, status: "approved" });
 	ctx.log.info("Listora listing approved", { listingId });
 	return renderQueue(ctx, { toast: { message: "Listing published.", type: "success" } });
@@ -264,6 +243,7 @@ async function renderReviewQueue(
 				? { type: "empty", title: "No pending reviews", description: "New reviews wait here." }
 				: {
 						type: "table",
+						page_action_id: "reviews_page",
 						columns: [
 							{ key: "title", label: "Review" },
 							{ key: "listing", label: "Listing" },
@@ -315,6 +295,7 @@ async function renderClaimQueue(
 				? { type: "empty", title: "No pending claims", description: "Claim requests wait here." }
 				: {
 						type: "table",
+						page_action_id: "claims_page",
 						columns: [
 							{ key: "listing", label: "Listing" },
 							{ key: "name", label: "Name" },
@@ -405,6 +386,32 @@ export async function renderSetup(
 	};
 }
 
+/** Change fields on a listing and keep it live. Updating a published entry only saves a draft. */
+async function patchListing(
+	ctx: PluginContext,
+	id: string,
+	patch: Record<string, unknown>,
+): Promise<Record<string, unknown> | null> {
+	const listing = await ctx.content?.get?.(LISTINGS, id);
+	if (!listing || !ctx.content?.update) return null;
+	const data = { ...listing.data, ...patch };
+	await ctx.content.update(LISTINGS, id, data);
+	if (listing.status === "published") await publishNow(ctx, id);
+	return data;
+}
+
+async function syncRating(ctx: PluginContext, listingId: string): Promise<void> {
+	const found = await ctx.storage.reviews.query({ where: { listingId }, limit: 200 });
+	const stars = rows(found)
+		.filter((row) => row.status === "published")
+		.map((row) => asNumber(row.stars) ?? 0);
+	const avg = stars.length ? stars.reduce((sum, value) => sum + value, 0) / stars.length : 0;
+	await patchListing(ctx, listingId, {
+		rating_avg: Math.round(avg * 10) / 10,
+		rating_count: stars.length,
+	});
+}
+
 export async function handleAdmin(
 	input: unknown,
 	ctx: PluginContext,
@@ -432,6 +439,7 @@ export async function handleAdmin(
 			asString(values.default_listing_type) || "business",
 		);
 		await ctx.settings.set("require_moderation", asBoolean(values.require_moderation));
+		await ctx.settings.set("spam_keywords", asString(values.spam_keywords));
 		return renderQueue(ctx, { toast: { message: "Settings saved.", type: "success" } });
 	}
 
@@ -454,6 +462,7 @@ export async function handleAdmin(
 				...existing,
 				status: action === "approve" ? "published" : "rejected",
 			});
+			await syncRating(ctx, asString(existing.listingId));
 		}
 		return renderReviewQueue(ctx, { toast: { message: "Review updated.", type: "success" } });
 	}
@@ -469,11 +478,19 @@ export async function handleAdmin(
 				...existing,
 				status: action === "approve" ? "approved" : "rejected",
 			});
-			if (action === "approve" && ctx.content?.update) {
-				const listing = await ctx.content.get("listings", asString(existing.listingId));
-				if (listing) {
-					await ctx.content.update("listings", listing.id, { ...listing.data, is_claimed: true });
-				}
+			if (action === "approve") {
+				const listingId = asString(existing.listingId);
+				const listing = await patchListing(ctx, listingId, { is_claimed: true, owner_name: asString(existing.name) });
+				const submission = asRecord(await ctx.storage.submissions.get(listingId));
+				await ctx.storage.submissions.put(listingId, {
+					listingId,
+					title: asString(listing?.title),
+					listing_type: asString(listing?.listing_type),
+					city: asString(listing?.city),
+					status: "approved",
+					...submission,
+					member_id: existing.member_id,
+				});
 			}
 		}
 		return renderClaimQueue(ctx, { toast: { message: "Claim updated.", type: "success" } });
