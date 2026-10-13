@@ -15,7 +15,7 @@ The plugin is the engine (routes, storage, hooks, Block Kit admin). It does not 
 - Kit pages (you copy): `/listings/`, `/listings/{slug}/`, `/listings/submit/`, `/listings/calendar/`, `/account/`
 - `GET /_emdash/api/plugins/listora/health`
 
-Testers install `@vapvarun.bsky.social/listora@0.2.0` only. Ignore `0.1.0`. GitHub tag, `package.json`, and the registry version are the same number.
+Testers install `@vapvarun.bsky.social/listora@0.2.1` only. Ignore `0.1.0` and `0.2.0`. GitHub tag, `package.json`, and the registry version are the same number.
 
 ## Docs
 

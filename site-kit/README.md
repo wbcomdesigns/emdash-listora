@@ -34,7 +34,7 @@ Add four menu links: `/listings/`, `/listings/submit/`, `/listings/calendar/`, `
 
 ## What you should see
 
-- `/listings/` command search, type chips, cards
+- `/listings/` command search, sideways type chips, featured track, cards
 - `/listings/{slug}/` cover, tabs, review / contact / claim
 - `/listings/submit/` five-step wizard
 - `/listings/calendar/` events

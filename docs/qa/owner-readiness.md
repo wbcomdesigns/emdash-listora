@@ -71,4 +71,4 @@ Do these before calling Free stable for a second site. Do not start Pro.
 
 "Install the plugin, then copy the site kit so your EmDash site has `/listings/` pages. The plugin is the engine. It does not create the pages."
 
-That line is true. The kit now contains the pages. A second-site apply is not proven yet. See [cover-before-next-release.md](cover-before-next-release.md) before testers use `0.2.0`.
+That line is true. The kit now contains the pages. A second-site apply is not proven yet. See [cover-before-next-release.md](cover-before-next-release.md) before testers use `0.2.1`.

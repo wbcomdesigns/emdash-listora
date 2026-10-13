@@ -6,7 +6,7 @@ Listora for EmDash is a directory plugin for EmDash sites. Visitors search listi
 
 Install from the EmDash collection as `@vapvarun.bsky.social/listora`, then copy the site kit so the site has `/listings/` pages. The plugin alone ships routes, storage, and Block Kit admin.
 
-This product is `0.2.0` and Free only. The engine is proven in the local lab. Public chrome is still thin. Match WordPress Listora Free screens next. Do not treat the lab pages as finished product UI. No Pro plan in this pass. Readiness and QA live in [QA catalog](how-to/qa-catalog.md). Testers install `@vapvarun.bsky.social/listora@0.2.0`.
+This product is `0.2.1` and Free only. The engine is proven in the local lab. Public chrome is still thin. Match WordPress Listora Free screens next. Do not treat the lab pages as finished product UI. No Pro plan in this pass. Readiness and QA live in [QA catalog](how-to/qa-catalog.md). Testers install `@vapvarun.bsky.social/listora@0.2.1`.
 
 ## Two products
 

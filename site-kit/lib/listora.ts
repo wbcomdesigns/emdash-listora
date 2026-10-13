@@ -145,6 +145,33 @@ export function coverUrl(slug: string, featured?: { src?: string } | null, type?
 	return `https://images.unsplash.com/${id}?auto=format&fit=crop&w=1600&h=900&q=80&sig=${encodeURIComponent(slug)}`;
 }
 
+export function formatEventWhen(value: unknown): string {
+	const raw = String(value || "").trim();
+	if (!raw) return "";
+	const dateOnly = /^(\d{4})-(\d{2})-(\d{2})$/.exec(raw);
+	const date = dateOnly
+		? new Date(Number(dateOnly[1]), Number(dateOnly[2]) - 1, Number(dateOnly[3]))
+		: new Date(raw);
+	if (Number.isNaN(date.getTime())) return raw;
+	if (dateOnly) {
+		return new Intl.DateTimeFormat("en-US", {
+			weekday: "short",
+			month: "short",
+			day: "numeric",
+			year: "numeric",
+		}).format(date);
+	}
+	return new Intl.DateTimeFormat("en-US", {
+		weekday: "short",
+		month: "short",
+		day: "numeric",
+		year: "numeric",
+		hour: "numeric",
+		minute: "2-digit",
+		timeZone: "America/New_York",
+	}).format(date);
+}
+
 export function mapsDirectionsUrl(lat: number, lng: number): string {
 	return `https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=;${lat},${lng}`;
 }

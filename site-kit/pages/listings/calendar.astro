@@ -1,6 +1,7 @@
 ---
 import { getEmDashCollection } from "emdash";
 import Base from "../../layouts/Base.astro";
+import { formatEventWhen } from "../../lib/listora";
 import "../../styles/listora-ui.css";
 
 const { entries, cacheHint } = await getEmDashCollection("listings", {
@@ -16,7 +17,7 @@ const events = entries.filter((entry) => entry.data.event_start);
 		<header class="listora-page-head">
 			<div>
 				<h1>Calendar</h1>
-				<p>{events.length} upcoming events</p>
+				<p>{events.length === 1 ? "1 upcoming event" : `${events.length} upcoming events`}</p>
 			</div>
 			<a class="listora-btn listora-btn--ghost" href="/listings/">Directory</a>
 		</header>
@@ -32,7 +33,7 @@ const events = entries.filter((entry) => entry.data.event_start);
 					{events.map((event) => (
 						<article class="listora-card">
 							<div class="listora-card-body">
-								<p class="listora-meta">{event.data.event_start}</p>
+								<p class="listora-meta">{formatEventWhen(event.data.event_start)}</p>
 								<h2>
 									<a href={`/listings/${event.id}/`}>{event.data.title}</a>
 								</h2>

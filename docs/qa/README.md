@@ -11,7 +11,7 @@ Use these files before you call a screen done, a route complete, or the plugin r
 | [code-completion.md](code-completion.md) | Engine, kit, and host: done / thin / missing |
 | [screen-checklist.md](screen-checklist.md) | Browser ticks per Free screen |
 | [qa-config.json](qa-config.json) | URLs, routes, personas, viewports |
-| [cover-before-next-release.md](cover-before-next-release.md) | Half-cooked list to close before `0.2.0` |
+| [cover-before-next-release.md](cover-before-next-release.md) | Half-cooked list to close before `0.2.1` |
 
 Team handbook pointer: [docs/website/how-to/qa-catalog.md](../website/how-to/qa-catalog.md).
 

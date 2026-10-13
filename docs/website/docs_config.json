@@ -6,7 +6,7 @@
   "tagline": "Directory listings for EmDash. The plugin is the engine. Screens live on the site kit.",
   "note": "GitHub-only documentation. Metadata only. No publish or sync target.",
   "images_dir": "images",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "sections": [
     {
       "name": "Getting Started",
@@ -75,6 +75,7 @@
       "folder": "whats-new",
       "description": "Registry versions, newest first.",
       "pages": [
+        { "slug": "0-2-1", "title": "0.2.1" },
         { "slug": "0-2-0", "title": "0.2.0" },
         { "slug": "0-1-0", "title": "0.1.0" }
       ]
