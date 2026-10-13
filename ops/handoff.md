@@ -1,4 +1,4 @@
-# Handoff (2026-10-13, after 0.4.1)
+# Handoff (2026-10-13, after 0.4.1, 0.5.0 plan locked)
 
 Read this first in a new session. Then `AGENTS.md`, `CONTRIBUTING.md`, and `docs/website/getting-started/new-machine.md`.
 
@@ -47,10 +47,7 @@ Override lab folder with `LISTORA_LAB`. After a kit change: edit `site-kit/`, th
 
 ## Next, in order
 
-1. Confirm the registry page shows the icon, banner and screenshots once the listing checks pass.
-2. Milestone `0.4.0` shipped paging, the Messages page, stored ratings and the kit changes for existing sites. Still open there: #23 (prove the kit on a clean second site and a preview of a live one), #20 (email the listing owner).
-3. Milestone `0.5.0`: categories and locations as filters, gallery, listing expiry, admin pages for import and settings.
-4. Milestone `Later`: type editor, reminders, health check.
+The 0.5.0 plan is locked. Read `PLAN.md`: it holds every owner decision, the order of work, and how to take a task. Work happens on the `0.5.0` branch (PR #37), never on `main`. Built so far on that branch: #23, #20, #26, #24. Open tasks: #27, #39, #38, #44, #45, #43, #42, #40, #41, #25, #46, #47, then #48 (full QA, preview on knowxtheme.com, release).
 
 ## How a release is verified
 

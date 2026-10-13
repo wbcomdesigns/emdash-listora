@@ -1,5 +1,7 @@
 # Listora 0.5.0 plan
 
+**Status: LOCKED on 2026-10-13.** The decisions and the order below were agreed with the owner. An agent does not change scope, add options, or reorder steps. If a task cannot be done as written, stop, say why on its issue, and wait for the owner.
+
 Scoped with the owner on 2026-10-13. Every task is a GitHub issue under the `0.5.0` milestone. Work them in the order below. One rule sits over all of it: **no half-cooked features**. If a site owner with no technical help cannot use a thing from start to finish, it is not built or shipped in that form.
 
 ## Decisions
@@ -57,6 +59,18 @@ Steps 1 to 7 are small and independent. Steps 8 to 10 share one pattern: a membe
 - Each task is done when its tests pass and it has been walked in a browser as guest, subscriber and admin, including a failed request, at 1440 and 390, in light and dark.
 - Each task adds its cases to `docs/qa/QA_CHECKLIST.md`.
 - Nothing is published until step 13.
+
+## Giving a task to an agent
+
+Tell the agent one thing: "Read `PLAN.md` and `ops/handoff.md` in `~/code/emdash-listora`, then work issue #N."
+
+- **Branch.** All 0.5.0 work lives on the `0.5.0` branch (PR #37 into `main`). An agent branches from `0.5.0` as `0.5.0-<issue number>` and opens a pull request back into `0.5.0`. Nobody commits to `main`.
+- **Own lab.** Two agents must not share a lab site: `reset-lab.sh` wipes its database. Each agent creates its own with `LISTORA_LAB=../emdash-lab-listora-<issue> LISTORA_PORT=<free port from 4340 up> ./scripts/setup-lab.sh`, and passes the same two values to every lab script (`LISTORA_BASE=http://localhost:<port>` for `prove-lab.sh`).
+- **Can run side by side:** steps 1 to 7, and 11 and 12. They touch different screens. Steps 1, 2 and 3 all add to the Settings page, so step 1 merges first and the other two build on it.
+- **One agent, in order:** steps 8, 9 and 10. They share the wait-then-approve pattern.
+- **Last, alone:** step 13.
+- **An agent stops** when its task passes its own tests and browser walk and its pull request is open. It never merges into `main`, never tags, never publishes.
+- **Report on the issue:** what was built, what was walked in the browser and as which role, what was not verified.
 
 ## Parked
 
