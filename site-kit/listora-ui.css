@@ -1,34 +1,35 @@
+/* Colours follow the site theme. light-dark() tracks the site's color-scheme, so one token block covers both modes. */
 .listora-block {
 	--listora-primary: var(--color-brand, #2271b1);
 	--listora-primary-hover: var(--color-brand-hover, #135e96);
-	--listora-primary-fg: #ffffff;
+	--listora-primary-fg: var(--color-on-brand, #ffffff);
 	--listora-primary-text-mix: 65%;
-	--listora-primary-text-toward: #000000;
+	--listora-primary-text-toward: light-dark(#000000, #ffffff);
 	--listora-primary-text: color-mix(
 		in srgb,
 		var(--listora-primary) var(--listora-primary-text-mix),
 		var(--listora-primary-text-toward)
 	);
 	--listora-success: #16a34a;
-	--listora-success-bg: #ecfdf5;
-	--listora-success-fg: #166534;
+	--listora-success-bg: light-dark(#ecfdf5, #052e16);
+	--listora-success-fg: light-dark(#166534, #86efac);
 	--listora-warning: #d97706;
-	--listora-warning-bg: #fef3c7;
-	--listora-warning-fg: #92400e;
+	--listora-warning-bg: light-dark(#fef3c7, #3b2506);
+	--listora-warning-fg: light-dark(#92400e, #fcd34d);
 	--listora-danger: #dc2626;
-	--listora-danger-bg: #fef2f2;
-	--listora-danger-fg: #b91c1c;
+	--listora-danger-bg: light-dark(#fef2f2, #3f0d0d);
+	--listora-danger-fg: light-dark(#b91c1c, #fca5a5);
 	--listora-rating: #f5a623;
 	--listora-on-rating: #2b1a00;
 	--listora-on-media: #ffffff;
-	--listora-bg-base: var(--color-bg, #ffffff);
-	--listora-bg-elevated: var(--color-surface, #ffffff);
-	--listora-bg-muted: #f5f5f5;
-	--listora-border-default: var(--color-border, #e0e0e0);
-	--listora-border-subtle: #e2e8f0;
-	--listora-fg-default: #1a1a1a;
-	--listora-fg-muted: #555555;
-	--listora-fg-faint: #5b6472;
+	--listora-bg-base: var(--color-bg, light-dark(#ffffff, #121212));
+	--listora-bg-elevated: var(--color-surface, light-dark(#ffffff, #1c1c1c));
+	--listora-bg-muted: var(--color-bg-subtle, light-dark(#f5f5f5, #222222));
+	--listora-border-default: var(--color-border, light-dark(#e0e0e0, #333333));
+	--listora-border-subtle: light-dark(#e2e8f0, #2a2a2a);
+	--listora-fg-default: var(--color-text, light-dark(#1a1a1a, #f4f4f4));
+	--listora-fg-muted: var(--color-text-secondary, light-dark(#555555, #c4c4c4));
+	--listora-fg-faint: light-dark(#5b6472, #9aa3b2);
 	--listora-space-1: 0.25rem;
 	--listora-space-2: 0.5rem;
 	--listora-space-3: 0.75rem;
@@ -66,23 +67,6 @@
 	background: var(--listora-bg-base);
 	isolation: isolate;
 	display: flow-root;
-}
-
-.dark .listora-block,
-html.dark .listora-block {
-	--listora-primary-text-mix: 40%;
-	--listora-primary-text-toward: #ffffff;
-	--listora-bg-base: var(--color-bg, #121212);
-	--listora-bg-elevated: var(--color-surface, #1c1c1c);
-	--listora-bg-muted: #222;
-	--listora-border-default: #333;
-	--listora-border-subtle: #2a2a2a;
-	--listora-fg-default: #f4f4f4;
-	--listora-fg-muted: #c4c4c4;
-	--listora-fg-faint: #9aa3b2;
-	--listora-success-bg: #052e16;
-	--listora-warning-bg: #3b2506;
-	--listora-danger-bg: #3f0d0d;
 }
 
 .listora-block *,
@@ -239,7 +223,7 @@ html.dark .listora-block {
 	pointer-events: none;
 }
 
-.listora-search__input {
+.listora-search .listora-search__input {
 	width: 100%;
 	min-height: var(--listora-tap-target);
 	padding-block: 0;
@@ -638,6 +622,11 @@ html.dark .listora-block {
 	gap: var(--listora-space-2);
 	color: var(--listora-fg-faint);
 	font-size: var(--listora-text-size-sm);
+}
+
+.listora-stars__value {
+	color: var(--listora-fg-default);
+	letter-spacing: normal;
 }
 
 .listora-stars {

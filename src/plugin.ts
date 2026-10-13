@@ -2,7 +2,7 @@ import type { SandboxedPlugin } from "emdash/plugin";
 
 import { handleAdmin } from "./admin";
 import { maybeSeedDemo } from "./lib/onboard";
-import { filterListings, listPublished, publishNow } from "./lib/listings-query";
+import { filterListings, listPublished, publishNow, syncRating } from "./lib/listings-query";
 import { LISTING_TYPES, LISTINGS, listingTypeBySlug } from "./lib/types";
 import {
 	asBoolean,
@@ -99,6 +99,9 @@ type Member = { id: string; name: string | null; role: number };
 
 const SIGN_IN = { ok: false, error: { code: "SIGN_IN_REQUIRED", message: "Sign in to continue." } };
 
+// ponytail: KV read-then-write is not atomic, so a burst of parallel requests can each
+// read the same count and slip a few past the cap. Fine for throttling abuse; move to a
+// host rate-limit primitive if one ships.
 async function rateLimited(
 	ctx: { kv: { get<T>(key: string): Promise<T | null>; set(key: string, value: string): Promise<void> } },
 	who: string,
@@ -345,6 +348,7 @@ const plugin: SandboxedPlugin = {
 				if (await rateLimited(ctx, `review:${user.id}`)) return RATE_LIMITED;
 				// One review per member per listing. Writing again replaces it and sends it back to moderation.
 				const id = `rev-${listingId}-${user.id}`;
+				const replacedLive = asRecord(await ctx.storage.reviews.get(id)).status === "published";
 				await ctx.storage.reviews.put(id, {
 					listingId,
 					member_id: user.id,
@@ -357,6 +361,7 @@ const plugin: SandboxedPlugin = {
 					owner_reply: "",
 					createdAt: nowIso(),
 				});
+				if (replacedLive) await syncRating(ctx, listingId);
 				return { ok: true, review: { id, status: "pending" } };
 			},
 		},
@@ -447,7 +452,9 @@ const plugin: SandboxedPlugin = {
 				if (asString(raw.company_website)) {
 					return { ok: false, error: { code: "SPAM", message: "Message rejected." } };
 				}
-				if (await rateLimited(ctx, `contact:${(routeCtx.requestMeta as { ip?: string | null } | undefined)?.ip ?? ""}`)) return RATE_LIMITED;
+				// Per visitor IP. With no IP from the host every guest shares one bucket: fail closed.
+				const ip = (routeCtx.requestMeta as { ip?: string | null } | undefined)?.ip || "unknown";
+				if (await rateLimited(ctx, `contact:${ip}`)) return RATE_LIMITED;
 				const id = `contact-${listingId}-${Date.now()}`;
 				await ctx.storage.contacts.put(id, {
 					listingId,

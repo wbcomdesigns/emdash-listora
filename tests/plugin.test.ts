@@ -187,6 +187,41 @@ describe("member routes", () => {
 	});
 });
 
+describe("moderation uses the version the admin saw", () => {
+	it("refuses to approve a review that was rewritten after the page loaded", async () => {
+		host = await createPluginTestHost();
+		const post = { method: "POST", user: ana };
+		await host.invokeRoute("review", { listingId: "a", body: "Polite first draft." }, post);
+		const seen = (await host.storage<{ createdAt: string }>("reviews").get("rev-a-ana"))!.createdAt;
+		await new Promise((resolve) => setTimeout(resolve, 5));
+		await host.invokeRoute("review", { listingId: "a", body: "Swapped after the admin looked." }, post);
+		const result = await host.invokeRoute("admin", {
+			type: "block_action",
+			action_id: "review_mod",
+			value: `approve|${seen}|rev-a-ana`,
+			page: "/reviews",
+		});
+		expect(result).toMatchObject({ toast: { type: "error" } });
+		expect(await host.storage("reviews").get("rev-a-ana")).toMatchObject({ status: "pending" });
+	});
+
+	it("refuses a second decision on a claim that is already handled", async () => {
+		host = await createPluginTestHost();
+		await host.invokeRoute("claims", { listingId: "a", name: "Ana" }, { method: "POST", user: ana });
+		const seen = (await host.storage<{ createdAt: string }>("claims").get("claim-a-ana"))!.createdAt;
+		const act = (action: string) =>
+			host!.invokeRoute("admin", {
+				type: "block_action",
+				action_id: "claim_mod",
+				value: `${action}|${seen}|claim-a-ana`,
+				page: "/claims",
+			});
+		expect(await act("reject")).toMatchObject({ toast: { type: "success" } });
+		expect(await act("approve")).toMatchObject({ toast: { message: "Someone already handled that item." } });
+		expect(await host.storage("claims").get("claim-a-ana")).toMatchObject({ status: "rejected" });
+	});
+});
+
 describe("moderation pages with rows", () => {
 	it("renders valid Block Kit for pending reviews and claims", async () => {
 		const runtime = await createPluginRuntimeTestHost();

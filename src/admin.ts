@@ -1,9 +1,9 @@
 import type { PluginContext } from "emdash/plugin";
 
-import { publishNow } from "./lib/listings-query";
+import { patchListing, publishNow, syncRating } from "./lib/listings-query";
 import { getOnboardState, loadSampleDirectory } from "./lib/onboard";
 import { LISTING_TYPES, LISTINGS } from "./lib/types";
-import { asBoolean, asNumber, asRecord, asString, rows } from "./lib/util";
+import { asBoolean, asRecord, asString } from "./lib/util";
 
 export type BlockMap = Record<string, unknown> & { type: string };
 
@@ -105,7 +105,7 @@ export async function renderQueue(
 							{ key: "city", label: "City" },
 							{ key: "submitted", label: "Submitted" },
 							{ key: "open", label: "Edit", format: "element" },
-							{ key: "action", label: "Review", format: "element" },
+							{ key: "action", label: "Decision", format: "element" },
 						],
 						rows,
 					},
@@ -214,20 +214,21 @@ async function renderReviewQueue(
 		orderBy: { createdAt: "desc" },
 		limit: 50,
 	});
+	const titles = await listingTitles(ctx, pending.items);
 	const rows = pending.items.map((row) => {
 		const data = asRecord(row.data);
 		return {
-			title: asString(data.title) || asString(data.body).slice(0, 40),
-			listing: asString(data.listingId),
-			stars: asString(data.stars) || "-",
+			title: [asString(data.title), asString(data.body)].filter(Boolean).join(": ").slice(0, 160),
+			listing: titles.get(asString(data.listingId)) ?? "Removed listing",
+			stars: data.stars ? `${data.stars} of 5` : "-",
 			author: asString(data.author),
 			action: {
 				type: "menu",
 				action_id: "review_mod",
 				label: "Review",
 				items: [
-					{ label: "Approve", value: `approve:${row.id}` },
-					{ label: "Reject", value: `reject:${row.id}` },
+					{ label: "Approve", value: stamped("approve", row.id, data) },
+					{ label: "Reject", value: stamped("reject", row.id, data) },
 				],
 			},
 		};
@@ -249,7 +250,7 @@ async function renderReviewQueue(
 							{ key: "listing", label: "Listing" },
 							{ key: "stars", label: "Stars" },
 							{ key: "author", label: "Author" },
-							{ key: "action", label: "Review", format: "element" },
+							{ key: "action", label: "Decision", format: "element" },
 						],
 						rows,
 					},
@@ -267,10 +268,12 @@ async function renderClaimQueue(
 		orderBy: { createdAt: "desc" },
 		limit: 50,
 	});
+	const titles = await listingTitles(ctx, pending.items);
 	const rows = pending.items.map((row) => {
 		const data = asRecord(row.data);
 		return {
-			listing: asString(data.listingId),
+			listing: titles.get(asString(data.listingId)) ?? "Removed listing",
+			message: asString(data.message).slice(0, 160),
 			name: asString(data.name),
 			email: asString(data.email),
 			action: {
@@ -278,8 +281,8 @@ async function renderClaimQueue(
 				action_id: "claim_mod",
 				label: "Review",
 				items: [
-					{ label: "Approve", value: `approve:${row.id}` },
-					{ label: "Reject", value: `reject:${row.id}` },
+					{ label: "Approve", value: stamped("approve", row.id, data) },
+					{ label: "Reject", value: stamped("reject", row.id, data) },
 				],
 			},
 		};
@@ -300,7 +303,8 @@ async function renderClaimQueue(
 							{ key: "listing", label: "Listing" },
 							{ key: "name", label: "Name" },
 							{ key: "email", label: "Email" },
-							{ key: "action", label: "Review", format: "element" },
+							{ key: "message", label: "Message" },
+							{ key: "action", label: "Decision", format: "element" },
 						],
 						rows,
 					},
@@ -386,30 +390,33 @@ export async function renderSetup(
 	};
 }
 
-/** Change fields on a listing and keep it live. Updating a published entry only saves a draft. */
-async function patchListing(
+/** Listing titles for a page of moderation rows, so the admin sees names instead of ids. */
+async function listingTitles(
 	ctx: PluginContext,
-	id: string,
-	patch: Record<string, unknown>,
-): Promise<Record<string, unknown> | null> {
-	const listing = await ctx.content?.get?.(LISTINGS, id);
-	if (!listing || !ctx.content?.update) return null;
-	const data = { ...listing.data, ...patch };
-	await ctx.content.update(LISTINGS, id, data);
-	if (listing.status === "published") await publishNow(ctx, id);
-	return data;
+	items: Array<{ data: unknown }>,
+): Promise<Map<string, string>> {
+	const ids = [...new Set(items.map((item) => asString(asRecord(item.data).listingId)).filter(Boolean))];
+	// One read per distinct listing on a page capped at 50 rows.
+	const found = await Promise.all(ids.map((id) => ctx.content?.get?.(LISTINGS, id).catch(() => null)));
+	return new Map(ids.flatMap((id, index) => (found[index] ? [[id, asString(found[index]?.data.title) || id]] : [])));
 }
 
-async function syncRating(ctx: PluginContext, listingId: string): Promise<void> {
-	const found = await ctx.storage.reviews.query({ where: { listingId }, limit: 200 });
-	const stars = rows(found)
-		.filter((row) => row.status === "published")
-		.map((row) => asNumber(row.stars) ?? 0);
-	const avg = stars.length ? stars.reduce((sum, value) => sum + value, 0) / stars.length : 0;
-	await patchListing(ctx, listingId, {
-		rating_avg: Math.round(avg * 10) / 10,
-		rating_count: stars.length,
-	});
+// A member can rewrite their own pending review or claim. The stamp ties an admin's
+// click to the exact version they were shown, so a rewrite cannot ride an approval.
+function stamped(action: string, id: string, data: Record<string, unknown>): string {
+	return `${action}|${asString(data.createdAt)}|${id}`;
+}
+
+function parseStamped(value: unknown): { action: string; stamp: string; id: string } {
+	const [action = "", stamp = "", ...rest] = asString(value).split("|");
+	return { action, stamp, id: rest.join("|") };
+}
+
+function staleRow(row: Record<string, unknown>, stamp: string): string | null {
+	if (!row.listingId) return "That item no longer exists.";
+	if (row.status !== "pending") return "Someone already handled that item.";
+	if (asString(row.createdAt) !== stamp) return "That item changed after this page loaded. Check it again.";
+	return null;
 }
 
 export async function handleAdmin(
@@ -452,46 +459,40 @@ export async function handleAdmin(
 	}
 
 	if (type === "block_action" && asString(raw.action_id) === "review_mod") {
-		const value = asString(raw.value);
-		const split = value.indexOf(":");
-		const action = split === -1 ? value : value.slice(0, split);
-		const id = split === -1 ? "" : value.slice(split + 1);
+		const { action, id, stamp } = parseStamped(raw.value);
 		const existing = asRecord(await ctx.storage.reviews.get(id));
-		if (existing.listingId) {
-			await ctx.storage.reviews.put(id, {
-				...existing,
-				status: action === "approve" ? "published" : "rejected",
-			});
-			await syncRating(ctx, asString(existing.listingId));
-		}
+		const stale = staleRow(existing, stamp);
+		if (stale) return renderReviewQueue(ctx, { toast: { message: stale, type: "error" } });
+		await ctx.storage.reviews.put(id, {
+			...existing,
+			status: action === "approve" ? "published" : "rejected",
+		});
+		await syncRating(ctx, asString(existing.listingId));
 		return renderReviewQueue(ctx, { toast: { message: "Review updated.", type: "success" } });
 	}
 
 	if (type === "block_action" && asString(raw.action_id) === "claim_mod") {
-		const value = asString(raw.value);
-		const split = value.indexOf(":");
-		const action = split === -1 ? value : value.slice(0, split);
-		const id = split === -1 ? "" : value.slice(split + 1);
+		const { action, id, stamp } = parseStamped(raw.value);
 		const existing = asRecord(await ctx.storage.claims.get(id));
-		if (existing.listingId) {
-			await ctx.storage.claims.put(id, {
-				...existing,
-				status: action === "approve" ? "approved" : "rejected",
+		const stale = staleRow(existing, stamp);
+		if (stale) return renderClaimQueue(ctx, { toast: { message: stale, type: "error" } });
+		await ctx.storage.claims.put(id, {
+			...existing,
+			status: action === "approve" ? "approved" : "rejected",
+		});
+		if (action === "approve") {
+			const listingId = asString(existing.listingId);
+			const listing = await patchListing(ctx, listingId, { is_claimed: true, owner_name: asString(existing.name) });
+			const submission = asRecord(await ctx.storage.submissions.get(listingId));
+			await ctx.storage.submissions.put(listingId, {
+				listingId,
+				title: asString(listing?.title),
+				listing_type: asString(listing?.listing_type),
+				city: asString(listing?.city),
+				status: "approved",
+				...submission,
+				member_id: existing.member_id,
 			});
-			if (action === "approve") {
-				const listingId = asString(existing.listingId);
-				const listing = await patchListing(ctx, listingId, { is_claimed: true, owner_name: asString(existing.name) });
-				const submission = asRecord(await ctx.storage.submissions.get(listingId));
-				await ctx.storage.submissions.put(listingId, {
-					listingId,
-					title: asString(listing?.title),
-					listing_type: asString(listing?.listing_type),
-					city: asString(listing?.city),
-					status: "approved",
-					...submission,
-					member_id: existing.member_id,
-				});
-			}
 		}
 		return renderClaimQueue(ctx, { toast: { message: "Claim updated.", type: "success" } });
 	}

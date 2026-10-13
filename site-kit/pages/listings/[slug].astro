@@ -153,7 +153,8 @@ const schema = {
 							{
 								rating ? (
 									<span class="listora-stars">
-										{stars(rating)} {rating.toFixed(1)} ({reviewCount})
+										<span aria-hidden="true">{stars(rating)}</span>{" "}
+										<span class="listora-stars__value">{rating.toFixed(1)} ({reviewCount} {reviewCount === 1 ? "review" : "reviews"})</span>
 									</span>
 								) : null
 							}
