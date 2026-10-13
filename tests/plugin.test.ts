@@ -699,7 +699,7 @@ describe("long admin lists", () => {
 		const first = await admin({ type: "page_load", page: "/queue" });
 		expect(table(first)?.rows).toHaveLength(25);
 		expect(table(first)?.next_cursor).toBe("50");
-		const more = await admin({ type: "block_action", action_id: "queue_page", value: "50", page: "/queue" });
+		const more = await admin({ type: "block_action", action_id: "queue_page", value: { cursor: "50", sort: null }, page: "/queue" });
 		expect(table(more)?.rows).toHaveLength(50);
 
 		// A decision keeps the place: still 50 shown, one fewer waiting.

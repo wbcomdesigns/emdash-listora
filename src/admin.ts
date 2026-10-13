@@ -692,7 +692,8 @@ export async function handleAdmin(
 	if (list) {
 		const key = `view:${list}`;
 		if (type === "page_load") await ctx.kv.set(key, { show: PAGE, find: "" });
-		else if (action === `${list}_page`) await ctx.kv.set(key, { ...(await viewOf(ctx, list)), show: Number(raw.value) || PAGE });
+		else if (action === `${list}_page`) await ctx.kv.set(key, { ...(await viewOf(ctx, list)), show: Number(asRecord(raw.value).cursor) || PAGE });
+		// The admin sends Load more as { cursor, sort }: seen on the lab, 2026-10-14.
 		else if (action === `${list}_find`) await ctx.kv.set(key, { show: PAGE, find: asString(asRecord(raw.values).find).trim().slice(0, 80) });
 		if (action === `${list}_page` || action === `${list}_find`) {
 			if (list === "messages") return renderMessages(ctx);

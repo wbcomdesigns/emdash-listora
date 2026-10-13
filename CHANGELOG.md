@@ -8,6 +8,7 @@ Copy `site-kit/` again after you update, including the new `site-kit/layouts/Lis
 
 - New      - Settings has its own page, in three groups, with a line saying what each option does. The Listings queue page shows only what is waiting.
 - New      - A card on the EmDash dashboard shows how many listings, reviews, claims and messages are waiting, with a link to each.
+- Improve  - The admin lists (listings, reviews, claims, messages) show 25 at a time with Load more, and a box to find an item by its text. A decision keeps your place in the list.
 - Improve  - Search results that appear as you type are now the same cards as the rest of the page, so they keep each listing's real photo. The address bar follows the search, so a result page can be shared, and a search inside a category no longer reloads the page.
 - Improve  - Featured listings appear once, in the top row, not again in the list below.
 - Improve  - Sorting by rating works across every page of results.

@@ -115,6 +115,8 @@ Three roles, always in this order: **guest**, **member** (subscriber role), **ad
 | A-23 | Enter a negative number or text for the days and save | Refused with a message. The saved value is unchanged | same test |
 | A-24 | Open the Listings queue | Only counts and the waiting list. No settings form | same test |
 | A-25 | Open the EmDash dashboard | A "Listora: waiting for you" card with the four counts and a link to each list. "Nothing is waiting." when all are zero | same test |
+| A-26 | With more than 25 listings waiting, open the Listings queue | 25 rows, "Showing 25 of N", Load more adds 25. Approve or reject one further down: the list stays where it was | long admin lists |
+| A-27 | Type part of a listing name in "Find in this list" and press Find | Only matching rows, with a line saying how many. Text that matches nothing says "Nothing matches". Reopening the page clears the search | same test |
 | A-12 | Get started on a site with no listings collection | Clear "create the collection first" message, no crash | tells the owner to create the listings collection first |
 
 ## Presentation, every screen
