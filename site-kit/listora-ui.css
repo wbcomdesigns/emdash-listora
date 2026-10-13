@@ -146,6 +146,8 @@ html.dark .listora-block {
 .listora-field input:focus-visible,
 .listora-field select:focus-visible,
 .listora-field textarea:focus-visible,
+.listora-input:focus-visible,
+.listora-wizard-steps button:focus-visible,
 .listora-tab:focus-visible,
 .listora-card a:focus-visible {
 	outline: none;
@@ -437,21 +439,26 @@ html.dark .listora-block {
 	display: flex;
 	flex-wrap: wrap;
 	gap: var(--listora-space-2);
-	margin-bottom: var(--listora-space-6);
+	margin: 0 0 var(--listora-space-6);
+	padding: 0;
+	list-style: none;
 }
 
-.listora-wizard-steps span {
+.listora-wizard-steps button {
 	display: inline-flex;
 	align-items: center;
-	min-height: 32px;
+	min-height: var(--listora-tap-target);
 	padding: 0 var(--listora-space-3);
+	border: 0;
 	border-radius: var(--listora-pill-radius);
 	background: var(--listora-bg-muted);
 	color: var(--listora-fg-faint);
+	font: inherit;
 	font-size: var(--listora-text-size-sm);
+	cursor: pointer;
 }
 
-.listora-wizard-steps span.is-active {
+.listora-wizard-steps button[aria-current="step"] {
 	background: var(--listora-primary);
 	color: var(--listora-primary-fg);
 }
@@ -462,15 +469,19 @@ html.dark .listora-block {
 	margin-bottom: var(--listora-space-4);
 }
 
-.listora-field label {
+.listora-label,
+.listora-field > label {
 	font-weight: var(--listora-weight-semibold);
 }
 
 .listora-field input,
 .listora-field select,
-.listora-field textarea {
+.listora-field textarea,
+.listora-input {
 	width: 100%;
-	padding: var(--listora-space-3);
+	min-height: var(--listora-tap-target);
+	padding-block: var(--listora-space-3);
+	padding-inline: var(--listora-space-3);
 	border: 1px solid var(--listora-border-default);
 	border-radius: var(--listora-radius-sm);
 	background: var(--listora-bg-base);
@@ -478,9 +489,73 @@ html.dark .listora-block {
 	font: inherit;
 }
 
+.listora-field textarea,
+textarea.listora-input {
+	min-height: 6.5rem;
+	resize: vertical;
+}
+
+.listora-field input.is-invalid,
+.listora-field select.is-invalid,
+.listora-field textarea.is-invalid,
+.listora-input.is-invalid {
+	border-color: var(--listora-danger);
+}
+
+.listora-helper {
+	margin: 0;
+	color: var(--listora-fg-muted);
+	font-size: var(--listora-text-size-sm);
+}
+
 .listora-field-error {
+	margin: 0;
 	color: var(--listora-danger-fg);
 	font-size: var(--listora-text-size-sm);
+}
+
+.listora-check {
+	display: flex;
+	align-items: center;
+	gap: var(--listora-space-3);
+	min-height: var(--listora-tap-target);
+}
+
+.listora-check input {
+	width: 1.25rem;
+	height: 1.25rem;
+	margin: 0;
+}
+
+.listora-actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--listora-space-3);
+}
+
+.listora-empty {
+	display: grid;
+	justify-items: center;
+	gap: var(--listora-space-3);
+	padding: var(--listora-space-8) var(--listora-space-4);
+	text-align: center;
+}
+
+.listora-empty h2,
+.listora-empty p {
+	margin: 0;
+}
+
+.listora-sr-only {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	padding: 0;
+	margin: -1px;
+	overflow: hidden;
+	clip: rect(0, 0, 0, 0);
+	white-space: nowrap;
+	border: 0;
 }
 
 .listora-honeypot {

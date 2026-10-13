@@ -36,6 +36,7 @@
       "description": "Match WordPress Listora chrome, then rebuild the public screens.",
       "pages": [
         { "slug": "match-listora-chrome", "title": "Match Listora chrome" },
+        { "slug": "form-presentation", "title": "Form presentation" },
         { "slug": "directory-screens", "title": "Directory screens" },
         { "slug": "improve-the-screens", "title": "Improve the screens" }
       ]

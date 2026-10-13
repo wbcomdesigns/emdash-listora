@@ -48,11 +48,12 @@ Do not ship a plugin route change without the screen that uses it. If you add a 
 
 ## Suggested first PR
 
-1. Extract Card + Grid + Search from the lab into `site-kit/`.
-2. Rebuild `/listings/` to use them.
-3. Empty and skeleton states.
-4. Update this inventory and `CHANGELOG.md` under Unreleased.
-5. Do not publish a new registry version until a visitor can see the difference.
+1. Ship form presentation on submit, review, contact, and claim. See [Form presentation](form-presentation.md).
+2. Extract Card + Grid + Search from the lab into `site-kit/`.
+3. Rebuild `/listings/` to use them.
+4. Empty and skeleton states.
+5. Update this inventory and `CHANGELOG.md` under Unreleased.
+6. Do not publish a new registry version until a visitor can see the difference.
 
 ## Planning files
 
