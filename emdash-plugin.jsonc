@@ -31,7 +31,7 @@
 		}
 	},
 
-	"capabilities": ["content:read", "content:write", "content:publish", "schema:read", "email:send", "taxonomies:read", "taxonomies:write"],
+	"capabilities": ["content:read", "content:write", "content:publish", "schema:read", "email:send", "taxonomies:read", "taxonomies:write", "media:write"],
 	"allowedHosts": [],
 	"storage": {
 		"submissions": {
@@ -48,6 +48,9 @@
 		},
 		"favorites": {
 			"indexes": ["member_id", "listingId", "createdAt"]
+		},
+		"photos": {
+			"indexes": ["status", "listingId", "member_id", "createdAt"]
 		},
 		"edits": {
 			"indexes": ["status", "listingId", "member_id", "createdAt"]
@@ -146,6 +149,12 @@
 				"description": "One short notice to the owner's account email. Needs a mail provider.",
 				"type": "boolean",
 				"default": true
+			},
+			"photo_limit": {
+				"label": "Photos per listing",
+				"description": "How many photos an owner may add to one listing. 0 turns owner photos off.",
+				"type": "number",
+				"default": 5
 			},
 			"spam_keywords": {
 				"label": "Spam keywords",

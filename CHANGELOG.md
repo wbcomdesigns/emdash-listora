@@ -19,6 +19,8 @@ Copy `site-kit/` again after you update, including the new `site-kit/layouts/Lis
 - Improve  - Opening hours, "Open now" and event times use your site's own time zone from EmDash's settings. Before, every site was treated as New York.
 - Improve  - The event start and end fields are proper date-and-time pickers.
 - Fix      - An event time entered without a zone is shown as entered, not shifted.
+- Security - A member's account id no longer appears in anything a visitor or another member can see. Review ids are replaced by opaque handles.
+- Improve  - "Delete my data" says exactly what it removes and what it keeps, and now also removes replies and anything still waiting for approval. "Download my data" gives a real file.
 - Security - The public list of reviews now returns named fields only. Before, it also carried the reviewer's email when one was given.
 - Security - An owner's change is shown to you as exact text and applied from the same source, hidden characters are removed, and a change or reply cannot be approved once its sender no longer owns the listing.
 - Security - Listing text written into a page's search engine data can no longer break out of it, and an image address that is not a normal web address or a path on the site is dropped.

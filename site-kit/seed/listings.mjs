@@ -6,6 +6,7 @@ const img = (id) => ({
 });
 
 export const extraFields = [
+	{ slug: "gallery", label: "Photos", type: "repeater", validation: { subFields: [{ slug: "image", label: "Photo", type: "image", required: true }] } },
 	{ slug: "is_featured", label: "Featured", type: "boolean", indexed: true, defaultValue: false },
 	{ slug: "owner_name", label: "Listed by", type: "string" },
 	{ slug: "rating_avg", label: "Rating", type: "number", indexed: true },

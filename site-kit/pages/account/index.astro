@@ -69,17 +69,18 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 				<section id="profile-panel" hidden>
 					<form class="listora-form-section" id="privacy-form">
 						<h2>Profile and privacy</h2>
-						<p class="listora-helper">Download your reviews, claims and favorites as JSON.</p>
+						<p class="listora-helper">Download a file with your reviews, claims and saved listings.</p>
 						<div class="listora-actions">
-							<button class="listora-btn" type="submit">Export my data</button>
+							<button class="listora-btn" type="submit">Download my data</button>
 						</div>
-						<pre id="export-box" hidden></pre>
+						<p id="export-status" class="listora-status" role="status" hidden></p>
 					</form>
 					<div class="listora-form-section">
 						<h2>Delete my data</h2>
-						<p class="listora-helper">Removes your reviews, claims and saved listings for good. Listings you added stay on the site.</p>
+						<p class="listora-helper">This removes, for good: your reviews, your claims, your saved listings, your replies to reviews, any changes or photos still waiting for approval, and your stored email address.</p>
+						<p class="listora-helper">It keeps: listings you added, which stay in the directory, and photos already approved on a listing. Ask the site to remove those.</p>
 						<div class="listora-actions">
-							<button class="listora-btn listora-btn--secondary" type="button" id="erase-btn">Delete my reviews, claims and saved listings</button>
+							<button class="listora-btn listora-btn--secondary" type="button" id="erase-btn">Delete my data</button>
 						</div>
 						<p id="erase-status" class="listora-status" role="status" hidden></p>
 					</div>
@@ -171,7 +172,7 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 		const button = form.querySelector("button") as HTMLButtonElement;
 		form.querySelector("[role=alert]")?.remove();
 		button.disabled = true;
-		const data = await api("reply", { reviewId: form.dataset.reply, text: new FormData(form).get("text") });
+		const data = await api("reply", { listingId: form.dataset.listing, ref: form.dataset.reply, text: new FormData(form).get("text") });
 		if (data.ok) return load();
 		button.disabled = false;
 		form.insertAdjacentHTML(
@@ -250,7 +251,7 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 							const waiting = item.reply_waiting
 								? `<div class="listora-reply"><p class="listora-reply__label"><span class="listora-tag">Waiting for approval</span></p><p>${esc(item.reply_waiting)}</p></div>`
 								: "";
-							const id = esc(item.id);
+							const id = esc(item.ref);
 							const label = item.reply || item.reply_waiting ? "Change your reply" : "Reply";
 							return `<li class="listora-review listora-message">
 								<p class="listora-message__head"><strong>${esc(item.listing_title || "Listing")}</strong></p>
@@ -259,7 +260,7 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 								${shown}${waiting}
 								<details class="listora-reply-form">
 									<summary class="listora-btn listora-btn--secondary">${label}</summary>
-									<form data-reply="${id}" class="listora-form">
+									<form data-reply="${id}" data-listing="${esc(item.listingId)}" class="listora-form">
 										<label class="listora-label" for="reply-${id}">Your reply (public, up to 1000 characters)</label>
 										<textarea id="reply-${id}" class="listora-input" name="text" rows="3" maxlength="1000" required>${esc(item.reply_waiting || item.reply || "")}</textarea>
 										<button type="submit" class="listora-btn">Send for approval</button>
@@ -302,11 +303,24 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 		form.setAttribute("aria-busy", "true");
 		const data = await api("privacy");
 		form.removeAttribute("aria-busy");
-		const box = document.getElementById("export-box");
-		if (box) {
-			box.hidden = false;
-			box.textContent = JSON.stringify(data, null, 2);
-		}
+		const status = document.getElementById("export-status");
+		const say = (text: string, tone: string) => {
+			if (!status) return;
+			status.hidden = false;
+			status.dataset.tone = tone;
+			status.textContent = text;
+		};
+		if (!data.ok) return say(data.error?.message || "Could not prepare your data. Try again.", "error");
+		// A real file, not text to copy.
+		const { ok: _ok, erases: _erases, keeps: _keeps, ...mine } = data as Record<string, unknown>;
+		const link = document.createElement("a");
+		link.href = URL.createObjectURL(new Blob([JSON.stringify(mine, null, 2)], { type: "application/json" }));
+		link.download = "my-directory-data.json";
+		document.body.append(link);
+		link.click();
+		link.remove();
+		URL.revokeObjectURL(link.href);
+		say("Your file was downloaded.", "success");
 	});
 
 	// Two clicks instead of a browser confirm box.
@@ -321,7 +335,7 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 		const result = await api("privacy", { action: "erase" });
 		eraseBtn.removeAttribute("aria-busy");
 		eraseBtn.dataset.armed = "";
-		eraseBtn.textContent = "Delete my reviews, claims and saved listings";
+		eraseBtn.textContent = "Delete my data";
 		const status = document.getElementById("erase-status");
 		if (status) {
 			status.hidden = false;

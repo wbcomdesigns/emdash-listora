@@ -10,6 +10,7 @@ import manifestText from "../emdash-plugin.jsonc?raw";
 import submitPage from "../site-kit/pages/listings/submit.astro?raw";
 import { LISTING_TYPES as KIT_TYPES } from "../site-kit/lib/listora";
 import { LISTING_TYPES } from "../src/lib/types";
+import { imageType, refOf } from "../src/plugin";
 // @ts-expect-error plain module shared with the lab seed
 import { listingsCollection } from "../site-kit/seed/collection.mjs";
 import { imageUrl, jsonForScript, placeholderHtml, safeImageUrl } from "../site-kit/lib/listora";
@@ -880,28 +881,35 @@ describe("owner reply to a review", () => {
 		const review = (await rt.inspect.storage.list<{ rev: string }>("reviews"))[0];
 
 		// Not public yet: nothing to reply to.
-		expect(await route("reply", { reviewId: review.id, text: "Thanks" }, { method: "POST", user: ana })).toMatchObject({ ok: false, error: { code: "NOT_FOUND" } });
+		expect(await route("reply", { listingId, ref: await refOf(review.id), text: "Thanks" }, { method: "POST", user: ana })).toMatchObject({ ok: false, error: { code: "NOT_FOUND" } });
 		await admin("review_mod", `approve|${review.data.rev}|${review.id}`);
 
 		// Only the owner of that listing. The reviewer, a guest and a made-up id all get the same refusal.
-		expect(await route("reply", { reviewId: review.id, text: "Mine" }, { method: "POST", user: ben })).toMatchObject({ ok: false, error: { code: "NOT_FOUND" } });
-		expect(await route("reply", { reviewId: "nope", text: "x" }, { method: "POST", user: ana })).toMatchObject({ ok: false, error: { code: "NOT_FOUND" } });
-		expect(await route("reply", { reviewId: review.id, text: "x" }, { method: "POST" })).not.toMatchObject({ ok: true });
-		expect(await route("reply", { reviewId: review.id, text: "   " }, { method: "POST", user: ana })).toMatchObject({ ok: false, error: { code: "VALIDATION_ERROR" } });
+		const ref = await refOf(review.id);
+		expect(await route("reply", { listingId, ref, text: "Mine" }, { method: "POST", user: ben })).toMatchObject({ ok: false, error: { code: "NOT_FOUND" } });
+		expect(await route("reply", { listingId, ref: "nope", text: "x" }, { method: "POST", user: ana })).toMatchObject({ ok: false, error: { code: "NOT_FOUND" } });
+		// The stored id is no longer a way in, even for the owner.
+		expect(await route("reply", { listingId, ref: review.id, reviewId: review.id, text: "x" }, { method: "POST", user: ana })).toMatchObject({ ok: false, error: { code: "NOT_FOUND" } });
+		expect(await route("reply", { listingId, ref, text: "x" }, { method: "POST" })).not.toMatchObject({ ok: true });
+		expect(await route("reply", { listingId, ref, text: "   " }, { method: "POST", user: ana })).toMatchObject({ ok: false, error: { code: "VALIDATION_ERROR" } });
 
-		expect(await route("reply", { reviewId: review.id, text: "Thank you <b>Ben</b>" }, { method: "POST", user: ana })).toMatchObject({ ok: true, status: "pending" });
+		expect(await route("reply", { listingId, ref, text: "Thank you <b>Ben</b>" }, { method: "POST", user: ana })).toMatchObject({ ok: true, status: "pending" });
 		// Waiting: nothing public, and the public answer carries only named fields.
 		let seen = await publicReviews(listingId);
 		expect(seen[0].owner_reply).toBe("");
-		expect(Object.keys(seen[0]).sort()).toEqual(["author", "body", "createdAt", "id", "owner_reply", "owner_reply_at", "stars", "title"]);
+		expect(Object.keys(seen[0]).sort()).toEqual(["author", "body", "createdAt", "owner_reply", "owner_reply_at", "stars", "title"]);
+		// Ben wrote the review. His account id is in the stored row id and nowhere a visitor or the owner can see.
+		expect(JSON.stringify(seen)).not.toContain(review.id);
+		expect(JSON.stringify(seen)).not.toContain("private.test");
 		expect(JSON.stringify(seen)).not.toContain("Thank you");
 
 		// The owner sees it as waiting; the admin approves it with the version they were shown.
 		const mine = (await route("dashboard", {}, { user: ana })) as { received: Array<{ reply: string; reply_waiting: string }> };
-		expect(mine.received[0]).toMatchObject({ reply: "", reply_waiting: "Thank you <b>Ben</b>" });
+		expect(mine.received[0]).toMatchObject({ reply: "", reply_waiting: "Thank you <b>Ben</b>", ref });
+		expect(JSON.stringify(mine.received)).not.toContain(review.id);
 		const waiting = (await rt.inspect.storage.get<{ reply_rev: string }>("reviews", review.id))!;
 		// A rewrite after the admin loaded the page: the old click is refused.
-		await route("reply", { reviewId: review.id, text: "Thank you, Ben." }, { method: "POST", user: ana });
+		await route("reply", { listingId, ref, text: "Thank you, Ben." }, { method: "POST", user: ana });
 		expect((await admin("reply_mod", `approve|${waiting.reply_rev}|${review.id}`)).toast?.type).toBe("error");
 		expect((await publicReviews(listingId))[0].owner_reply).toBe("");
 		const fresh = (await rt.inspect.storage.get<{ reply_rev: string }>("reviews", review.id))!;
@@ -911,11 +919,16 @@ describe("owner reply to a review", () => {
 		expect(String(seen[0].owner_reply_at)).toMatch(/^20/);
 
 		// A rejected rewrite leaves the public reply in place.
-		await route("reply", { reviewId: review.id, text: "Rude words" }, { method: "POST", user: ana });
+		await route("reply", { listingId, ref, text: "Rude words" }, { method: "POST", user: ana });
 		const again = (await rt.inspect.storage.get<{ reply_rev: string }>("reviews", review.id))!;
 		await admin("reply_mod", `reject|${again.reply_rev}|${review.id}`);
 		expect((await publicReviews(listingId))[0].owner_reply).toBe("Thank you, Ben.");
 		// The review itself was never changed by any of this.
 		expect(await rt.inspect.storage.get("reviews", review.id)).toMatchObject({ status: "published", body: "Nice place.", stars: 4 });
+
+		// Ana deletes her data: her public reply goes too, and the review stays.
+		await route("privacy", { action: "erase" }, { method: "POST", user: ana });
+		expect((await publicReviews(listingId))[0]).toMatchObject({ owner_reply: "", body: "Nice place." });
+		expect(await rt.inspect.storage.get("reviews", review.id)).toMatchObject({ reply_by: "", reply_draft: "" });
 	});
 });

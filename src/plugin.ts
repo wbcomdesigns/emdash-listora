@@ -195,6 +195,48 @@ async function notifyOwners(ctx: Ctx): Promise<void> {
 }
 
 /**
+ * A handle for a stored row that can be shown to someone other than its owner. Row ids are
+ * built from the member's account id, which is not for other people to see.
+ */
+export async function refOf(id: string): Promise<string> {
+	const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(`listora-ref:${id}`));
+	return [...new Uint8Array(digest)].slice(0, 12).map((byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+/* ---- Photos ---- */
+
+const PHOTO_MAX_BYTES = 5 * 1024 * 1024;
+
+/** The real type of a file, read from its first bytes. A name or a header can lie. */
+export function imageType(bytes: Uint8Array): { mime: string; ext: string } | null {
+	const at = (index: number) => bytes[index] ?? -1;
+	if (at(0) === 0xff && at(1) === 0xd8 && at(2) === 0xff) return { mime: "image/jpeg", ext: "jpg" };
+	if (at(0) === 0x89 && at(1) === 0x50 && at(2) === 0x4e && at(3) === 0x47) return { mime: "image/png", ext: "png" };
+	const text = (from: number) => String.fromCharCode(at(from), at(from + 1), at(from + 2), at(from + 3));
+	if (text(0) === "RIFF" && text(8) === "WEBP") return { mime: "image/webp", ext: "webp" };
+	return null;
+}
+
+/** How many photos an owner may add to one listing. 0 turns owner photos off. */
+export async function photoLimit(ctx: Ctx): Promise<number> {
+	const saved = await ctx.settings.get("photo_limit");
+	const limit = saved === undefined || saved === null ? 5 : Math.floor(Number(saved) || 0);
+	return Math.min(Math.max(limit, 0), 20);
+}
+
+/** Photos need a "gallery" field on the listings collection. A plugin cannot add one itself. */
+export async function galleryReady(ctx: Ctx): Promise<boolean> {
+	const collection = await ctx.schema?.getCollection(LISTINGS).catch(() => null);
+	return Boolean(collection?.fields.some((field) => field.slug === "gallery"));
+}
+
+/** The member who may add photos: whoever sent the listing in, while it is live or still waiting. */
+async function ownsSubmission(ctx: Ctx, listingId: string, memberId: string): Promise<boolean> {
+	const row = asRecord(await ctx.storage.submissions.get(listingId));
+	return row.member_id === memberId && row.status !== "rejected";
+}
+
+/**
  * Daily task: tell owners a listing of theirs expires within seven days. Same rules as the
  * message notice: the owner's account address only, no link, nothing anyone typed, one
  * email per owner per run. A listing is warned once per expiry date, so renewing it makes
@@ -537,12 +579,12 @@ const plugin: SandboxedPlugin = {
 					orderBy: { createdAt: "desc" },
 					limit: 100,
 				});
-				// Named fields only. A review row also holds the member's id and email, version
-				// tokens and an owner reply still waiting for approval: none of that is public.
+				// Named fields only. A review row also holds the member's id (its own id is built
+				// from it) and email, version tokens and an owner reply still waiting for approval:
+				// none of that is public.
 				const items = rows(found)
 					.filter((row) => row.status === "published")
 					.map((row) => ({
-						id: row.id,
 						author: asString(row.author),
 						stars: asNumber(row.stars) ?? 0,
 						title: asString(row.title),
@@ -700,6 +742,14 @@ const plugin: SandboxedPlugin = {
 						.filter((row) => row.status === "pending")
 						.map((row) => asString(row.listingId)),
 				);
+				// Photos this member added, by listing, and whether the site has photos turned on.
+				const limit = (await galleryReady(ctx)) ? await photoLimit(ctx) : 0;
+				const photosBy = new Map<string, Array<{ id: string; url: string; status: string }>>();
+				for (const row of rows(await ctx.storage.photos.query({ where: { member_id: user.id }, orderBy: { createdAt: "asc" }, limit: 200 }))) {
+					if (row.status === "rejected") continue;
+					const key = asString(row.listingId);
+					photosBy.set(key, [...(photosBy.get(key) ?? []), { id: row.id, url: asString(row.url), status: asString(row.status) }]);
+				}
 				const named = (items: ReturnType<typeof rows>, own = false) =>
 					items.map((row) => {
 						const ref = refs.get(asString(row.listingId));
@@ -714,6 +764,9 @@ const plugin: SandboxedPlugin = {
 								: {}),
 							...(own && ref?.published
 								? { can_edit: true, edit_pending: editing.has(asString(row.listingId) || row.id) }
+								: {}),
+							...(own && limit && row.status !== "rejected"
+								? { photo_limit: limit, photos: photosBy.get(asString(row.listingId) || row.id) ?? [] }
 								: {}),
 						};
 					});
@@ -732,30 +785,105 @@ const plugin: SandboxedPlugin = {
 					reviews: named(all[1]),
 					claims: named(all[2]),
 					favorites: named(all[3]),
-					// Reviews of the member's listings: the reviewer's name, never their id or email.
-					received: named(all[5]).map((row) => {
-						const item = row as Record<string, unknown>;
-						return {
-							id: item.id,
-							listing_title: item.listing_title,
-							listing_url: item.listing_url,
-							author: asString(item.author),
-							stars: asNumber(item.stars) ?? 0,
-							title: asString(item.title),
-							body: asString(item.body),
-							createdAt: asString(item.createdAt),
-							reply: asString(item.owner_reply),
-							reply_waiting: item.reply_status === "pending" ? asString(item.reply_draft) : "",
-						};
-					}),
+					// Reviews of the member's listings: the reviewer's name and a handle to reply with.
+					// Never the stored id (it holds the reviewer's account id) or their email.
+					received: await Promise.all(
+						named(all[5]).map(async (row) => {
+							const item = row as Record<string, unknown>;
+							return {
+								ref: await refOf(asString(item.id)),
+								listingId: asString(item.listingId),
+								listing_title: item.listing_title,
+								listing_url: item.listing_url,
+								author: asString(item.author),
+								stars: asNumber(item.stars) ?? 0,
+								title: asString(item.title),
+								body: asString(item.body),
+								createdAt: asString(item.createdAt),
+								reply: asString(item.owner_reply),
+								reply_waiting: item.reply_status === "pending" ? asString(item.reply_draft) : "",
+							};
+						}),
+					),
 					// New ones first. "Done" is the owner's own mark, separate from the admin's handled flag.
 					messages: named(all[4])
 						.map((row) => {
-							const { status: _status, notice: _notice, owner_done, tries: _tries, ...rest } = row as Record<string, unknown>;
-							return { ...rest, done: owner_done === true };
+							const item = row as Record<string, unknown>;
+							// Named fields only: what the owner needs to read and answer a message.
+							return {
+								id: asString(item.id),
+								listing_title: item.listing_title,
+								listing_url: item.listing_url,
+								name: asString(item.name),
+								email: asString(item.email),
+								message: asString(item.message),
+								createdAt: asString(item.createdAt),
+								done: item.owner_done === true,
+							};
 						})
 						.sort((x, y) => Number(x.done) - Number(y.done)),
 				};
+			},
+		},
+		// The owner adds a photo. The file goes to the media library but shows nowhere until an
+		// admin approves it. The body is the file itself.
+		photo: {
+			permission: MEMBER,
+			methods: ["POST"],
+			request: { body: "bytes", maxBytes: PHOTO_MAX_BYTES },
+			handler: async (routeCtx, ctx) => {
+				const user = routeCtx.user as Member | undefined;
+				if (!user) return SIGN_IN;
+				const listingId = new URL(routeCtx.request.url, "http://x").searchParams.get("listingId") || "";
+				const fail = (code: string, message: string) => ({ ok: false, error: { code, message } });
+				if (!listingId || !(await ownsSubmission(ctx, listingId, user.id))) return fail("NOT_FOUND", "That listing is not available.");
+				const limit = await photoLimit(ctx);
+				if (!limit || !ctx.media?.upload || !(await galleryReady(ctx))) return fail("PHOTOS_OFF", "Photos are not turned on for this site.");
+				const bytes = routeCtx.input instanceof Uint8Array ? routeCtx.input : new Uint8Array();
+				if (bytes.byteLength === 0) return fail("VALIDATION_ERROR", "Choose a photo first.");
+				if (bytes.byteLength > PHOTO_MAX_BYTES) return fail("TOO_BIG", "That photo is larger than 5 MB.");
+				const type = imageType(bytes);
+				if (!type) return fail("WRONG_TYPE", "Use a JPEG, PNG or WebP photo.");
+				const have = rows(await ctx.storage.photos.query({ where: { listingId }, limit: 50 })).filter((row) => row.status !== "rejected");
+				if (have.length >= limit) return fail("LIMIT", `This listing already has ${limit} photos. Remove one that is waiting, or ask the site to remove one.`);
+				if (await rateLimited(ctx, `photo:${user.id}`)) return RATE_LIMITED;
+
+				const filename = `listing-${listingId.slice(-8).toLowerCase()}-${Date.now()}.${type.ext}`;
+				const uploaded = await ctx.media.upload(filename, type.mime, bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer);
+				const media = await ctx.media.get(uploaded.mediaId).catch(() => null);
+				const id = `photo-${listingId}-${uploaded.mediaId}`;
+				await ctx.storage.photos.put(id, {
+					listingId,
+					member_id: user.id,
+					mediaId: uploaded.mediaId,
+					storageKey: uploaded.storageKey,
+					url: uploaded.url,
+					mime: type.mime,
+					filename,
+					width: media?.width ?? null,
+					height: media?.height ?? null,
+					status: "pending",
+					rev: crypto.randomUUID(),
+					createdAt: nowIso(),
+				});
+				return { ok: true, id, status: "pending", url: uploaded.url };
+			},
+		},
+		// The owner takes back a photo that is still waiting. An approved photo is the admin's to remove.
+		photo_remove: {
+			permission: MEMBER,
+			methods: ["POST"],
+			handler: async (routeCtx, ctx) => {
+				const user = routeCtx.user as Member | undefined;
+				if (!user) return SIGN_IN;
+				const id = asString(asRecord(routeCtx.input).id);
+				const row = asRecord(await ctx.storage.photos.get(id));
+				if (row.member_id !== user.id || row.status !== "pending") {
+					return { ok: false, error: { code: "NOT_FOUND", message: "That photo is not available to remove." } };
+				}
+				await ctx.storage.photos.delete(id);
+				await ctx.media?.delete?.(asString(row.mediaId)).catch(() => false);
+				return { ok: true, id };
 			},
 		},
 		// The listing owner answers a review. The reply waits for approval; a reply already
@@ -767,12 +895,17 @@ const plugin: SandboxedPlugin = {
 				const user = routeCtx.user as Member | undefined;
 				if (!user) return SIGN_IN;
 				const raw = asRecord(routeCtx.input);
-				const id = asString(raw.reviewId);
+				const listingId = asString(raw.listingId);
 				const text = clean(raw.text, REVIEW_BODY_MAX);
-				const review = asRecord(await ctx.storage.reviews.get(id));
 				const NOT_YOURS = { ok: false, error: { code: "NOT_FOUND", message: "That review is not available." } };
-				if (!review.listingId || review.status !== "published") return NOT_YOURS;
-				if ((await listingOwner(ctx, asString(review.listingId))) !== user.id) return NOT_YOURS;
+				// Ownership first, so nothing about a listing's reviews is learned by someone else.
+				if (!listingId || (await listingOwner(ctx, listingId)) !== user.id) return NOT_YOURS;
+				// The owner is given a handle for each review, never its stored id.
+				let id = "";
+				for (const row of rows(await ctx.storage.reviews.query({ where: { listingId }, limit: 100 }))) {
+					if (row.status === "published" && (await refOf(row.id)) === asString(raw.ref)) id = row.id;
+				}
+				if (!id) return NOT_YOURS;
 				if (!text) return { ok: false, error: { code: "VALIDATION_ERROR", message: "Write your reply first." } };
 				if (await rateLimited(ctx, `reply:${user.id}`)) return RATE_LIMITED;
 				// Guarded: only the reply fields, and only while the review is still public.
@@ -780,7 +913,7 @@ const plugin: SandboxedPlugin = {
 					where: { status: "published" },
 					set: { reply_draft: text, reply_status: "pending", reply_by: user.id, reply_rev: crypto.randomUUID(), reply_sent: nowIso() },
 				});
-				return { ok: true, id, status: "pending" };
+				return { ok: true, status: "pending" };
 			},
 		},
 		// The owner changes their own listing. The change waits in plugin storage: a member route
@@ -979,14 +1112,39 @@ const plugin: SandboxedPlugin = {
 						...claims.items.map((row) => ctx.storage.claims.delete(row.id)),
 						...favorites.items.map((row) => ctx.storage.favorites.delete(row.id)),
 					]);
+					for (const row of (await ctx.storage.photos.query({ where: { member_id: user.id }, limit: 200 })).items) {
+						// A photo still waiting is theirs to take back. One already on a listing stays with the listing.
+						if (asRecord(row.data).status !== "pending") continue;
+						await ctx.storage.photos.delete(row.id);
+						await ctx.media?.delete?.(asString(asRecord(row.data).mediaId)).catch(() => false);
+					}
 					for (const row of (await ctx.storage.edits.query({ where: { member_id: user.id }, limit: 200 })).items) {
 						await ctx.storage.edits.delete(row.id);
+					}
+					// Replies this member wrote as a listing owner, public or still waiting.
+					for (const listing of rows(await ctx.storage.submissions.query(mine))) {
+						const listingId = asString(listing.listingId) || listing.id;
+						for (const review of rows(await ctx.storage.reviews.query({ where: { listingId }, limit: 100 }))) {
+							if (review.reply_by !== user.id) continue;
+							await ctx.storage.reviews.updateIf(review.id, {
+								where: {},
+								set: { owner_reply: "", owner_reply_at: "", reply_draft: "", reply_status: "none", reply_by: "", reply_rev: "" },
+							});
+						}
 					}
 					await ctx.kv.delete(emailKey(user.id));
 					for (const id of new Set(rows(reviews).map((row) => asString(row.listingId)))) await syncRating(ctx, id);
 					return { ok: true, erased: true };
 				}
-				return { ok: true, reviews: rows(reviews), claims: rows(claims), favorites: rows(favorites) };
+				// What "my data" covers, so the account page can say it plainly.
+				return {
+					ok: true,
+					reviews: rows(reviews),
+					claims: rows(claims),
+					favorites: rows(favorites),
+					erases: ["your reviews", "your claims", "your saved listings", "your replies to reviews", "changes and photos still waiting for approval", "your stored email address"],
+					keeps: ["listings you added, which stay in the directory", "photos already approved on a listing"],
+				};
 			},
 		},
 		renew: {
