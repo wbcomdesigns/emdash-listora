@@ -1,0 +1,81 @@
+{
+  "product": "Listora for EmDash",
+  "productType": "plugin",
+  "shortId": "lstem",
+  "slug": "listora-emdash",
+  "tagline": "Directory listings for EmDash. Engine is sandboxed. Screens live on the site kit.",
+  "note": "GitHub-only documentation. Metadata only. No publish or sync target.",
+  "images_dir": "images",
+  "version": "0.1.0",
+  "sections": [
+    {
+      "name": "Getting Started",
+      "folder": "getting-started",
+      "description": "What this plugin is, what we already shipped, and how to run the lab.",
+      "pages": [
+        { "slug": "intro", "title": "What Listora on EmDash is" },
+        { "slug": "what-we-built", "title": "What we built in 0.1.0" },
+        { "slug": "install", "title": "Install the plugin" },
+        { "slug": "local-lab", "title": "Run the local lab" }
+      ]
+    },
+    {
+      "name": "Architecture",
+      "folder": "architecture",
+      "description": "Why WordPress PHP cannot run here, and who owns pages versus routes.",
+      "pages": [
+        { "slug": "split", "title": "Plugin, site kit, and host" },
+        { "slug": "wordpress-vs-emdash", "title": "WordPress Listora versus this plugin" }
+      ]
+    },
+    {
+      "name": "Features",
+      "folder": "features",
+      "description": "Jobs the Free engine already does for visitors, owners, and admins.",
+      "pages": [
+        { "slug": "directory", "title": "Browse, search, and maps" },
+        { "slug": "submit", "title": "Submit a listing" },
+        { "slug": "reviews-claims", "title": "Reviews and claims" },
+        { "slug": "owner-dashboard", "title": "Owner dashboard" },
+        { "slug": "admin", "title": "Admin queue" },
+        { "slug": "parked-pro", "title": "Parked Pro work" }
+      ]
+    },
+    {
+      "name": "UX and Presentation",
+      "folder": "ux",
+      "description": "The next job. Engine is proven. Screens must match WordPress Listora quality.",
+      "pages": [
+        { "slug": "presentation-bar", "title": "The presentation bar" },
+        { "slug": "screen-inventory", "title": "Screen inventory" },
+        { "slug": "next-work", "title": "What to improve next" }
+      ]
+    },
+    {
+      "name": "Developer Guide",
+      "folder": "developer-guide",
+      "description": "Routes, site kit, tests, and how to ship a new version.",
+      "pages": [
+        { "slug": "routes", "title": "Plugin routes" },
+        { "slug": "site-kit", "title": "Site kit" },
+        { "slug": "release", "title": "Version and publish" }
+      ]
+    },
+    {
+      "name": "FAQ",
+      "folder": "faq",
+      "description": "Short answers the team asks first.",
+      "pages": [
+        { "slug": "faqs", "title": "FAQ" }
+      ]
+    },
+    {
+      "name": "Troubleshooting",
+      "folder": "troubleshooting",
+      "description": "Lab and registry problems we already hit.",
+      "pages": [
+        { "slug": "lab", "title": "Lab and publish problems" }
+      ]
+    }
+  ]
+}

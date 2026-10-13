@@ -1,23 +1,23 @@
-screen	wp_block_or_page	emdash_now	drop	bar
-directory_search	listing-search	missing	A-UI then F	command search, Near Me, type chips, facets
-directory_grid	listing-grid	thin blog list	A-UI	grid/list toggle, sort, count, skeletons
-listing_card	listing-card	title+excerpt	A-UI	photo, type, location, rating, features
-listing_detail	listing-detail	facts list	A-UI	gallery, tabs, sidebar, hours badge, actions
-reviews	listing-reviews	missing	E	summary, list, form, reply
-map	listing-map	missing	F	OSM, cluster, overflow, search on drag
-submit_wizard	listing-submission	flat form	A-UI	5 steps, draft, preview, duplicate
-categories	listing-categories	missing	B	icon grid, counts
-featured	listing-featured	missing	B	carousel
-calendar	listing-calendar	missing	F	month + phone agenda
-user_dashboard	user-dashboard	missing	C	left nav, own data only
-compare	listora-pro/comparison	missing	F	2-4 table
-needs	needs-grid + post-need	missing	H	form + grid
-quick_view	Pro modal	missing	F	modal from card
-seo_landing	type-in-location	missing	kit	same card chrome
-coming_soon	Pro gate	missing	kit	gate, not 404
-admin_queue	moderation	listings only	A then D+E	listings + reviews + claims
-admin_types	type editor	missing	B	Block Kit /types
-admin_settings	settings sidebar	partial on queue	B	own /settings page
-admin_import	import/export	missing	I	CSV JSON GeoJSON
-admin_analytics	analytics	missing	G	views/clicks
-admin_emails	email templates	missing	G	templates + log
+screen	wp_block_or_page	engine_0_1_0	lab_chrome	next
+directory_search	listing-search	search+types	q, Near Me, type chips	command search, facets, skeletons
+directory_grid	listing-grid	listings	grid/list, count, featured row	sort, paging, skeletons
+listing_card	listing-card	listing fields	photo, type, city, rating	features, owner, featured treatment
+listing_detail	listing-detail	listings+extras	tabs, hours, services, JSON-LD, map, actions	gallery/lightbox, full sidebar
+reviews	listing-reviews	reviews route	list+form on detail	distribution, helpful, reply
+map	listing-map	lat/lng	OSM archive+detail	cluster, overflow, search on drag
+submit_wizard	listing-submission	submit+duplicate	5 steps	autosave, live card preview
+categories	listing-categories	site taxonomies	missing screen	icon grid, counts
+featured	listing-featured	is_featured	static row of 3	carousel, arrows, dots
+calendar	listing-calendar	event dates	/listings/calendar/	month + phone agenda
+user_dashboard	user-dashboard	dashboard route	one /account/ page	left nav, real member, URL tabs
+compare	listora-pro/comparison	parked	parked	Pro later
+needs	needs-grid + post-need	parked	parked	Pro later
+quick_view	Pro modal	parked	parked	Pro later
+seo_landing	type-in-location	parked	parked	Pro later
+coming_soon	Pro gate	parked	parked	Pro later
+admin_queue	moderation	admin	listings+reviews+claims	empty states, settings IA
+admin_types	type editor	types in code	missing	Block Kit /types
+admin_settings	settings sidebar	partial on queue	partial	own /settings page
+admin_import	import/export	import route	CSV fixture only	Block Kit import page
+admin_analytics	analytics	missing	missing	later
+admin_emails	email templates	email_log	missing UI	later
