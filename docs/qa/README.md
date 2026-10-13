@@ -37,3 +37,7 @@ npm test
 ```
 
 Then walk [screen-checklist.md](screen-checklist.md) at 1440 and 390 as visitor, owner, and admin.
+
+## Release walk
+
+[QA_CHECKLIST.md](QA_CHECKLIST.md) is the one living list of cases by role (guest, member, admin) plus the presentation checks. Walk all of it before a release. Add or change a case in the same pull request as the behaviour.

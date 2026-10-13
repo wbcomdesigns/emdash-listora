@@ -67,10 +67,9 @@ Override lab folder with `LISTORA_LAB`. After a kit change: edit `site-kit/`, th
 | Contact | Stored, never delivered, no admin screen |
 | Dashboard rows | Read only. No edit or renew action |
 | Featured row | The same listings repeat at the top of the grid below it |
-| Member role check | Verified on the lab as the dev admin only. A subscriber-role account has not been walked in the browser |
 | Banner | `images/banner.png` is the dark-text lockup on a transparent ground. Check it on the registry page |
 | Timezone | Hardcoded to America/New_York on submit and in the calendar |
 
-QA source: `docs/qa/`. Screen ticks: `docs/qa/screen-checklist.md`. Parked Pro: `docs/website/pro-features/parked-work.md`.
+QA cases by role: `docs/qa/QA_CHECKLIST.md` (walk all of it before a release; `./scripts/lab-role.sh subscriber` for member cases). QA source: `docs/qa/`. Screen ticks: `docs/qa/screen-checklist.md`. Parked Pro: `docs/website/pro-features/parked-work.md`.
 
 When this page goes stale, rewrite the date and the next list in the same commit as the work.

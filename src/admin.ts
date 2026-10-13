@@ -1,6 +1,6 @@
 import type { PluginContext } from "emdash/plugin";
 
-import { patchListing, publishNow, syncRating } from "./lib/listings-query";
+import { drainRatingDirty, listingRefs, patchListing, publishNow, syncRating } from "./lib/listings-query";
 import { getOnboardState, loadSampleDirectory } from "./lib/onboard";
 import { LISTING_TYPES, LISTINGS } from "./lib/types";
 import { asBoolean, asRecord, asString } from "./lib/util";
@@ -392,14 +392,9 @@ export async function renderSetup(
 }
 
 /** Listing titles for a page of moderation rows, so the admin sees names instead of ids. */
-async function listingTitles(
-	ctx: PluginContext,
-	items: Array<{ data: unknown }>,
-): Promise<Map<string, string>> {
-	const ids = [...new Set(items.map((item) => asString(asRecord(item.data).listingId)).filter(Boolean))];
-	// One read per distinct listing on a page capped at 50 rows.
-	const found = await Promise.all(ids.map((id) => ctx.content?.get?.(LISTINGS, id).catch(() => null)));
-	return new Map(ids.flatMap((id, index) => (found[index] ? [[id, asString(found[index]?.data.title) || id]] : [])));
+async function listingTitles(ctx: PluginContext, items: Array<{ data: unknown }>): Promise<Map<string, string>> {
+	const refs = await listingRefs(ctx, items.map((item) => asString(asRecord(item.data).listingId)));
+	return new Map([...refs].map(([id, ref]) => [id, ref.title]));
 }
 
 // A member can rewrite their own pending review or claim. The stamp ties an admin's
@@ -435,6 +430,9 @@ export async function handleAdmin(
 	const raw = asRecord(input);
 	const type = asString(raw.type);
 	const page = asString(raw.page);
+
+	// Ratings that members made stale (rewrote or erased a live review) catch up here.
+	if (type === "page_load") await drainRatingDirty(ctx);
 
 	if (type === "block_action" && asString(raw.action_id) === "load_sample") {
 		const result = await loadSampleDirectory(ctx);

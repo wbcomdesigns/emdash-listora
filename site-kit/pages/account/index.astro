@@ -90,10 +90,26 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 
 	const LABELS: Record<string, string> = { listings: "Listings", reviews: "Reviews", claims: "Claims", favorites: "Favorites" };
 
+	const STATUS: Record<string, string> = {
+		pending: "Awaiting approval",
+		approved: "Approved",
+		published: "Published",
+		rejected: "Not approved",
+	};
+
+	// Each row leads with the listing name (a link once the listing is public), then the given fields.
 	function list(items: Array<Record<string, unknown>>, keys: string[]) {
 		return items.length
 			? `<ul class="listora-dash-list">${items
-					.map((item) => `<li class="listora-review">${keys.map((key) => esc(item[key])).filter(Boolean).join(" · ")}</li>`)
+					.map((item) => {
+						const name = esc(item.listing_title || "Listing no longer available");
+						const title = item.listing_url ? `<a href="${esc(item.listing_url)}">${name}</a>` : name;
+						const rest = keys
+							.map((key) => (key === "status" ? STATUS[String(item.status)] ?? item.status : item[key]))
+							.filter(Boolean)
+							.map(esc);
+						return `<li class="listora-review"><strong>${title}</strong>${rest.length ? ` · ${rest.join(" · ")}` : ""}</li>`;
+					})
 					.join("")}</ul>`
 			: `<div class="listora-empty"><h2>Nothing here yet</h2><p>This tab fills as you use the directory.</p></div>`;
 	}
@@ -117,10 +133,10 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 				.join(""),
 		);
 		type Rows = Array<Record<string, unknown>>;
-		fill("dash-listings", list(data.listings as Rows, ["title", "listing_type", "city", "status"]));
-		fill("dash-reviews", list(data.reviews as Rows, ["title", "body", "status"]));
-		fill("dash-claims", list(data.claims as Rows, ["name", "status"]));
-		fill("dash-favs", list(data.favorites as Rows, ["listingId"]));
+		fill("dash-listings", list(data.listings as Rows, ["city", "status"]));
+		fill("dash-reviews", list(data.reviews as Rows, ["body", "status"]));
+		fill("dash-claims", list(data.claims as Rows, ["status"]));
+		fill("dash-favs", list(data.favorites as Rows, []));
 	}
 
 	document.getElementById("privacy-form")?.addEventListener("submit", async (event) => {
