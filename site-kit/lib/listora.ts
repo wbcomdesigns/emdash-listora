@@ -1,21 +1,25 @@
 export type HourRow = { day: number; open: string; close: string };
 
 export const LISTING_TYPES = [
-	{ slug: "business", name: "Business", color: "#2563EB", hint: "Shops and local services" },
-	{ slug: "restaurant", name: "Restaurant", color: "#DC2626", hint: "Food and drink" },
-	{ slug: "real-estate", name: "Real estate", color: "#16A34A", hint: "Homes and rentals" },
-	{ slug: "hotel", name: "Hotel", color: "#DB2777", hint: "Rooms and stays" },
-	{ slug: "event", name: "Event", color: "#7C3AED", hint: "Dates and venues" },
-	{ slug: "job", name: "Job", color: "#0D9488", hint: "Open roles" },
-	{ slug: "healthcare", name: "Healthcare", color: "#0284C7", hint: "Clinics and care" },
-	{ slug: "education", name: "Education", color: "#CA8A04", hint: "Schools and classes" },
-	{ slug: "place", name: "Place", color: "#059669", hint: "Parks and landmarks" },
-	{ slug: "classified", name: "Classified", color: "#EA580C", hint: "Goods for sale" },
+	{ slug: "business", name: "Business", schema: "LocalBusiness", color: "#2563EB", hint: "Shops and local services" },
+	{ slug: "restaurant", name: "Restaurant", schema: "Restaurant", color: "#DC2626", hint: "Food and drink" },
+	{ slug: "real-estate", name: "Real estate", schema: "Residence", color: "#16A34A", hint: "Homes and rentals" },
+	{ slug: "hotel", name: "Hotel", schema: "Hotel", color: "#DB2777", hint: "Rooms and stays" },
+	{ slug: "event", name: "Event", schema: "Event", color: "#7C3AED", hint: "Dates and venues" },
+	{ slug: "job", name: "Job", schema: "JobPosting", color: "#0D9488", hint: "Open roles" },
+	{ slug: "healthcare", name: "Healthcare", schema: "MedicalBusiness", color: "#0284C7", hint: "Clinics and care" },
+	{ slug: "education", name: "Education", schema: "EducationalOrganization", color: "#CA8A04", hint: "Schools and classes" },
+	{ slug: "place", name: "Place", schema: "Place", color: "#059669", hint: "Parks and landmarks" },
+	{ slug: "classified", name: "Classified", schema: "Offer", color: "#EA580C", hint: "Goods for sale" },
 ] as const;
 
 export function typeName(slug: unknown): string {
 	const found = LISTING_TYPES.find((item) => item.slug === slug);
 	return found?.name ?? "Business";
+}
+
+export function schemaType(slug: unknown): string {
+	return LISTING_TYPES.find((item) => item.slug === slug)?.schema ?? "LocalBusiness";
 }
 
 export function typeColor(slug: unknown): string {
@@ -174,4 +178,52 @@ export function formatEventWhen(value: unknown): string {
 
 export function mapsDirectionsUrl(lat: number, lng: number): string {
 	return `https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=;${lat},${lng}`;
+}
+
+/* ---- Browser helpers shared by every kit page ---- */
+
+const ESCAPES: Record<string, string> = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
+
+/** Escape anything that came from the API before it goes into innerHTML. */
+export function esc(value: unknown): string {
+	return String(value ?? "").replace(/[&<>"']/g, (char) => ESCAPES[char]);
+}
+
+export function signInUrl(): string {
+	return `/_emdash/admin/login?redirect=${encodeURIComponent(location.pathname + location.search)}`;
+}
+
+export type ApiResult = { ok: boolean; error?: { code?: string; message?: string }; [key: string]: unknown };
+
+/** Call a Listora plugin route. Member routes answer SIGN_IN_REQUIRED for guests. */
+export async function api(path: string, body?: unknown, method = body ? "POST" : "GET"): Promise<ApiResult> {
+	const response = await fetch(`/_emdash/api/plugins/listora/${path}`, {
+		method,
+		credentials: "same-origin",
+		headers: { "Content-Type": "application/json", "X-EmDash-Request": "1" },
+		body: body ? JSON.stringify(body) : undefined,
+	});
+	if (response.status === 401) return { ok: false, error: { code: "SIGN_IN_REQUIRED", message: "Sign in to continue." } };
+	const json = await response.json().catch(() => null);
+	if (!response.ok || !json) {
+		return { ok: false, error: { code: "FAILED", message: json?.error?.message || "Something went wrong. Try again." } };
+	}
+	return json.data ?? { ok: false };
+}
+
+/** Show a result next to a form: success text, the API's error, or a sign-in link for guests. */
+export function notify(after: Element, result: ApiResult, success: string): void {
+	let box = after.nextElementSibling as HTMLElement | null;
+	if (!box?.classList.contains("listora-status")) {
+		box = document.createElement("p");
+		box.className = "listora-status";
+		box.setAttribute("role", "status");
+		after.after(box);
+	}
+	box.hidden = false;
+	box.dataset.tone = result.ok ? "success" : "error";
+	if (result.ok) box.textContent = success;
+	else if (result.error?.code === "SIGN_IN_REQUIRED") {
+		box.innerHTML = `Sign in to continue. <a href="${esc(signInUrl())}">Sign in</a>`;
+	} else box.textContent = result.error?.message || "Something went wrong. Try again.";
 }

@@ -15,6 +15,7 @@ import {
 	isOpenNow,
 	mapsDirectionsUrl,
 	parseHours,
+	schemaType,
 	stars,
 	typeName,
 	websiteHref,
@@ -24,10 +25,10 @@ import { resolveBlogSiteIdentity } from "../../utils/site-identity";
 import "../../styles/listora-ui.css";
 
 const slug = decodeSlug(Astro.params.slug);
-if (!slug) return Astro.redirect("/404");
+if (!slug) return Astro.rewrite("/404");
 
 const { entry: listing, cacheHint } = await getEmDashEntry("listings", slug);
-if (!listing) return Astro.redirect("/404");
+if (!listing) return Astro.rewrite("/404");
 if (Astro.cache?.enabled) Astro.cache.set(cacheHint);
 
 const { siteTitle } = resolveBlogSiteIdentity(await getSiteSettings());
@@ -69,7 +70,7 @@ const photo = coverUrl(slug, data.featured_image, String(data.listing_type || ""
 const directions = hasMap ? mapsDirectionsUrl(lat, lng) : "";
 const schema = {
 	"@context": "https://schema.org",
-	"@type": data.listing_type === "restaurant" ? "Restaurant" : "LocalBusiness",
+	"@type": schemaType(data.listing_type),
 	name: data.title,
 	description: data.excerpt || data.description,
 	telephone: data.phone,
@@ -152,7 +153,8 @@ const schema = {
 							{
 								rating ? (
 									<span class="listora-stars">
-										{stars(rating)} {rating.toFixed(1)} ({reviewCount})
+										<span aria-hidden="true">{stars(rating)}</span>{" "}
+										<span class="listora-stars__value">{rating.toFixed(1)} ({reviewCount} {reviewCount === 1 ? "review" : "reviews"})</span>
 									</span>
 								) : null
 							}
@@ -173,11 +175,11 @@ const schema = {
 						{data.excerpt ? <p class="listora-detail__lead">{data.excerpt}</p> : null}
 
 						<div class="listora-detail__actions">
-							<button class="listora-btn listora-btn--secondary" type="button" id="fav-btn" data-id={data.id} data-slug={slug}>
+							<button class="listora-btn listora-btn--secondary" type="button" id="fav-btn" aria-pressed="false" data-id={data.id}>
 								<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
 									<path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
 								</svg>
-								Save
+								<span data-label>Save</span>
 							</button>
 							<button class="listora-btn listora-btn--secondary" type="button" id="share-btn" data-title={data.title}>
 								<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
@@ -473,8 +475,10 @@ const schema = {
 
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <script>
+	import { api, esc, notify } from "../../lib/listora";
+
 	const favBtn = document.getElementById("fav-btn");
-	const listingId = favBtn?.getAttribute("data-slug") || favBtn?.getAttribute("data-id") || "";
+	const listingId = favBtn?.getAttribute("data-id") || "";
 
 	document.querySelectorAll<HTMLButtonElement>(".listora-tab").forEach((tab) => {
 		tab.addEventListener("click", () => {
@@ -500,27 +504,18 @@ const schema = {
 		if (show) input?.focus();
 	}
 
-	async function api(path: string, body?: unknown, method = body ? "POST" : "GET") {
-		return fetch(`/_emdash/api/plugins/listora/${path}`, {
-			method,
-			credentials: "same-origin",
-			headers: { "Content-Type": "application/json", "X-EmDash-Request": "1" },
-			body: body ? JSON.stringify(body) : undefined,
-		}).then((res) => res.json());
-	}
-
 	async function loadReviews() {
 		const box = document.getElementById("listora-reviews");
 		if (!box) return;
-		const json = await api(`reviews?listingId=${encodeURIComponent(listingId)}`);
-		const items = json.data?.items ?? [];
+		const data = await api(`reviews?listingId=${encodeURIComponent(listingId)}`);
+		const items = (data.items ?? []) as Array<Record<string, unknown>>;
 		box.innerHTML =
 			items.length === 0
 				? `<div class="listora-empty"><h2>No reviews yet</h2><p>Be the first to review this listing.</p></div>`
 				: items
 						.map(
-							(item: { author?: string; stars?: number; title?: string; body?: string; owner_reply?: string }) =>
-								`<article class="listora-review"><strong>${item.author ?? "Visitor"}</strong> <span class="listora-stars">${"★".repeat(item.stars ?? 0)}</span><h3>${item.title ?? ""}</h3><p>${item.body ?? ""}</p>${item.owner_reply ? `<p>Owner: ${item.owner_reply}</p>` : ""}</article>`,
+							(item) =>
+								`<article class="listora-review"><strong>${esc(item.author || "Member")}</strong> <span class="listora-stars" aria-label="${Number(item.stars) || 0} out of 5">${"★".repeat(Number(item.stars) || 0)}</span><h3>${esc(item.title)}</h3><p>${esc(item.body)}</p>${item.owner_reply ? `<p>Owner: ${esc(item.owner_reply)}</p>` : ""}</article>`,
 						)
 						.join("");
 	}
@@ -536,16 +531,15 @@ const schema = {
 		}
 		setFieldError("rev-body", "rev-body-error", false);
 		form.setAttribute("aria-busy", "true");
-		await api("reviews", {
+		const result = await api("review", {
 			listingId,
 			stars: Number(data.get("stars")),
 			title: String(data.get("title") ?? ""),
 			body,
-			author: "Visitor",
 		});
-		form.reset();
 		form.removeAttribute("aria-busy");
-		await loadReviews();
+		if (result.ok) form.reset();
+		notify(form, result, "Thanks. Your review will appear once it is approved.");
 	});
 
 	document.getElementById("listora-contact-form")?.addEventListener("submit", async (event) => {
@@ -559,7 +553,7 @@ const schema = {
 		}
 		setFieldError("c-message", "c-message-error", false);
 		form.setAttribute("aria-busy", "true");
-		const json = await api("contact", {
+		const result = await api("contact", {
 			listingId,
 			name: String(data.get("name") ?? ""),
 			email: String(data.get("email") ?? ""),
@@ -567,22 +561,26 @@ const schema = {
 			company_website: String(data.get("company_website") ?? ""),
 		});
 		form.removeAttribute("aria-busy");
+		if (result.ok) form.reset();
 		const status = document.getElementById("listora-contact-status");
 		if (status) {
 			status.hidden = false;
-			status.dataset.tone = json.data?.ok === false ? "error" : "success";
-			status.textContent = json.data?.ok === false ? "Could not send." : `Message saved. Mail: ${json.data?.mail ?? "queued"}`;
+			status.dataset.tone = result.ok ? "success" : "error";
+			status.textContent = result.ok ? "Message sent." : result.error?.message || "Could not send.";
 		}
 	});
 
-	document.getElementById("fav-btn")?.addEventListener("click", async () => {
-		await api("favorites", { listingId, member_id: "demo-member" });
-		const btn = document.getElementById("fav-btn");
-		if (btn) {
-			btn.textContent = "";
-			btn.append("Saved");
-			btn.classList.add("is-saved");
+	favBtn?.addEventListener("click", async () => {
+		const saved = favBtn.classList.contains("is-saved");
+		const result = await api("favorites", { listingId }, saved ? "DELETE" : "POST");
+		if (!result.ok) {
+			notify(favBtn.parentElement ?? favBtn, result, "");
+			return;
 		}
+		favBtn.classList.toggle("is-saved", !saved);
+		favBtn.setAttribute("aria-pressed", String(!saved));
+		const label = favBtn.querySelector("[data-label]") ?? favBtn;
+		label.textContent = saved ? "Save" : "Saved";
 	});
 
 	document.getElementById("share-btn")?.addEventListener("click", async () => {
@@ -609,7 +607,12 @@ const schema = {
 		setFieldError("claim-message", "claim-message-error", !message);
 		if (!name || !email || !email.includes("@") || !message) return;
 		form.setAttribute("aria-busy", "true");
-		await api("claims", { listingId, name, email, message });
+		const result = await api("claims", { listingId, name, email, message });
+		form.removeAttribute("aria-busy");
+		if (!result.ok) {
+			notify(form, result, "");
+			return;
+		}
 		const done = document.createElement("p");
 		done.className = "listora-status";
 		done.dataset.tone = "success";

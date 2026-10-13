@@ -2,7 +2,7 @@ import type { PluginContext } from "emdash/plugin";
 
 import { haversineKm, listingFromContent, matchesQuery, type ListingCard } from "./catalog";
 import { LISTINGS } from "./types";
-import { asNumber, asRecord, asString } from "./util";
+import { asNumber, asRecord, asString, rows } from "./util";
 
 export async function listPublished(ctx: PluginContext, limit = 100): Promise<ListingCard[]> {
 	if (!ctx.content) return [];
@@ -59,3 +59,39 @@ export async function filterListings(
 
 	return { items, total: items.length };
 }
+
+/** Publish a listing's current revision. False when the host cannot publish. */
+export async function publishNow(ctx: PluginContext, id: string): Promise<boolean> {
+	if (!ctx.content?.getVersioned || !ctx.content.publish) return false;
+	const versioned = await ctx.content.getVersioned(LISTINGS, id);
+	if (!versioned) return false;
+	await ctx.content.publish(LISTINGS, id, { _rev: versioned._rev });
+	return true;
+}
+
+/** Change fields on a listing and keep it live. Updating a published entry only saves a draft. */
+export async function patchListing(
+	ctx: PluginContext,
+	id: string,
+	patch: Record<string, unknown>,
+): Promise<Record<string, unknown> | null> {
+	const listing = await ctx.content?.get?.(LISTINGS, id);
+	if (!listing || !ctx.content?.update) return null;
+	const data = { ...listing.data, ...patch };
+	await ctx.content.update(LISTINGS, id, data);
+	if (listing.status === "published") await publishNow(ctx, id);
+	return data;
+}
+
+export async function syncRating(ctx: PluginContext, listingId: string): Promise<void> {
+	const found = await ctx.storage.reviews.query({ where: { listingId }, limit: 200 });
+	const stars = rows(found)
+		.filter((row) => row.status === "published")
+		.map((row) => asNumber(row.stars) ?? 0);
+	const avg = stars.length ? stars.reduce((sum, value) => sum + value, 0) / stars.length : 0;
+	await patchListing(ctx, listingId, {
+		rating_avg: Math.round(avg * 10) / 10,
+		rating_count: stars.length,
+	});
+}
+

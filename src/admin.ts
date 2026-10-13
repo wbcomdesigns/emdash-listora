@@ -1,8 +1,9 @@
 import type { PluginContext } from "emdash/plugin";
 
+import { patchListing, publishNow, syncRating } from "./lib/listings-query";
 import { getOnboardState, loadSampleDirectory } from "./lib/onboard";
-
-const LISTINGS = "listings";
+import { LISTING_TYPES, LISTINGS } from "./lib/types";
+import { asBoolean, asRecord, asString } from "./lib/util";
 
 export type BlockMap = Record<string, unknown> & { type: string };
 
@@ -20,20 +21,6 @@ type SubmissionRow = {
 	createdAt?: string;
 };
 
-function asRecord(input: unknown): Record<string, unknown> {
-	return input !== null && typeof input === "object" && !Array.isArray(input)
-		? (input as Record<string, unknown>)
-		: {};
-}
-
-function asString(value: unknown): string {
-	return typeof value === "string" ? value.trim() : "";
-}
-
-function asBoolean(value: unknown): boolean {
-	return value === true || value === "true" || value === 1 || value === "1";
-}
-
 function localeFor(ctx: PluginContext): string {
 	return ctx.site.locale || "en";
 }
@@ -41,8 +28,10 @@ function localeFor(ctx: PluginContext): string {
 async function loadSettings(ctx: PluginContext): Promise<{
 	requireModeration: boolean;
 	defaultListingType: string;
+	spamKeywords: string;
 }> {
 	return {
+		spamKeywords: (await ctx.settings.get<string>("spam_keywords")) ?? "viagra, crypto pump",
 		requireModeration: (await ctx.settings.get<boolean>("require_moderation")) !== false,
 		defaultListingType: (await ctx.settings.get<string>("default_listing_type")) || "business",
 	};
@@ -116,7 +105,7 @@ export async function renderQueue(
 							{ key: "city", label: "City" },
 							{ key: "submitted", label: "Submitted" },
 							{ key: "open", label: "Edit", format: "element" },
-							{ key: "action", label: "Review", format: "element" },
+							{ key: "action", label: "Decision", format: "element" },
 						],
 						rows,
 					},
@@ -157,18 +146,14 @@ export async function renderQueue(
 						action_id: "default_listing_type",
 						label: "Default listing type",
 						initial_value: settings.defaultListingType,
-						options: [
-							{ label: "Business", value: "business" },
-							{ label: "Restaurant", value: "restaurant" },
-							{ label: "Real estate", value: "real-estate" },
-							{ label: "Hotel", value: "hotel" },
-							{ label: "Event", value: "event" },
-							{ label: "Job", value: "job" },
-							{ label: "Healthcare", value: "healthcare" },
-							{ label: "Education", value: "education" },
-							{ label: "Place", value: "place" },
-							{ label: "Classified", value: "classified" },
-						],
+						options: LISTING_TYPES.map((type) => ({ label: type.name, value: type.slug })),
+					},
+					{
+						type: "text_input",
+						action_id: "spam_keywords",
+						label: "Spam keywords",
+						help_text: "Comma-separated words that reject a submission.",
+						initial_value: settings.spamKeywords,
 					},
 				],
 				submit: { label: "Save settings", action_id: "save_settings" },
@@ -189,6 +174,7 @@ async function reviewListing(
 
 	const existing = (await ctx.storage.submissions.get(listingId)) as SubmissionRow | null;
 	const next: SubmissionRow = {
+		...existing,
 		listingId,
 		title: existing?.title ?? listingId,
 		listing_type: existing?.listing_type,
@@ -206,21 +192,14 @@ async function reviewListing(
 		return renderQueue(ctx, { toast: { message: "Unknown review action.", type: "error" } });
 	}
 
-	if (!ctx.content?.getVersioned || !ctx.content.publish) {
+	if (!(await publishNow(ctx, listingId))) {
 		return renderQueue(ctx, {
 			toast: {
-				message: "Publish is not available. Open the listing in admin and publish it there.",
+				message: "Could not publish. Open the listing in admin and publish it there.",
 				type: "error",
 			},
 		});
 	}
-
-	const versioned = await ctx.content.getVersioned(LISTINGS, listingId);
-	if (!versioned) {
-		return renderQueue(ctx, { toast: { message: "Listing was not found.", type: "error" } });
-	}
-
-	await ctx.content.publish(LISTINGS, listingId, { _rev: versioned._rev });
 	await ctx.storage.submissions.put(listingId, { ...next, status: "approved" });
 	ctx.log.info("Listora listing approved", { listingId });
 	return renderQueue(ctx, { toast: { message: "Listing published.", type: "success" } });
@@ -235,20 +214,22 @@ async function renderReviewQueue(
 		orderBy: { createdAt: "desc" },
 		limit: 50,
 	});
+	const titles = await listingTitles(ctx, pending.items);
 	const rows = pending.items.map((row) => {
 		const data = asRecord(row.data);
 		return {
-			title: asString(data.title) || asString(data.body).slice(0, 40),
-			listing: asString(data.listingId),
-			stars: asString(data.stars) || "-",
+			// Shown in full: what the admin reads is exactly what goes live.
+			title: [asString(data.title), asString(data.body)].filter(Boolean).join(": "),
+			listing: titles.get(asString(data.listingId)) ?? "Removed listing",
+			stars: data.stars ? `${data.stars} of 5` : "-",
 			author: asString(data.author),
 			action: {
 				type: "menu",
 				action_id: "review_mod",
 				label: "Review",
 				items: [
-					{ label: "Approve", value: `approve:${row.id}` },
-					{ label: "Reject", value: `reject:${row.id}` },
+					{ label: "Approve", value: stamped("approve", row.id, data) },
+					{ label: "Reject", value: stamped("reject", row.id, data) },
 				],
 			},
 		};
@@ -264,12 +245,13 @@ async function renderReviewQueue(
 				? { type: "empty", title: "No pending reviews", description: "New reviews wait here." }
 				: {
 						type: "table",
+						page_action_id: "reviews_page",
 						columns: [
 							{ key: "title", label: "Review" },
 							{ key: "listing", label: "Listing" },
 							{ key: "stars", label: "Stars" },
 							{ key: "author", label: "Author" },
-							{ key: "action", label: "Review", format: "element" },
+							{ key: "action", label: "Decision", format: "element" },
 						],
 						rows,
 					},
@@ -287,10 +269,12 @@ async function renderClaimQueue(
 		orderBy: { createdAt: "desc" },
 		limit: 50,
 	});
+	const titles = await listingTitles(ctx, pending.items);
 	const rows = pending.items.map((row) => {
 		const data = asRecord(row.data);
 		return {
-			listing: asString(data.listingId),
+			listing: titles.get(asString(data.listingId)) ?? "Removed listing",
+			message: asString(data.message),
 			name: asString(data.name),
 			email: asString(data.email),
 			action: {
@@ -298,8 +282,8 @@ async function renderClaimQueue(
 				action_id: "claim_mod",
 				label: "Review",
 				items: [
-					{ label: "Approve", value: `approve:${row.id}` },
-					{ label: "Reject", value: `reject:${row.id}` },
+					{ label: "Approve", value: stamped("approve", row.id, data) },
+					{ label: "Reject", value: stamped("reject", row.id, data) },
 				],
 			},
 		};
@@ -315,11 +299,13 @@ async function renderClaimQueue(
 				? { type: "empty", title: "No pending claims", description: "Claim requests wait here." }
 				: {
 						type: "table",
+						page_action_id: "claims_page",
 						columns: [
 							{ key: "listing", label: "Listing" },
 							{ key: "name", label: "Name" },
 							{ key: "email", label: "Email" },
-							{ key: "action", label: "Review", format: "element" },
+							{ key: "message", label: "Message" },
+							{ key: "action", label: "Decision", format: "element" },
 						],
 						rows,
 					},
@@ -405,6 +391,43 @@ export async function renderSetup(
 	};
 }
 
+/** Listing titles for a page of moderation rows, so the admin sees names instead of ids. */
+async function listingTitles(
+	ctx: PluginContext,
+	items: Array<{ data: unknown }>,
+): Promise<Map<string, string>> {
+	const ids = [...new Set(items.map((item) => asString(asRecord(item.data).listingId)).filter(Boolean))];
+	// One read per distinct listing on a page capped at 50 rows.
+	const found = await Promise.all(ids.map((id) => ctx.content?.get?.(LISTINGS, id).catch(() => null)));
+	return new Map(ids.flatMap((id, index) => (found[index] ? [[id, asString(found[index]?.data.title) || id]] : [])));
+}
+
+// A member can rewrite their own pending review or claim. The stamp ties an admin's
+// click to the exact version they were shown, so a rewrite cannot ride an approval.
+// ponytail: check-then-write is not atomic. A rewrite landing in the few milliseconds
+// between the check and the write would still be approved; needs compare-and-set in
+// plugin storage to close fully.
+function stamped(action: string, id: string, data: Record<string, unknown>): string {
+	return `${action}|${versionOf(data)}|${id}`;
+}
+
+/** Random per-write token. Rows written before 0.3.0 fall back to their timestamp. */
+function versionOf(row: Record<string, unknown>): string {
+	return asString(row.rev) || asString(row.createdAt);
+}
+
+function parseStamped(value: unknown): { action: string; stamp: string; id: string } {
+	const [action = "", stamp = "", ...rest] = asString(value).split("|");
+	return { action, stamp, id: rest.join("|") };
+}
+
+function staleRow(row: Record<string, unknown>, stamp: string): string | null {
+	if (!row.listingId) return "That item no longer exists.";
+	if (row.status !== "pending") return "Someone already handled that item.";
+	if (versionOf(row) !== stamp) return "That item changed after this page loaded. Check it again.";
+	return null;
+}
+
 export async function handleAdmin(
 	input: unknown,
 	ctx: PluginContext,
@@ -432,6 +455,7 @@ export async function handleAdmin(
 			asString(values.default_listing_type) || "business",
 		);
 		await ctx.settings.set("require_moderation", asBoolean(values.require_moderation));
+		await ctx.settings.set("spam_keywords", asString(values.spam_keywords));
 		return renderQueue(ctx, { toast: { message: "Settings saved.", type: "success" } });
 	}
 
@@ -444,37 +468,40 @@ export async function handleAdmin(
 	}
 
 	if (type === "block_action" && asString(raw.action_id) === "review_mod") {
-		const value = asString(raw.value);
-		const split = value.indexOf(":");
-		const action = split === -1 ? value : value.slice(0, split);
-		const id = split === -1 ? "" : value.slice(split + 1);
+		const { action, id, stamp } = parseStamped(raw.value);
 		const existing = asRecord(await ctx.storage.reviews.get(id));
-		if (existing.listingId) {
-			await ctx.storage.reviews.put(id, {
-				...existing,
-				status: action === "approve" ? "published" : "rejected",
-			});
-		}
+		const stale = staleRow(existing, stamp);
+		if (stale) return renderReviewQueue(ctx, { toast: { message: stale, type: "error" } });
+		await ctx.storage.reviews.put(id, {
+			...existing,
+			status: action === "approve" ? "published" : "rejected",
+		});
+		await syncRating(ctx, asString(existing.listingId));
 		return renderReviewQueue(ctx, { toast: { message: "Review updated.", type: "success" } });
 	}
 
 	if (type === "block_action" && asString(raw.action_id) === "claim_mod") {
-		const value = asString(raw.value);
-		const split = value.indexOf(":");
-		const action = split === -1 ? value : value.slice(0, split);
-		const id = split === -1 ? "" : value.slice(split + 1);
+		const { action, id, stamp } = parseStamped(raw.value);
 		const existing = asRecord(await ctx.storage.claims.get(id));
-		if (existing.listingId) {
-			await ctx.storage.claims.put(id, {
-				...existing,
-				status: action === "approve" ? "approved" : "rejected",
+		const stale = staleRow(existing, stamp);
+		if (stale) return renderClaimQueue(ctx, { toast: { message: stale, type: "error" } });
+		await ctx.storage.claims.put(id, {
+			...existing,
+			status: action === "approve" ? "approved" : "rejected",
+		});
+		if (action === "approve") {
+			const listingId = asString(existing.listingId);
+			const listing = await patchListing(ctx, listingId, { is_claimed: true, owner_name: asString(existing.name) });
+			const submission = asRecord(await ctx.storage.submissions.get(listingId));
+			await ctx.storage.submissions.put(listingId, {
+				listingId,
+				title: asString(listing?.title),
+				listing_type: asString(listing?.listing_type),
+				city: asString(listing?.city),
+				status: "approved",
+				...submission,
+				member_id: existing.member_id,
 			});
-			if (action === "approve" && ctx.content?.update) {
-				const listing = await ctx.content.get("listings", asString(existing.listingId));
-				if (listing) {
-					await ctx.content.update("listings", listing.id, { ...listing.data, is_claimed: true });
-				}
-			}
 		}
 		return renderClaimQueue(ctx, { toast: { message: "Claim updated.", type: "success" } });
 	}

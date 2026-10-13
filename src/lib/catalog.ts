@@ -69,7 +69,7 @@ export function listingFromContent(item: ContentLike): ListingCard {
 		id: item.id,
 		slug: item.slug || item.id,
 		status: item.status,
-		title: asString(data.title) || item.slug,
+		title: asString(data.title) || item.slug || item.id,
 		excerpt: asString(data.excerpt),
 		description: asString(data.description),
 		listing_type: type.slug,

@@ -2,19 +2,40 @@
 	"$schema": "./node_modules/@emdash-cms/plugin-cli/schemas/emdash-plugin.schema.json",
 
 	"slug": "listora",
+	"name": "Listora",
+	"keywords": ["directory", "listings", "reviews", "local business", "classifieds"],
 	"publisher": "did:plc:2o6axbe264shvyedyhycyhya",
 
 	"license": "MIT",
 	"repo": "https://github.com/wbcomdesigns/emdash-listora",
 	"author": { "name": "Wbcom Designs", "url": "https://wbcomdesigns.com", "email": "security@wbcomdesigns.com" },
 	"security": { "email": "security@wbcomdesigns.com" },
-	"description": "Directory listings for EmDash: search, submit, reviews, claims, dashboard, and import with Listora Free chrome.",
+	"description": "A moderated local directory: search, a map, 10 listing types, member submissions, reviews, claims and a dashboard.",
+	"sections": {
+		"description": { "file": "./docs/registry/description.md" },
+		"installation": { "file": "./docs/registry/installation.md" },
+		"faq": { "file": "./docs/registry/faq.md" },
+		"changelog": { "file": "./docs/registry/changelog.md" }
+	},
+	"release": {
+		"artifacts": {
+			"icon": { "file": "./icon.png" },
+			"banner": { "file": "./images/banner.png" },
+			"screenshots": [
+				{ "file": "./images/screenshot-1-directory.jpg" },
+				{ "file": "./images/screenshot-2-listing.jpg" },
+				{ "file": "./images/screenshot-3-submit.jpg" },
+				{ "file": "./images/screenshot-4-account.jpg" },
+				{ "file": "./images/screenshot-5-moderation.jpg" }
+			]
+		}
+	},
 
 	"capabilities": ["content:read", "content:write", "content:publish", "schema:read"],
 	"allowedHosts": [],
 	"storage": {
 		"submissions": {
-			"indexes": ["status", "createdAt", "title"]
+			"indexes": ["status", "createdAt", "title", "member_id"]
 		},
 		"events": {
 			"indexes": ["savedAt", "contentId", "collection"]

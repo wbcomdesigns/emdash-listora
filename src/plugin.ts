@@ -1,19 +1,18 @@
 import type { SandboxedPlugin } from "emdash/plugin";
 
 import { handleAdmin } from "./admin";
-import { listingFromContent } from "./lib/catalog";
 import { maybeSeedDemo } from "./lib/onboard";
-import { filterListings, listPublished } from "./lib/listings-query";
-import { DEMO_MEMBER, LISTING_TYPES, LISTINGS, listingTypeBySlug } from "./lib/types";
+import { filterListings, listPublished, publishNow } from "./lib/listings-query";
+import { LISTING_TYPES, LISTINGS, listingTypeBySlug } from "./lib/types";
 import {
 	asBoolean,
 	asNumber,
 	asRecord,
 	asString,
 	asStringArray,
-	memberIdFrom,
 	nowIso,
 	parseJson,
+	rows,
 } from "./lib/util";
 
 type SubmitInput = {
@@ -90,17 +89,40 @@ function spamBlocked(title: string, description: string, keywords: string[]): bo
 	return keywords.some((word) => word && hay.includes(word.toLowerCase()));
 }
 
+// Lowest signed-in role (subscriber). Private routes get a host-verified routeCtx.user.
+const MEMBER = "content:read";
+const ADMIN_ROLE = 50;
+const RATE_WINDOW_MS = 60 * 60 * 1000;
+const RATE_MAX = 8;
+// Short enough that the moderation table can show every character an admin approves.
+const REVIEW_TITLE_MAX = 120;
+const REVIEW_BODY_MAX = 1000;
+
+type Member = { id: string; name: string | null; role: number };
+
+const SIGN_IN = { ok: false, error: { code: "SIGN_IN_REQUIRED", message: "Sign in to continue." } };
+
+// ponytail: KV read-then-write is not atomic, so a burst of parallel requests can each
+// read the same count and slip a few past the cap. Fine for throttling abuse; move to a
+// host rate-limit primitive if one ships.
 async function rateLimited(
 	ctx: { kv: { get<T>(key: string): Promise<T | null>; set(key: string, value: string): Promise<void> } },
-	ip: string,
+	who: string,
 ): Promise<boolean> {
-	if (!ip) return false;
-	const key = `rate:${ip}`;
-	const count = Number((await ctx.kv.get<string>(key)) || "0");
-	if (count >= 8) return true;
-	await ctx.kv.set(key, String(count + 1));
+	if (!who) return false;
+	const key = `rate:${who}`;
+	const [start, count] = ((await ctx.kv.get<string>(key)) || "0|0").split("|").map(Number);
+	const now = Date.now();
+	if (now - start > RATE_WINDOW_MS) {
+		await ctx.kv.set(key, `${now}|1`);
+		return false;
+	}
+	if (count >= RATE_MAX) return true;
+	await ctx.kv.set(key, `${start}|${count + 1}`);
 	return false;
 }
+
+const RATE_LIMITED = { ok: false, error: { code: "RATE_LIMITED", message: "Too many requests. Try again in an hour." } };
 
 const plugin: SandboxedPlugin = {
 	hooks: {
@@ -144,7 +166,6 @@ const plugin: SandboxedPlugin = {
 		listings: {
 			public: true,
 			handler: async (routeCtx, ctx) => {
-				await maybeSeedDemo(ctx);
 				const filtered = await filterListings(ctx, routeCtx.input);
 				const raw = asRecord(routeCtx.input);
 				const limit = Math.min(Math.max(asNumber(raw.limit) ?? 40, 1), 100);
@@ -160,7 +181,6 @@ const plugin: SandboxedPlugin = {
 		search: {
 			public: true,
 			handler: async (routeCtx, ctx) => {
-				await maybeSeedDemo(ctx);
 				const raw = asRecord(routeCtx.input);
 				const action = asString(raw.action);
 				const filtered = await filterListings(ctx, raw);
@@ -195,21 +215,16 @@ const plugin: SandboxedPlugin = {
 			},
 		},
 		submit: {
-			public: true,
+			permission: MEMBER,
 			methods: ["POST"],
 			handler: async (routeCtx, ctx) => {
+				const user = routeCtx.user as Member | undefined;
+				if (!user) return SIGN_IN;
 				const parsed = parseSubmit(routeCtx.input);
 				if (!parsed.ok) {
 					return { ok: false, error: { code: "VALIDATION_ERROR", message: parsed.error } };
 				}
-
-				const ip =
-					routeCtx.request.headers["cf-connecting-ip"] ||
-					routeCtx.request.headers["x-forwarded-for"] ||
-					"";
-				if (await rateLimited(ctx, ip)) {
-					return { ok: false, error: { code: "RATE_LIMITED", message: "Too many submissions. Try later." } };
-				}
+				if (await rateLimited(ctx, `submit:${user.id}`)) return RATE_LIMITED;
 
 				const keywords = asStringArray(await ctx.settings.get<string>("spam_keywords"));
 				if (spamBlocked(parsed.data.title, parsed.data.description, keywords.length ? keywords : ["viagra", "crypto pump"])) {
@@ -218,8 +233,7 @@ const plugin: SandboxedPlugin = {
 
 				const requireModeration = (await ctx.settings.get<boolean>("require_moderation")) !== false;
 				const defaultType = (await ctx.settings.get<string>("default_listing_type")) || "business";
-				const listingType = parsed.data.listing_type || defaultType;
-				listingTypeBySlug(listingType);
+				const listingType = listingTypeBySlug(parsed.data.listing_type || defaultType).slug;
 
 				const collections = (await ctx.schema?.listCollections()) ?? [];
 				const hasListings = collections.some((item) => item.slug === LISTINGS);
@@ -250,7 +264,7 @@ const plugin: SandboxedPlugin = {
 					lng: parsed.data.lng,
 					is_claimed: false,
 					is_featured: false,
-					owner_name: parsed.data.owner_name,
+					owner_name: parsed.data.owner_name || user.name || "",
 					hours: parsed.data.hours,
 					services: parsed.data.services,
 					amenities: parsed.data.amenities,
@@ -263,25 +277,24 @@ const plugin: SandboxedPlugin = {
 					timezone: "America/New_York",
 				});
 
+				// Moderation off means the listing goes live now, not into a queue nobody reads.
+				const published = !requireModeration && (await publishNow(ctx, created.id));
+
 				await ctx.storage.submissions.put(created.id, {
 					listingId: created.id,
+					member_id: user.id,
 					title: parsed.data.title,
 					listing_type: listingType,
 					city: parsed.data.city,
-					status: requireModeration ? "pending" : created.status,
+					status: published ? "approved" : "pending",
 					agree_terms: parsed.data.agree_terms,
 					createdAt: nowIso(),
 				});
 
 				return {
 					ok: true,
-					listing: {
-						id: created.id,
-						slug: created.slug,
-						status: created.status,
-						title: parsed.data.title,
-					},
-					pendingReview: requireModeration || created.status !== "published",
+					listing: { id: created.id, slug: created.slug, title: parsed.data.title },
+					pendingReview: !published,
 				};
 			},
 		},
@@ -299,62 +312,20 @@ const plugin: SandboxedPlugin = {
 		},
 		reviews: {
 			public: true,
-			methods: ["GET", "POST"],
+			methods: ["GET"],
 			handler: async (routeCtx, ctx) => {
-				await maybeSeedDemo(ctx);
 				const raw = asRecord(routeCtx.input);
-				const listingId = asString(raw.listingId || raw.listing_id || raw.slug);
-				const wantsWrite = routeCtx.request.method === "POST" && (asString(raw.body) || asNumber(raw.stars));
-				if (wantsWrite) {
-					const memberId = routeCtx.user?.id || memberIdFrom(raw);
-					if (await ctx.storage.blocked.exists(memberId)) {
-						return { ok: false, error: { code: "BLOCKED", message: "This member cannot review." } };
-					}
-					const stars = Math.min(Math.max(asNumber(raw.stars) ?? 0, 1), 5);
-					const title = asString(raw.title);
-					const body = asString(raw.body);
-					if (!listingId || !body) {
-						return { ok: false, error: { code: "VALIDATION_ERROR", message: "Listing and review text are required." } };
-					}
-					const id = `rev-${listingId}-${Date.now()}`;
-					await ctx.storage.reviews.put(id, {
-						listingId,
-						member_id: memberId,
-						author: routeCtx.user?.name || asString(raw.author) || "Visitor",
-						stars,
-						title,
-						body,
-						status: "pending",
-						helpful: 0,
-						owner_reply: "",
-						createdAt: nowIso(),
-					});
-					return { ok: true, review: { id, status: "pending" } };
-				}
-
-				if (asString(raw.action) === "helpful" && asString(raw.id)) {
-					const existing = asRecord(await ctx.storage.reviews.get(asString(raw.id)));
-					if (!existing.listingId) return { ok: false, error: { code: "NOT_FOUND" } };
-					await ctx.storage.reviews.put(asString(raw.id), {
-						...existing,
-						helpful: (asNumber(existing.helpful) ?? 0) + 1,
-					});
-					return { ok: true };
-				}
-
-				const rows = await ctx.storage.reviews.query({ limit: 100, orderBy: { createdAt: "desc" } });
-				const items = rows.items
-					.map((row) => ({ id: row.id, ...asRecord(row.data) }))
-					.filter((row) => {
-						if (
-							listingId &&
-							asString(row.listingId) !== listingId &&
-							asString(row.slug) !== listingId
-						) {
-							return false;
-						}
-						return asString(row.status) === "published";
-					});
+				const listingId = asString(raw.listingId || raw.listing_id);
+				if (!listingId) return { ok: true, items: [], average: 0, count: 0 };
+				const found = await ctx.storage.reviews.query({
+					where: { listingId },
+					orderBy: { createdAt: "desc" },
+					limit: 100,
+				});
+				// member_id stays server-side; the public list only needs what the page prints.
+				const items = rows(found)
+					.filter((row) => row.status === "published")
+					.map(({ member_id: _member, rev: _rev, ...row }) => row);
 				const avg =
 					items.length === 0
 						? 0
@@ -362,103 +333,113 @@ const plugin: SandboxedPlugin = {
 				return { ok: true, items, average: Math.round(avg * 10) / 10, count: items.length };
 			},
 		},
-		claims: {
-			public: true,
-			methods: ["GET", "POST"],
+		review: {
+			permission: MEMBER,
+			methods: ["POST"],
 			handler: async (routeCtx, ctx) => {
-				await maybeSeedDemo(ctx);
+				const user = routeCtx.user as Member | undefined;
+				if (!user) return SIGN_IN;
 				const raw = asRecord(routeCtx.input);
-				if (routeCtx.request.method !== "POST") {
-					const listingId = asString(raw.listingId);
-					const rows = await ctx.storage.claims.query({ limit: 50 });
-					const items = rows.items
-						.map((row) => ({ id: row.id, ...asRecord(row.data) }))
-						.filter((row) => !listingId || asString(row.listingId) === listingId);
-					return { ok: true, items };
+				const listingId = asString(raw.listingId || raw.listing_id);
+				const body = asString(raw.body);
+				if (!listingId || !body) {
+					return { ok: false, error: { code: "VALIDATION_ERROR", message: "Listing and review text are required." } };
 				}
+				if (await ctx.storage.blocked.exists(user.id)) {
+					return { ok: false, error: { code: "BLOCKED", message: "This member cannot review." } };
+				}
+				if (await rateLimited(ctx, `review:${user.id}`)) return RATE_LIMITED;
+				// One review per member per listing. Writing again replaces it and sends it back to moderation.
+				// The listing rating is only ever recalculated by an admin decision: a member route must
+				// not write to or publish a listing.
+				const id = `rev-${listingId}-${user.id}`;
+				await ctx.storage.reviews.put(id, {
+					listingId,
+					member_id: user.id,
+					author: user.name || "Member",
+					stars: Math.min(Math.max(asNumber(raw.stars) ?? 5, 1), 5),
+					title: asString(raw.title).slice(0, REVIEW_TITLE_MAX),
+					body: body.slice(0, REVIEW_BODY_MAX),
+					status: "pending",
+					rev: crypto.randomUUID(),
+					helpful: 0,
+					owner_reply: "",
+					createdAt: nowIso(),
+				});
+				return { ok: true, review: { id, status: "pending" } };
+			},
+		},
+		claims: {
+			permission: MEMBER,
+			methods: ["POST"],
+			handler: async (routeCtx, ctx) => {
+				const user = routeCtx.user as Member | undefined;
+				if (!user) return SIGN_IN;
+				const raw = asRecord(routeCtx.input);
 				const listingId = asString(raw.listingId || raw.listing_id);
 				if (!listingId) {
 					return { ok: false, error: { code: "VALIDATION_ERROR", message: "Listing is required." } };
 				}
-				const id = `claim-${listingId}-${Date.now()}`;
+				if (await rateLimited(ctx, `claim:${user.id}`)) return RATE_LIMITED;
+				const id = `claim-${listingId}-${user.id}`;
 				await ctx.storage.claims.put(id, {
 					listingId,
-					member_id: routeCtx.user?.id || memberIdFrom(raw),
-					name: asString(raw.name),
-					email: asString(raw.email),
-					message: asString(raw.message),
+					member_id: user.id,
+					name: (asString(raw.name) || user.name || "").slice(0, REVIEW_TITLE_MAX),
+					email: asString(raw.email).slice(0, REVIEW_TITLE_MAX),
+					message: asString(raw.message).slice(0, REVIEW_BODY_MAX),
 					status: "pending",
-					createdAt: nowIso(),
-				});
-				await ctx.storage.email_log.put(`email-${id}`, {
-					template: "claim_received",
-					to: asString(raw.email),
-					listingId,
-					status: ctx.email ? "queued" : "MAIL_UNAVAILABLE",
+					rev: crypto.randomUUID(),
 					createdAt: nowIso(),
 				});
 				return { ok: true, claim: { id, status: "pending" } };
 			},
 		},
 		favorites: {
-			public: true,
+			permission: MEMBER,
 			methods: ["GET", "POST", "DELETE"],
 			handler: async (routeCtx, ctx) => {
-				await maybeSeedDemo(ctx);
-				const raw = asRecord(routeCtx.input);
-				const memberId = routeCtx.user?.id || memberIdFrom(raw);
-				const listingId = asString(raw.listingId || raw.listing_id);
-				const id = `${memberId}:${listingId}`;
+				const user = routeCtx.user as Member | undefined;
+				if (!user) return SIGN_IN;
+				const listingId = asString(asRecord(routeCtx.input).listingId);
+				const id = `${user.id}:${listingId}`;
 				if (routeCtx.request.method === "POST" && listingId) {
-					await ctx.storage.favorites.put(id, { member_id: memberId, listingId, createdAt: nowIso() });
+					await ctx.storage.favorites.put(id, { member_id: user.id, listingId, createdAt: nowIso() });
 					return { ok: true, favorited: true };
 				}
 				if (routeCtx.request.method === "DELETE" && listingId) {
 					await ctx.storage.favorites.delete(id);
 					return { ok: true, favorited: false };
 				}
-				const rows = await ctx.storage.favorites.query({ limit: 100 });
-				const items = rows.items
-					.map((row) => ({ id: row.id, ...asRecord(row.data) }))
-					.filter((row) => asString(row.member_id) === memberId);
-				return { ok: true, items };
+				const found = await ctx.storage.favorites.query({ where: { member_id: user.id }, limit: 100 });
+				return { ok: true, items: rows(found) };
 			},
 		},
 		dashboard: {
-			public: true,
+			permission: MEMBER,
 			handler: async (routeCtx, ctx) => {
-				await maybeSeedDemo(ctx);
-				const memberId = routeCtx.user?.id || memberIdFrom(routeCtx.input);
-				const [reviews, claims, favorites, submissions] = await Promise.all([
-					ctx.storage.reviews.query({ limit: 100 }),
-					ctx.storage.claims.query({ limit: 100 }),
-					ctx.storage.favorites.query({ limit: 100 }),
-					ctx.storage.submissions.query({ limit: 100 }),
+				const user = routeCtx.user as Member | undefined;
+				if (!user) return SIGN_IN;
+				const mine = { where: { member_id: user.id }, limit: 100 };
+				const [reviews, claims, favorites, listings] = await Promise.all([
+					ctx.storage.reviews.query(mine),
+					ctx.storage.claims.query(mine),
+					ctx.storage.favorites.query(mine),
+					ctx.storage.submissions.query(mine),
 				]);
-				const mine = {
-					reviews: reviews.items
-						.map((row) => ({ id: row.id, ...asRecord(row.data) }))
-						.filter((row) => asString(row.member_id) === memberId),
-					claims: claims.items
-						.map((row) => ({ id: row.id, ...asRecord(row.data) }))
-						.filter((row) => asString(row.member_id) === memberId),
-					favorites: favorites.items
-						.map((row) => ({ id: row.id, ...asRecord(row.data) }))
-						.filter((row) => asString(row.member_id) === memberId),
-					listings: submissions.items
-						.map((row) => ({ id: row.id, ...asRecord(row.data) }))
-						.filter((row) => asString(row.member_id) === memberId || memberId === DEMO_MEMBER),
-				};
 				return {
 					ok: true,
-					member_id: memberId,
+					member: { id: user.id, name: user.name },
 					counts: {
-						listings: mine.listings.length,
-						reviews: mine.reviews.length,
-						claims: mine.claims.length,
-						favorites: mine.favorites.length,
+						listings: listings.items.length,
+						reviews: reviews.items.length,
+						claims: claims.items.length,
+						favorites: favorites.items.length,
 					},
-					...mine,
+					listings: rows(listings),
+					reviews: rows(reviews),
+					claims: rows(claims),
+					favorites: rows(favorites),
 				};
 			},
 		},
@@ -476,6 +457,9 @@ const plugin: SandboxedPlugin = {
 				if (asString(raw.company_website)) {
 					return { ok: false, error: { code: "SPAM", message: "Message rejected." } };
 				}
+				// Per visitor IP. With no IP from the host every guest shares one bucket: fail closed.
+				const ip = (routeCtx.requestMeta as { ip?: string | null } | undefined)?.ip || "unknown";
+				if (await rateLimited(ctx, `contact:${ip}`)) return RATE_LIMITED;
 				const id = `contact-${listingId}-${Date.now()}`;
 				await ctx.storage.contacts.put(id, {
 					listingId,
@@ -484,19 +468,11 @@ const plugin: SandboxedPlugin = {
 					message,
 					createdAt: nowIso(),
 				});
-				const mailStatus = ctx.email ? "queued" : "MAIL_UNAVAILABLE";
-				await ctx.storage.email_log.put(`email-${id}`, {
-					template: "listing_contact",
-					to: email,
-					listingId,
-					status: mailStatus,
-					createdAt: nowIso(),
-				});
-				return { ok: true, id, mail: mailStatus };
+				return { ok: true, id };
 			},
 		},
+		// Admin only: no `public`, no `permission`, so the host requires plugins:manage.
 		import: {
-			public: true,
 			methods: ["GET", "POST"],
 			handler: async (routeCtx, ctx) => {
 				const raw = asRecord(routeCtx.input);
@@ -535,17 +511,18 @@ const plugin: SandboxedPlugin = {
 				if (!ctx.content?.create) {
 					return { ok: false, error: { code: "CONTENT_UNAVAILABLE" } };
 				}
-				const rows = Array.isArray(raw.rows) ? raw.rows : parseCsv(asString(raw.csv));
+				const input = Array.isArray(raw.rows) ? raw.rows : parseCsv(asString(raw.csv));
 				const created: Array<{ id: string; title: string }> = [];
-				for (const row of rows) {
+				for (const row of input) {
 					const data = asRecord(row);
 					const title = asString(data.title);
 					if (!title) continue;
+					const listingType = listingTypeBySlug(asString(data.listing_type)).slug;
 					const item = await ctx.content.create(LISTINGS, {
 						title,
 						excerpt: asString(data.excerpt),
 						description: asString(data.description),
-						listing_type: asString(data.listing_type) || "business",
+						listing_type: listingType,
 						city: asString(data.city),
 						address: asString(data.address),
 						lat: asNumber(data.lat),
@@ -556,7 +533,7 @@ const plugin: SandboxedPlugin = {
 					await ctx.storage.submissions.put(item.id, {
 						listingId: item.id,
 						title,
-						listing_type: asString(data.listing_type) || "business",
+						listing_type: listingType,
 						city: asString(data.city),
 						status: "pending",
 						createdAt: nowIso(),
@@ -567,43 +544,43 @@ const plugin: SandboxedPlugin = {
 			},
 		},
 		privacy: {
-			public: true,
+			permission: MEMBER,
 			handler: async (routeCtx, ctx) => {
-				const raw = asRecord(routeCtx.input);
-				const memberId = routeCtx.user?.id || memberIdFrom(raw);
-				const action = asString(raw.action) || "export";
+				const user = routeCtx.user as Member | undefined;
+				if (!user) return SIGN_IN;
+				const mine = { where: { member_id: user.id }, limit: 200 };
 				const [reviews, claims, favorites] = await Promise.all([
-					ctx.storage.reviews.query({ limit: 200 }),
-					ctx.storage.claims.query({ limit: 200 }),
-					ctx.storage.favorites.query({ limit: 200 }),
+					ctx.storage.reviews.query(mine),
+					ctx.storage.claims.query(mine),
+					ctx.storage.favorites.query(mine),
 				]);
-				const mine = {
-					reviews: reviews.items.filter((row) => asString(asRecord(row.data).member_id) === memberId),
-					claims: claims.items.filter((row) => asString(asRecord(row.data).member_id) === memberId),
-					favorites: favorites.items.filter((row) => asString(asRecord(row.data).member_id) === memberId),
-				};
-				if (action === "erase") {
+				if (asString(asRecord(routeCtx.input).action) === "erase") {
 					await Promise.all([
-						...mine.reviews.map((row) => ctx.storage.reviews.delete(row.id)),
-						...mine.claims.map((row) => ctx.storage.claims.delete(row.id)),
-						...mine.favorites.map((row) => ctx.storage.favorites.delete(row.id)),
+						...reviews.items.map((row) => ctx.storage.reviews.delete(row.id)),
+						...claims.items.map((row) => ctx.storage.claims.delete(row.id)),
+						...favorites.items.map((row) => ctx.storage.favorites.delete(row.id)),
 					]);
-					return { ok: true, erased: true, member_id: memberId };
+					return { ok: true, erased: true };
 				}
-				return { ok: true, member_id: memberId, ...mine };
+				return { ok: true, reviews: rows(reviews), claims: rows(claims), favorites: rows(favorites) };
 			},
 		},
 		renew: {
-			public: true,
+			permission: MEMBER,
 			methods: ["POST"],
 			handler: async (routeCtx, ctx) => {
+				const user = routeCtx.user as Member | undefined;
+				if (!user) return SIGN_IN;
 				const listingId = asString(asRecord(routeCtx.input).listingId);
 				if (!listingId || !ctx.content?.update) {
 					return { ok: false, error: { code: "VALIDATION_ERROR", message: "Listing is required." } };
 				}
+				const owner = asRecord(await ctx.storage.submissions.get(listingId)).member_id;
+				if (owner !== user.id && user.role < ADMIN_ROLE) {
+					return { ok: false, error: { code: "FORBIDDEN", message: "Only the listing owner can renew it." } };
+				}
 				const existing = await ctx.content.get?.(LISTINGS, listingId);
 				if (!existing) return { ok: false, error: { code: "NOT_FOUND" } };
-				const next = listingFromContent(existing);
 				const expires = new Date();
 				expires.setFullYear(expires.getFullYear() + 1);
 				await ctx.content.update(LISTINGS, listingId, {
@@ -611,7 +588,7 @@ const plugin: SandboxedPlugin = {
 					listing_status: "live",
 					expires_at: expires.toISOString(),
 				});
-				return { ok: true, listingId, listing_status: "live", expires_at: expires.toISOString(), title: next.title };
+				return { ok: true, listingId, listing_status: "live", expires_at: expires.toISOString() };
 			},
 		},
 		admin: {

@@ -2,6 +2,31 @@
 
 Versions match `package.json`, the git tag, and the EmDash registry release. Newest first. Never publish a version that is not on `origin/main`.
 
+## [0.3.0] - 2026-10-13
+
+Members sign in, the core flows finish, and the directory works in dark mode. Copy `site-kit/` again after you update: the pages and the CSS changed.
+
+- New      - Members act as their signed-in account. Adding a listing, reviewing, saving, claiming and the dashboard need a sign-in. Guests browse and can message a listing.
+- New      - `review` route for members. One review per member per listing. Writing again replaces it and sends it back for approval.
+- New      - Registry listing has a name, icon, banner, screenshots, long description, install steps and FAQ.
+- Improve  - Approving or rejecting a review recalculates the listing rating.
+- Improve  - Approving a claim marks the listing as claimed and makes the claimant its owner.
+- Improve  - Reviews and Claims tables show the listing name, the star count and the full text being approved.
+- Improve  - Spam keywords can be edited in Settings.
+- Improve  - The submit limit is eight per hour per member instead of a permanent block.
+- Improve  - Listing schema uses the listing type's own schema.org type.
+- Improve  - Calendar lists upcoming events only, soonest first.
+- Fix      - Submitting with Require moderation off publishes the listing instead of leaving it as an unlisted draft.
+- Fix      - Reviews and Claims admin pages failed to load once they had a row to show.
+- Fix      - The directory was unreadable in dark mode. Kit colours now follow the site theme.
+- Fix      - Search icons overlapped the placeholder text.
+- Fix      - A missing listing returns a real 404.
+- Security - Import, export and the claims list need an admin. A member id sent in a request is ignored.
+- Security - Kit pages escape review, listing and dashboard text before showing it.
+- Security - A review or claim rewritten after the admin loaded the page cannot be approved without a second look.
+- Dev      - `reviews` is read only. `favorites`, `dashboard`, `privacy`, `renew`, `claims` and `submit` are member routes. `import` is admin only.
+- Dev      - One `api`, `esc` and `notify` helper in `site-kit/lib/listora.ts`. Typecheck runs inside `npm test`.
+
 ## [0.2.1] - 2026-10-13
 
 Site-kit chrome. Copy `site-kit/` again after install. Plugin routes stay the same.

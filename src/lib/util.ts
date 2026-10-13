@@ -48,7 +48,9 @@ export function nowIso(): string {
 	return new Date().toISOString();
 }
 
-export function memberIdFrom(input: unknown, fallback = "demo-member"): string {
-	const raw = asRecord(input);
-	return asString(raw.member_id) || asString(raw.memberId) || fallback;
+export type Row = Record<string, unknown> & { id: string };
+
+/** Flatten a storage query result into plain rows carrying their id. */
+export function rows(result: { items: Array<{ id: string; data: unknown }> }): Row[] {
+	return result.items.map((item) => ({ ...asRecord(item.data), id: item.id }));
 }

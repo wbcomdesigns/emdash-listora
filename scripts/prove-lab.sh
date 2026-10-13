@@ -61,32 +61,42 @@ types="$(json "$BASE/_emdash/api/plugins/listora/types")"
 echo "$types" | grep -q "restaurant" || fail "types"
 ok "types"
 
-reviews="$(json "$BASE/_emdash/api/plugins/listora/reviews?listingId=listing-golden-fork")"
+fork_id="$(echo "$search" | sed -n 's/.*"id":"\([^"]*\)","slug":"the-golden-fork".*/\1/p')"
+[[ -n "$fork_id" ]] || fail "Golden Fork id from search"
+reviews="$(json "$BASE/_emdash/api/plugins/listora/reviews?listingId=$fork_id")"
 echo "$reviews" | grep -q "Handmade pasta" || fail "reviews"
 ok "reviews"
 
-dash="$(json "$BASE/_emdash/api/plugins/listora/dashboard?member_id=demo-member")"
+# Member and admin routes refuse guests, then answer the signed-in dev admin.
+JAR="$(mktemp)"
+trap 'rm -f "$JAR"' EXIT
+status() { curl -s -o /dev/null -w "%{http_code}" -H "X-EmDash-Request: 1" -H "Origin: $BASE" "$@"; }
+for route in dashboard favorites privacy "import?format=json"; do
+	[[ "$(status "$BASE/_emdash/api/plugins/listora/$route")" == "401" ]] || fail "guest refused on $route"
+done
+ok "guests refused on member and admin routes"
+
+curl -sf -c "$JAR" -o /dev/null "$BASE/_emdash/api/setup/dev-bypass?redirect=/"
+dash="$(json -b "$JAR" "$BASE/_emdash/api/plugins/listora/dashboard")"
 echo "$dash" | grep -q '"favorites"' || fail "dashboard"
-ok "dashboard"
+ok "dashboard (signed in)"
 
-export_json="$(json "$BASE/_emdash/api/plugins/listora/import?format=json")"
+export_json="$(json -b "$JAR" "$BASE/_emdash/api/plugins/listora/import?format=json")"
 echo "$export_json" | grep -q '"count"' || fail "export json"
-ok "export json"
+ok "export json (admin)"
 
-geo="$(json "$BASE/_emdash/api/plugins/listora/import?format=geojson")"
+geo="$(json -b "$JAR" "$BASE/_emdash/api/plugins/listora/import?format=geojson")"
 echo "$geo" | grep -q "FeatureCollection" || fail "geojson"
-ok "geojson"
+ok "geojson (admin)"
 
 dup="$(json "$BASE/_emdash/api/plugins/listora/duplicate?title=The%20Golden%20Fork")"
 echo "$dup" | grep -q "the-golden-fork" || fail "duplicate"
 ok "duplicate"
 
-spam="$(curl -sf -X POST "$BASE/_emdash/api/plugins/listora/submit" \
+spam="$(json -b "$JAR" -X POST "$BASE/_emdash/api/plugins/listora/submit" \
 	-H "Content-Type: application/json" \
-	-H "X-EmDash-Request: 1" \
-	-H "Origin: $BASE" \
 	-d '{"title":"Test","company_website":"https://spam.example"}' || true)"
-echo "$spam" | grep -q "VALIDATION_ERROR\|Submission rejected\|ok.:false" || fail "honeypot"
+echo "$spam" | grep -q "Submission rejected" || fail "honeypot"
 ok "honeypot"
 
 echo "All requested checks passed for drop=$DROP"

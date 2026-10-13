@@ -1,11 +1,10 @@
 ---
-import { getEmDashCollection } from "emdash";
 import Base from "../../layouts/Base.astro";
 import "../../styles/listora-ui.css";
 
 const tab = Astro.url.searchParams.get("tab") || "overview";
-const { entries } = await getEmDashCollection("listings", { limit: 80 });
-const expired = entries.filter((entry) => entry.data.listing_status === "expired");
+const user = Astro.locals.user as { name?: string | null; email?: string } | undefined;
+const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.pathname + Astro.url.search)}`;
 ---
 
 <Base title="Your listings" description="Owner dashboard for listings, reviews, claims, and favorites.">
@@ -13,10 +12,20 @@ const expired = entries.filter((entry) => entry.data.listing_status === "expired
 		<header class="listora-page-head">
 			<div>
 				<h1>Dashboard</h1>
-				<p>Signed in as the demo member on this local lab.</p>
+				<p>{user ? `Signed in as ${user.name || user.email}.` : "Your listings, reviews, claims and saved places."}</p>
 			</div>
 			<a class="listora-btn" href="/listings/submit/">Add a listing</a>
 		</header>
+		{
+			user ? null : (
+				<div class="listora-empty">
+					<h2>Sign in to see your dashboard</h2>
+					<p>Your listings, reviews, claims and saved places live here.</p>
+					<a class="listora-btn" href={loginUrl}>Sign in</a>
+				</div>
+			)
+		}
+		{user ? (
 		<div class="listora-dash">
 			<nav aria-label="Dashboard">
 				<a class:list={{ "listora-chip": true, "is-active": tab === "overview" }} href="/account/">Overview</a>
@@ -26,21 +35,9 @@ const expired = entries.filter((entry) => entry.data.listing_status === "expired
 				<a class:list={{ "listora-chip": true, "is-active": tab === "favorites" }} href="/account/?tab=favorites">Favorites</a>
 				<a class:list={{ "listora-chip": true, "is-active": tab === "profile" }} href="/account/?tab=profile">Profile</a>
 			</nav>
-			<div id="dash-main" data-tab={tab} data-expired={expired[0]?.data.id ?? ""}>
+			<div id="dash-main" data-tab={tab}>
 				<section id="overview-panel">
 					<div class="listora-chips" id="dash-counts"></div>
-					{
-						expired.length ? (
-							<form class="listora-form-section" id="renew-form" data-id={expired[0].data.id}>
-								<h2>Renew</h2>
-								<p class="listora-helper">{expired[0].data.title} has expired. Renewing puts it back in review.</p>
-								<div class="listora-actions">
-									<button class="listora-btn" type="submit" id="renew-btn">Renew listing</button>
-								</div>
-								<p id="renew-status" class="listora-status" hidden></p>
-							</form>
-						) : null
-					}
 				</section>
 				<section id="list-panel" hidden>
 					<h2>My listings</h2>
@@ -61,7 +58,7 @@ const expired = entries.filter((entry) => entry.data.listing_status === "expired
 				<section id="profile-panel" hidden>
 					<form class="listora-form-section" id="privacy-form">
 						<h2>Profile and privacy</h2>
-						<p class="listora-helper">Export demo-member reviews, claims, and favorites as JSON.</p>
+						<p class="listora-helper">Download your reviews, claims and favorites as JSON.</p>
 						<div class="listora-actions">
 							<button class="listora-btn" type="submit">Export my data</button>
 						</div>
@@ -70,10 +67,13 @@ const expired = entries.filter((entry) => entry.data.listing_status === "expired
 				</section>
 			</div>
 		</div>
+		) : null}
 	</div>
 </Base>
 
 <script>
+	import { api, esc } from "../../lib/listora";
+
 	const tab = document.getElementById("dash-main")?.getAttribute("data-tab") || "overview";
 	const panels: Record<string, string> = {
 		overview: "overview-panel",
@@ -88,70 +88,52 @@ const expired = entries.filter((entry) => entry.data.listing_status === "expired
 		if (node) node.hidden = key !== tab;
 	});
 
+	const LABELS: Record<string, string> = { listings: "Listings", reviews: "Reviews", claims: "Claims", favorites: "Favorites" };
+
+	function list(items: Array<Record<string, unknown>>, keys: string[]) {
+		return items.length
+			? `<ul class="listora-dash-list">${items
+					.map((item) => `<li class="listora-review">${keys.map((key) => esc(item[key])).filter(Boolean).join(" · ")}</li>`)
+					.join("")}</ul>`
+			: `<div class="listora-empty"><h2>Nothing here yet</h2><p>This tab fills as you use the directory.</p></div>`;
+	}
+
+	function fill(id: string, html: string) {
+		const node = document.getElementById(id);
+		if (node) node.innerHTML = html;
+	}
+
 	async function load() {
-		const response = await fetch("/_emdash/api/plugins/listora/dashboard?member_id=demo-member", {
-			credentials: "same-origin",
-			headers: { "X-EmDash-Request": "1" },
-		});
-		const json = await response.json();
-		const data = json.data ?? {};
-		const counts = data.counts ?? {};
-		const countBox = document.getElementById("dash-counts");
-		if (countBox) {
-			countBox.innerHTML = Object.entries(counts)
-				.map(([key, value]) => `<span class="listora-chip">${key}: ${value}</span>`)
-				.join("");
+		if (!document.getElementById("dash-main")) return;
+		const data = await api("dashboard");
+		if (!data.ok) {
+			fill("dash-counts", `<p class="listora-status" data-tone="error">${esc(data.error?.message || "Could not load your dashboard.")}</p>`);
+			return;
 		}
-		const list = (items: Array<Record<string, unknown>>, keys: string[]) =>
-			items.length
-				? items
-						.map((item) => `<article class="listora-review">${keys.map((key) => item[key] ?? "").join(" · ")}</article>`)
-						.join("")
-				: `<div class="listora-empty"><h2>Nothing here</h2><p>This tab fills when you use the directory.</p></div>`;
-		const listings = document.getElementById("dash-listings");
-		const reviews = document.getElementById("dash-reviews");
-		const claims = document.getElementById("dash-claims");
-		const favs = document.getElementById("dash-favs");
-		if (listings) listings.innerHTML = list(data.listings ?? [], ["title", "status", "city"]);
-		if (reviews) reviews.innerHTML = list(data.reviews ?? [], ["title", "stars", "status"]);
-		if (claims) claims.innerHTML = list(data.claims ?? [], ["listingId", "status"]);
-		if (favs) favs.innerHTML = list(data.favorites ?? [], ["listingId"]);
+		fill(
+			"dash-counts",
+			Object.entries((data.counts ?? {}) as Record<string, number>)
+				.map(([key, value]) => `<span class="listora-chip">${esc(LABELS[key] ?? key)}: ${esc(value)}</span>`)
+				.join(""),
+		);
+		type Rows = Array<Record<string, unknown>>;
+		fill("dash-listings", list(data.listings as Rows, ["title", "listing_type", "city", "status"]));
+		fill("dash-reviews", list(data.reviews as Rows, ["title", "body", "status"]));
+		fill("dash-claims", list(data.claims as Rows, ["name", "status"]));
+		fill("dash-favs", list(data.favorites as Rows, ["listingId"]));
 	}
 
 	document.getElementById("privacy-form")?.addEventListener("submit", async (event) => {
 		event.preventDefault();
 		const form = event.target as HTMLFormElement;
 		form.setAttribute("aria-busy", "true");
-		const response = await fetch("/_emdash/api/plugins/listora/privacy?member_id=demo-member&action=export", {
-			credentials: "same-origin",
-			headers: { "X-EmDash-Request": "1" },
-		});
-		const json = await response.json();
+		const data = await api("privacy");
+		form.removeAttribute("aria-busy");
 		const box = document.getElementById("export-box");
 		if (box) {
 			box.hidden = false;
-			box.textContent = JSON.stringify(json.data, null, 2);
+			box.textContent = JSON.stringify(data, null, 2);
 		}
-		form.removeAttribute("aria-busy");
-	});
-
-	document.getElementById("renew-form")?.addEventListener("submit", async (event) => {
-		event.preventDefault();
-		const form = event.target as HTMLFormElement;
-		form.setAttribute("aria-busy", "true");
-		await fetch("/_emdash/api/plugins/listora/renew", {
-			method: "POST",
-			credentials: "same-origin",
-			headers: { "Content-Type": "application/json", "X-EmDash-Request": "1" },
-			body: JSON.stringify({ listingId: form.dataset.id }),
-		});
-		const status = document.getElementById("renew-status");
-		if (status) {
-			status.hidden = false;
-			status.dataset.tone = "success";
-			status.textContent = "Renewed. The listing is back in review.";
-		}
-		form.removeAttribute("aria-busy");
 	});
 
 	load();
