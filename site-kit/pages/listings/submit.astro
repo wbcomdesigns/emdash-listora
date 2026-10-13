@@ -1,25 +1,28 @@
 ---
-import Base from "../../layouts/Base.astro";
+import { getTaxonomyTerms } from "emdash";
+import Layout from "../../layouts/ListoraLayout.astro";
 import { LISTING_TYPES } from "../../lib/listora";
 import "../../styles/listora-ui.css";
 
 // This page differs per visitor. Sites cache pages without regard to cookies, so say so.
 Astro.response.headers.set("Cache-Control", "private, no-store");
 const user = Astro.locals.user;
+// The site's own categories. A site with none still gets a working form.
+const categories = await getTaxonomyTerms("listing_category").catch(() => []);
 const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.pathname)}`;
 ---
 
-<Base
+<Layout
 	title="Add a listing"
 	description="Submit a directory listing in five steps. New listings stay in review until they are published."
 >
 	<div class="listora-block">
 		<header class="listora-page-head">
 			<div>
-				<h1>Add a listing</h1>
-				<p>Type, basics, details, categories, then a card preview.</p>
+				<h1 id="wizard-title">Add a listing</h1>
+				<p id="wizard-intro">Type, basics, details, categories, then a card preview.</p>
 			</div>
-			<a class="listora-btn listora-btn--ghost" href="/listings/">All listings</a>
+			<a class="listora-btn listora-btn--ghost" id="wizard-back" href="/listings/">All listings</a>
 		</header>
 
 		{
@@ -150,21 +153,18 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 				<div class="listora-field">
 					<label class="listora-label" for="category">Category</label>
 					<select id="category" class="listora-input" name="category">
-						<option value="fine-dining">Fine Dining</option>
-						<option value="casual">Casual</option>
-						<option value="services">Services</option>
-						<option value="retail">Retail</option>
-						<option value="apartment">Apartment</option>
+						<option value="">No category</option>
+						{categories.map((term) => <option value={term.slug}>{term.label}</option>)}
 					</select>
 				</div>
 				<div class="listora-form-grid">
 					<div class="listora-field">
 						<label class="listora-label" for="country">Country</label>
-						<input id="country" class="listora-input" name="country" value="US" autocomplete="country" />
+						<input id="country" class="listora-input" name="country" autocomplete="country" />
 					</div>
 					<div class="listora-field">
 						<label class="listora-label" for="state">State</label>
-						<input id="state" class="listora-input" name="state" value="NY" autocomplete="address-level1" />
+						<input id="state" class="listora-input" name="state" autocomplete="address-level1" />
 					</div>
 				</div>
 			</section>
@@ -191,42 +191,18 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 		</Fragment>
 		) : null}
 	</div>
-</Base>
+</Layout>
 
 <script>
-	import { api, esc } from "../../lib/listora";
+	import { api, esc, TYPE_FIELDS, typeName } from "../../lib/listora";
 
 	const form = document.getElementById("listora-submit") as HTMLFormElement | null;
 	if (form) wizard(form);
 
 	function wizard(form: HTMLFormElement) {
 	let step = 1;
-	const typeFields: Record<string, Array<{ key: string; label: string; help: string }>> = {
-		restaurant: [
-			{ key: "cuisine", label: "Cuisine", help: "Italian, Korean, and so on." },
-			{ key: "price_range", label: "Price range", help: "Use $ to $$$." },
-		],
-		hotel: [{ key: "star_rating", label: "Stars", help: "1 to 5." }],
-		"real-estate": [
-			{ key: "beds", label: "Bedrooms", help: "Whole number." },
-			{ key: "baths", label: "Bathrooms", help: "Whole number." },
-			{ key: "price", label: "Price", help: "Asking or nightly rate." },
-		],
-		event: [
-			{ key: "event_start", label: "Starts", help: "Date and time." },
-			{ key: "event_end", label: "Ends", help: "Date and time." },
-		],
-		job: [
-			{ key: "salary", label: "Salary", help: "Range is fine." },
-			{ key: "job_type", label: "Job type", help: "Full-time, contract, or intern." },
-		],
-		healthcare: [{ key: "specialty", label: "Specialty", help: "What the practice treats." }],
-		education: [{ key: "program", label: "Program", help: "Course or school name." }],
-		classified: [{ key: "asking_price", label: "Asking price", help: "What you want for the item." }],
-		place: [{ key: "place_kind", label: "Kind of place", help: "Park, museum, or trail." }],
-		business: [{ key: "year_founded", label: "Year founded", help: "Four digits if you know it." }],
-	};
-
+	// /listings/submit/?edit=<listing> opens the same form for a listing the member already owns.
+	const editId = new URLSearchParams(location.search).get("edit") || "";
 	function setFieldError(id: string, errorId: string, show: boolean) {
 		const input = document.getElementById(id) as HTMLInputElement | null;
 		const error = document.getElementById(errorId);
@@ -245,6 +221,12 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 			if (Number(node.dataset.step) === step) node.setAttribute("aria-current", "step");
 			else node.removeAttribute("aria-current");
 		});
+		// Say where we are: focus lands on the new step's heading, which a screen reader then reads.
+		const heading = form.querySelector<HTMLElement>(`[data-panel="${step}"] h2`);
+		if (heading) {
+			heading.tabIndex = -1;
+			heading.focus();
+		}
 		(document.getElementById("back-btn") as HTMLButtonElement).hidden = step === 1;
 		(document.getElementById("next-btn") as HTMLButtonElement).hidden = step === 5;
 		(document.getElementById("submit-btn") as HTMLButtonElement).hidden = step !== 5;
@@ -255,10 +237,10 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 		const type = String(new FormData(form).get("listing_type") || "business");
 		const box = document.getElementById("type-fields");
 		if (!box) return;
-		box.innerHTML = (typeFields[type] ?? [])
+		box.innerHTML = (TYPE_FIELDS[type] ?? [])
 			.map(
 				(field) =>
-					`<div class="listora-field"><label class="listora-label" for="${field.key}">${field.label}</label><input id="${field.key}" class="listora-input" name="${field.key}" aria-describedby="${field.key}-help" /><p class="listora-helper" id="${field.key}-help">${field.help}</p></div>`,
+					`<div class="listora-field"><label class="listora-label" for="${field.key}">${field.label}</label><input id="${field.key}" class="listora-input" name="${field.key}" type="${field.type || "text"}" aria-describedby="${field.key}-help" /><p class="listora-helper" id="${field.key}-help">${field.help}</p></div>`,
 			)
 			.join("");
 	}
@@ -268,13 +250,14 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 		const preview = document.getElementById("preview");
 		const type = String(data.listing_type || "business");
 		if (preview) {
-			preview.innerHTML = `<article class="listora-card"><div class="listora-card-body"><p class="listora-meta"><span class="listora-badge listora-badge--type">${esc(type)}</span></p><h2>${esc(data.title || "Untitled")}</h2><p class="listora-meta">${esc(data.city || "City not set")}</p><p>${esc(data.excerpt || "No summary yet.")}</p></div></article>`;
+			preview.innerHTML = `<article class="listora-card"><div class="listora-card-body"><p class="listora-meta"><span class="listora-badge listora-badge--type">${esc(typeName(type))}</span></p><h2>${esc(data.title || "Untitled")}</h2><p class="listora-meta">${esc(data.city || "City not set")}</p><p>${esc(data.excerpt || "No summary yet.")}</p></div></article>`;
 		}
 	}
 
 	async function checkDuplicate(title: string) {
 		const warning = document.getElementById("dup-warning");
-		if (!warning || !title.trim()) return;
+		// When editing, the match would be the listing itself.
+		if (editId || !warning || !title.trim()) return;
 		const data = await api(`duplicate?title=${encodeURIComponent(title)}`);
 		const matches = (data.matches ?? []) as Array<{ slug: string; title: string }>;
 		warning.hidden = matches.length === 0;
@@ -307,10 +290,70 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 			return;
 		}
 		setFieldError("title", "title-error", false);
+		// A field the browser can check (an email, a web address) is checked on its own step,
+		// with the browser's own message next to it, not at the very end.
+		const wrong = [...form.querySelectorAll<HTMLInputElement>(`[data-panel="${step}"] input`)].find((input) => !input.checkValidity());
+		if (wrong) {
+			wrong.reportValidity();
+			return;
+		}
 		showStep(Math.min(5, step + 1));
 	});
 	document.getElementById("back-btn")?.addEventListener("click", () => showStep(Math.max(1, step - 1)));
 	renderTypeFields();
+	if (editId) startEdit();
+
+	async function startEdit() {
+		const status = document.getElementById("listora-status");
+		const data = await api(`edit?listingId=${encodeURIComponent(editId)}`);
+		if (!data.ok) {
+			// Not theirs, not public, or not found: say so and offer no form.
+			form.hidden = true;
+			document.getElementById("wizard-steps")?.setAttribute("hidden", "");
+			if (status) {
+				status.hidden = false;
+				status.dataset.tone = "error";
+				status.innerHTML = `${esc(data.error?.message || "That listing is not available to edit.")} <a href="/account/?tab=listings">Back to your listings</a>`;
+			}
+			return;
+		}
+		const values = (data.values ?? {}) as Record<string, unknown>;
+		const title = document.getElementById("wizard-title");
+		const intro = document.getElementById("wizard-intro");
+		if (title) title.textContent = "Edit your listing";
+		document.title = document.title.replace("Add a listing", "Edit your listing");
+		const back = document.getElementById("wizard-back") as HTMLAnchorElement | null;
+		if (back) {
+			back.textContent = "Back to my listings";
+			back.href = "/account/?tab=listings";
+		}
+		if (intro) {
+			intro.textContent = data.pending
+				? "You already sent changes that are waiting for approval. Sending again replaces them."
+				: "Your listing stays as it is until your changes are approved.";
+		}
+		// The type of a live listing is fixed: pick it, lock the others, and start on Basics.
+		form.querySelectorAll<HTMLInputElement>('input[name="listing_type"]').forEach((input) => {
+			input.checked = input.value === data.listing_type;
+			input.disabled = input.value !== data.listing_type;
+		});
+		renderTypeFields();
+		const set = (name: string, value: unknown) => {
+			const field = form.elements.namedItem(name);
+			if (field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement || field instanceof HTMLSelectElement) {
+				field.value = String(value ?? "");
+			}
+		};
+		for (const [key, value] of Object.entries(values)) {
+			if (key === "type_fields") for (const [inner, text] of Object.entries((value ?? {}) as Record<string, unknown>)) set(inner, text);
+			else set(key, value);
+		}
+		// The category is set by the site's admin, so it is not part of an edit.
+		document.getElementById("category")?.closest<HTMLElement>(".listora-field")?.setAttribute("hidden", "");
+		const submit = document.getElementById("submit-btn");
+		if (submit) submit.textContent = "Send changes for approval";
+		showStep(2);
+	}
 
 	form.addEventListener("submit", async (event) => {
 		event.preventDefault();
@@ -332,9 +375,11 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 		button.disabled = true;
 		form.setAttribute("aria-busy", "true");
 		try {
-			const result = await api("submit", {
+			const result = await api(editId ? "edit" : "submit", {
+					...(editId ? { listingId: editId } : {}),
 					title,
 					listing_type: String(data.get("listing_type") ?? "business"),
+					category: String(data.get("category") ?? ""),
 					excerpt: String(data.get("excerpt") ?? ""),
 					description: String(data.get("description") ?? ""),
 					phone: String(data.get("phone") ?? ""),
@@ -367,6 +412,18 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 					},
 				});
 			if (!result.ok) throw new Error(result.error?.message || "Could not submit.");
+			if (editId) {
+				// Stay on the form with what they sent, and say plainly what happens next.
+				if (status) {
+					status.hidden = false;
+					status.dataset.tone = "success";
+					status.innerHTML = result.unchanged
+						? 'Nothing was different, so there is nothing to approve. <a href="/account/?tab=listings">Back to your listings</a>'
+						: 'Thanks. Your changes are waiting for approval. Your listing stays as it is until then. <a href="/account/?tab=listings">Back to your listings</a>';
+					status.scrollIntoView({ block: "center" });
+				}
+				return;
+			}
 			form.reset();
 			showStep(1);
 			if (status) {

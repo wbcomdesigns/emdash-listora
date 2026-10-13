@@ -1,4 +1,4 @@
-import { hoursLabel, parseHours } from "./hours";
+import { parseHours } from "./hours";
 import { listingTypeBySlug } from "./types";
 import { asBoolean, asNumber, asRecord, asString, asStringArray, parseJson } from "./util";
 
@@ -38,11 +38,9 @@ export type ListingCard = {
 	is_claimed: boolean;
 	is_featured: boolean;
 	owner_name: string;
-	timezone: string;
 	rating_avg: number;
 	rating_count: number;
 	hours: ReturnType<typeof parseHours>;
-	open_label: string;
 	services: ServiceRow[];
 	amenities: string[];
 	price_range: string;
@@ -62,7 +60,6 @@ export function listingFromContent(
 	const data = asRecord(item.data);
 	const type = listingTypeBySlug(asString(data.listing_type) || "business");
 	const hours = parseHours(data.hours);
-	const timezone = asString(data.timezone) || "America/New_York";
 	const websiteValue = data.website;
 	const website =
 		typeof websiteValue === "string"
@@ -91,12 +88,11 @@ export function listingFromContent(
 		is_claimed: asBoolean(data.is_claimed),
 		is_featured: asBoolean(data.is_featured),
 		owner_name: asString(data.owner_name),
-		timezone,
 		// Ratings live in plugin storage since 0.4.0, never on the listing.
 		rating_avg: rating?.average ?? 0,
 		rating_count: rating?.count ?? 0,
 		hours,
-		open_label: hoursLabel(hours, timezone),
+		// Open or closed is worked out by the site page, in the site's own time zone.
 		services: parseJson<ServiceRow[]>(data.services, []),
 		amenities: asStringArray(data.amenities),
 		price_range: asString(data.price_range),

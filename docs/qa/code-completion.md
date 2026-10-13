@@ -39,7 +39,7 @@ Status words: Pass, Thin, Lab only, Missing, Skip.
 | --- | --- | --- |
 | Tokens and chrome | `site-kit/listora-ui.css` | Pass (copied into the lab) |
 | Collection + NYC seed | `site-kit/seed/listings.mjs` | Lab only |
-| Import fixture | `site-kit/seed/import/sample.csv` | Pass |
+| Import sample | `site-kit/public/vendor/listora-sample.csv` | Pass |
 | Archive page | `site-kit/pages/listings/index.astro` | Thin. In the kit. Apply not proven on a second site |
 | Detail page | `site-kit/pages/listings/[slug].astro` | Thin |
 | Submit page | `site-kit/pages/listings/submit.astro` | Thin |

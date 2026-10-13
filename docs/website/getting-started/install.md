@@ -1,59 +1,80 @@
-# Install the plugin
+# Set up Listora on your site
 
-**Included in Free**
+This takes a developer about ten minutes. The plugin gives you the directory engine and the admin screens. Your site's own pages (`/listings/` and the rest) come from a kit of files that one command copies in, because an EmDash plugin cannot add pages to a site by itself.
 
-Two install paths. Use the lab path while you change code. Use the registry path on a real EmDash site after the listing is approved.
+You need: an EmDash 1.2 site with a sandbox runner (Node `@emdash-cms/sandbox-workerd` locally, Cloudflare `sandbox()` in production), and Node 22.16 or later.
 
-## Lab (developers)
+## 1. Install the plugin
 
-On a new machine, run [Set up a new machine](new-machine.md). That creates the EmDash site, wires this plugin as a `file:` package, and copies the kit.
+In the admin: Registry, search `@vapvarun.bsky.social/listora`, review what it asks for, Install.
+
+## 2. Run the setup command
 
 ```bash
-# plugin: this repo
-# site: sibling emdash-local (or $LISTORA_LAB)
-./scripts/setup-lab.sh
+git clone --depth 1 https://github.com/wbcomdesigns/emdash-listora
+emdash-listora/scripts/add-to-site.sh /path/to/your/site
 ```
 
-`astro.config.mjs` must load the sandbox runner and the plugin:
+It copies the directory pages, styles and scripts into your site, writes a small seed file for the listings collection, and prints what is left. It is safe to run again after every plugin update: it replaces Listora's own files and never touches `src/layouts/ListoraLayout.astro` once that file exists. If your site already has its own page at one of the kit's addresses (an `/account/` page, for example), the command stops and names it, and copies nothing.
+
+## 3. Create the listings collection
+
+```bash
+cd /path/to/your/site
+npx emdash seed .emdash/listora-seed.json --no-content
+```
+
+This adds the `listings` collection, its fields and four taxonomies (categories, features, locations, tags). It skips anything that already exists and adds no content. Add `-d <file>` if your database is not `./data.db`.
+
+On a hosted site whose database you cannot reach from the command line, create the collection in the admin instead: Content Types, New, slug `listings`, then add the fields listed in `.emdash/listora-seed.json`. We have only proven the command on a local SQLite site.
+
+## 4. Point the layout at your site
+
+Open `src/layouts/ListoraLayout.astro`. It wraps every Listora page in `src/layouts/Base.astro` with `title` and `description`, which is what the EmDash templates ship. If your layout has another name or other props, change that one file.
+
+Colours and fonts come from your site: the kit reads `--color-bg`, `--color-text`, `--color-surface`, `--color-border`, `--color-brand`, `--color-on-brand` and `--font-body` when they exist, and uses its own neutral set when they do not.
+
+## 5. Add the menu links
+
+In the admin, Menus, add: `/listings/`, `/listings/submit/`, `/listings/calendar/`, `/account/`.
+
+## 6. Check four addresses
+
+Start the site and open each one:
+
+| Address | You should see |
+| --- | --- |
+| `/listings/` | The directory, empty until you add a listing |
+| `/listings/submit/` | A sign-in prompt, or the add-a-listing form when signed in |
+| `/listings/calendar/` | The events calendar |
+| `/account/` | A sign-in prompt, or the owner dashboard when signed in |
+
+To see it full first, open the admin, Listora, Listings queue, and choose **Load sample directory** (12 sample listings with reviews). Then set your options under Listora, Settings. Import and export is at `/listings/import/` for site admins.
+
+## Optional: a Listings block inside post and page text
+
+The setup command also copies a small block into `src/listora-block/`. It does nothing until you switch it on in `astro.config.mjs`:
 
 ```js
-import emdash from "emdash/astro";
-import listora from "@wbcomdesigns/listora";
+import { listoraBlock } from "./src/listora-block/descriptor.mjs";
 
-export default defineConfig({
-  integrations: [
-    emdash({
-      sandboxed: [listora],
-      sandboxRunner: "@emdash-cms/sandbox-workerd/sandbox",
-    }),
-  ],
+emdash({
+	plugins: [listoraBlock()],
+	// ...the rest of your options
 });
 ```
 
-No runner means EmDash skips sandboxed plugins and registry install fails.
+Restart the site. In any post or page, type `/listings` in the text, choose **Listings**, and fill in the form: a heading, a listing type, a category name, a city and how many to show (all optional). The block draws that many listing cards at that spot. If nothing matches, the block shows nothing.
 
-After a DB wipe, open the dev-bypass once so seed listings actually insert:
+This part runs as trusted site code, not inside the plugin sandbox, which is why it lives in your site and is switched on by hand. EmDash does not let a registry plugin add blocks to text. The plugin works the same with or without it.
 
-`http://localhost:4321/_emdash/api/setup/dev-bypass?redirect=/_emdash/admin`
+## Good to know
 
-Health check: `http://localhost:4321/_emdash/api/plugins/listora/health`
+- **Email.** Notices to owners need email set up on your site. Without it, messages still arrive in the owner's account.
+- **Photos.** Owner photos need the `gallery` field, which the seed above creates. Settings shows a notice if it is missing.
+- **Caching.** Public directory data is cached for 30 seconds.
+- **Updating.** After a plugin update, run the setup command again to refresh the kit files.
 
-## Registry (a site owner)
+## Working on the plugin itself
 
-1. Site has a sandbox runner (Node workerd locally, Cloudflare `sandbox()` in production).
-2. Admin → Registry.
-3. Search `@vapvarun.bsky.social/listora`.
-4. Review capabilities, then Install.
-
-Until the labeler approves the version testers install (`0.2.1`), the public page stays empty:
-
-https://plugins.emdashcms.com/plugins/@vapvarun.bsky.social/listora
-
-After install:
-
-1. Open Admin → Get started.
-2. Create a `listings` collection on the site if the page says it is missing.
-3. Click **Load sample directory**. That writes 12 NYC listings, reviews, favorites, and a pending claim. It does not run on health. Empty production stays empty until you click.
-4. Apply `site-kit/` (CSS, `lib/listora.ts`, pages, four menu links). The plugin alone does not create `/listings/` pages.
-
-Exact copy commands: [site-kit/README.md](https://github.com/wbcomdesigns/emdash-listora/blob/main/site-kit/README.md). The lab can still use `site-kit/seed/listings.mjs` for the larger 33-listing pack.
+See [Set up a new machine](new-machine.md) and [Local lab](local-lab.md).

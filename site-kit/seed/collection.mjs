@@ -17,7 +17,6 @@ const coreFields = [
 	{ slug: "lat", label: "Latitude", type: "number", indexed: true },
 	{ slug: "lng", label: "Longitude", type: "number" },
 	{ slug: "is_claimed", label: "Claimed", type: "boolean", indexed: true, defaultValue: false },
-	{ slug: "timezone", label: "Timezone", type: "string" },
 ];
 
 export const listingsCollection = {

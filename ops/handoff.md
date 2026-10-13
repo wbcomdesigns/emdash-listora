@@ -1,8 +1,8 @@
-# Handoff (2026-10-13, after 0.4.1)
+# Handoff (2026-10-14, 0.5.0 built and QA walked)
 
 Read this first in a new session. Then `AGENTS.md`, `CONTRIBUTING.md`, and `docs/website/getting-started/new-machine.md`.
 
-This product is Free only. No Pro. Work is tracked as GitHub issues under the `0.3.0`, `0.4.0` and `Later` milestones. Do not add Compare, Needs, credits, Google Maps, lead forms, verification, photo reviews, or native-plugin features.
+This product is Free only. No Pro. Work is tracked as GitHub issues under the `0.3.0`, `0.4.0` and `Later` milestones. There is no Basecamp board. Do not add Compare, Needs, credits, Google Maps, lead forms, verification, photo reviews, or native-plugin features.
 
 ## Where the code lives
 
@@ -41,16 +41,13 @@ npm install --legacy-peer-deps
 ./scripts/prove-lab.sh --all
 ```
 
-Override lab folder with `LISTORA_LAB`. After a kit change: edit `site-kit/`, then `./scripts/apply-kit.sh`. After a plugin change: `npm run build`, then restart the lab dev server (reset-lab also wipes the lab database). Sign in on the lab with `/_emdash/api/setup/dev-bypass?redirect=/account/`.
+Override lab folder with `LISTORA_LAB`. After a kit change: edit `site-kit/`, then `./scripts/apply-kit.sh`. Second site for proving the kit off the starter: `npm create emdash@latest -- emdash-lab-listora2 --template portfolio --platform node --pm npm --yes` beside this repo, then run the lab scripts with `LISTORA_LAB=../emdash-lab-listora2 LISTORA_PORT=4322` (and `LISTORA_BASE=http://localhost:4322` for `prove-lab.sh`). After a plugin change: `npm run build`, then restart the lab dev server (reset-lab also wipes the lab database). Sign in on the lab with `/_emdash/api/setup/dev-bypass?redirect=/account/`.
 
 `emdash-plugin publish` needs `vapvarun.bsky.social`. Open a PR. The publisher ships after merge.
 
 ## Next, in order
 
-1. Confirm the registry page shows the icon, banner and screenshots once the listing checks pass.
-2. Milestone `0.4.0` shipped paging, the Messages page, stored ratings and the kit changes for existing sites. Still open there: #23 (prove the kit on a clean second site and a preview of a live one), #20 (email the listing owner).
-3. Milestone `0.5.0`: categories and locations as filters, gallery, listing expiry, admin pages for import and settings.
-4. Milestone `Later`: type editor, reminders, health check.
+The 0.5.0 plan is locked. Read `PLAN.md`: it holds every owner decision, the order of work, and how to take a task. Work happens on the `0.5.0` branch (PR #49), never on `main`. Built so far on that branch: #23, #20, #26, #24, #27 (Settings page, queue page, dashboard card). A dashboard card asks the admin route with `{ type: "page_load", page: "widget:<id>" }`. Also built: #38, #44, #45, #43, #42, #40, #41, #25, #46 (import and export on the kit page `/listings/import/`, see PLAN.md corrections). #47 built (`scripts/add-to-site.sh` + `docs/website/getting-started/install.md`, proven on a fresh blog-template site at `~/code/emdash-lab-guide`, port 4323). #50 built: the in-text block is site code in `site-kit/blocks/` (a native plugin with site-local entry paths), proven on the lab, registry plugin untouched. #48: an independent QA pass was run on 2026-10-14 and its findings fixed (see the top of `docs/qa/QA_CHECKLIST.md` and its Known gaps). The knowxtheme.com preview was dropped: that site runs EmDash 1.1 and a preview shares the live database. Left for #48: the security review of the final commit, then merge, tag, publish (full QA, preview on knowxtheme.com, release).
 
 ## How a release is verified
 
@@ -69,13 +66,21 @@ Every case in `docs/qa/QA_CHECKLIST.md` is run in a browser as guest, subscriber
 
 | Item | Note |
 | --- | --- |
-| Second-site apply | Kit pages still import the starter's `layouts/Base.astro` and `utils/site-identity`. Not proven on a clean site |
+| Live-site preview | Kit is proven on a clean second site (`portfolio` template). Not yet proven on a preview deploy of a live fleet site (Cloudflare, EmDash 1.1) |
 | Directory size | Reads at most 500 listings and filters in memory |
-| Contact | Shown in the Messages admin page. Not emailed to anyone |
-| Dashboard rows | Read only. No edit or renew action |
-| Featured row | The same listings repeat at the top of the grid below it |
+| Contact | Stored, shown in admin Messages and in the owner's account. Nothing is mailed from the visitor's request. The hourly `notify` task (`notifyOwners`) sends each owner one notice to their account address, with no visitor text. Owner = the member on the listing's approved submission row (`listingOwner`); approving a claim moves that row. The address lives only in kv `member-email:<id>`, refreshed on member routes, deleted on erase |
+| Permissions | The next release adds `email:send`, `taxonomies:read`, `taxonomies:write`. That widens what the plugin may do, so decide the version number with the owner |
+| Categories | Filtering by category is done by the kit page, not the search route, so a search inside a category reloads the page |
+| Expiry | Off by default (0 days). The daily task is scheduled when the owner saves a number above 0. 50 listings per run |
+| Photos | `photo` route (member, byte body, 5 MB) uploads to the media library and stores a `photos` row with a random id. The member is never given the file address or media id of a waiting photo. The admin approves from the Listings queue, which appends to the listing's `gallery` repeater field (and sets the cover if empty). Approval and removal both claim the row with a guarded update first. One upload at a time per listing (kv lock). Needs the `gallery` field: a plugin cannot add fields, so Settings shows how when it is missing |
+| Owner replies | `reply` route writes `reply_draft` on the review with a guarded update; the admin approves from the Reviews page; `owner_reply` is what the public sees. A reviewer rewriting their review clears the reply |
+| Showing member text to the admin | Use a `code` block (exact text, never shortened, never read as formatting). `src/lib/edits.ts` is the one place that decides what an edit changes: the screen and the approval both call `editPatch` |
+| Owner edits | `edit` route stores only the fields that differ in `edits` (one per listing). The admin applies them from the Listings queue with `patchListing`. `EDITABLE` in `plugin.ts` is the list an owner may change. The category is not editable by the owner |
 | Banner | `images/banner.png` is the dark-text lockup on a transparent ground. Check it on the registry page |
-| Timezone | Hardcoded to America/New_York on submit and in the calendar |
+| No-photo listings | `placeholderHtml(type)` in the kit lib: a panel with a type icon. No stock photos. The owner-chosen default image is dropped: EmDash's media picker cannot be used in a plugin admin form, and choosing by file name from a long list is not good enough to ship |
+| Live search | Loads the directory page for the new query and swaps in its results (`LIVE` ids in `index.astro`). One card renderer: the server's. The plugin `search`, `listings` and `types` routes are not used by the kit; they stay as the public API |
+| Near me | Removed. EmDash core sends `Permissions-Policy: geolocation=()` on every page |
+| Time zone | The site's own, from EmDash settings (`siteZone` in the kit lib). The plugin never computes open or closed: the page does, because a plugin cannot read the site zone. Listings no longer store a zone |
 
 QA cases by role: `docs/qa/QA_CHECKLIST.md` (walk all of it before a release; `./scripts/lab-role.sh subscriber` for member cases). QA source: `docs/qa/`. Screen ticks: `docs/qa/screen-checklist.md`. Parked Pro: `docs/website/pro-features/parked-work.md`.
 

@@ -100,7 +100,6 @@ export async function loadSampleDirectory(
 			event_start: row.event_start || "",
 			type_fields: JSON.stringify(row.type_fields || {}),
 			listing_status: "live",
-			timezone: "America/New_York",
 		};
 		try {
 			const item = await ctx.content.create(LISTINGS, data);

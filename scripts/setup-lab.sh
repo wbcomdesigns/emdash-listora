@@ -48,5 +48,5 @@ echo "Lab is wired. First run (wipes the site DB so seed listings land):"
 echo "  $PLUGIN/scripts/reset-lab.sh"
 echo "  $PLUGIN/scripts/prove-lab.sh --all"
 echo
-echo "Then open http://localhost:4321/listings/"
-echo "Admin bypass: http://localhost:4321/_emdash/api/setup/dev-bypass?redirect=/_emdash/admin"
+echo "Then open http://localhost:${LISTORA_PORT:-4321}/listings/"
+echo "Admin bypass: http://localhost:${LISTORA_PORT:-4321}/_emdash/api/setup/dev-bypass?redirect=/_emdash/admin"

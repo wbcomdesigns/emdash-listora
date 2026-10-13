@@ -1,9 +1,8 @@
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { readFileSync, writeFileSync } from "node:fs";
 
 import { extraFields, listings, taxonomyTerms } from "../site-kit/seed/listings.mjs";
 import { listingMenuItems, listingTaxonomies, listingsCollection } from "../site-kit/seed/collection.mjs";
-import { labRoot, labSeedPath, pluginRoot } from "./paths.mjs";
+import { labRoot, labSeedPath } from "./paths.mjs";
 
 const lab = labRoot();
 const seedPath = labSeedPath(lab);
@@ -44,11 +43,5 @@ if (menu) {
 }
 
 writeFileSync(seedPath, `${JSON.stringify(seed, null, "\t")}\n`);
-
-mkdirSync(resolve(pluginRoot(), "site-kit/seed/import"), { recursive: true });
-writeFileSync(
-	resolve(pluginRoot(), "site-kit/seed/import/sample.csv"),
-	"title,listing_type,city,excerpt,address,lat,lng\nHarbor Bike Repair,business,Brooklyn,Same-day tube changes,Smith Street,40.688,-73.990\nRed Hook Ceramics,place,Brooklyn,Open studio hours,Van Brunt Street,40.678,-74.013\nNight Market Dumplings,restaurant,Manhattan,Late dumplings,Chinatown,40.715,-73.998\n",
-);
 
 console.log(`Seeded ${listings.length} listings into ${seedPath}`);

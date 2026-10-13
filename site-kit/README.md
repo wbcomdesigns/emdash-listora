@@ -6,33 +6,27 @@ Install `@vapvarun.bsky.social/listora` first (or the local package). Then apply
 
 ## Apply on a site
 
-On the lab, prefer `./scripts/apply-kit.sh` (or `./scripts/setup-lab.sh` the first time). Manual copy from the site root (`src/` is the Astro app):
-
 ```bash
-# CSS
-cp path/to/listora/site-kit/listora-ui.css src/styles/listora-ui.css
-
-# Helpers the pages import
-cp path/to/listora/site-kit/lib/listora.ts src/lib/listora.ts
-
-# Pages (imports expect ../../layouts/Base.astro)
-mkdir -p src/pages/listings src/pages/account
-cp path/to/listora/site-kit/pages/listings/index.astro src/pages/listings/index.astro
-cp path/to/listora/site-kit/pages/listings/\[slug\].astro src/pages/listings/\[slug\].astro
-cp path/to/listora/site-kit/pages/listings/submit.astro src/pages/listings/submit.astro
-cp path/to/listora/site-kit/pages/listings/calendar.astro src/pages/listings/calendar.astro
-cp path/to/listora/site-kit/pages/account/index.astro src/pages/account/index.astro
-
-# The map library, served from your own site (no outside host)
-mkdir -p public/vendor
-cp -R path/to/listora/site-kit/public/vendor/. public/vendor/
+path/to/emdash-listora/scripts/add-to-site.sh /path/to/your/site
 ```
 
-Collection: create a `listings` collection with the same fields the lab seed uses, or run `site-kit/seed/listings.mjs` the way the lab reset does.
+It copies everything in this folder to the right place, writes a seed for the listings collection, and prints what is left to do. Run it again after each plugin update: it never replaces `src/layouts/ListoraLayout.astro` once it exists. The full steps are in [Set up Listora on your site](../docs/website/getting-started/install.md).
 
-Demo rows: Admin → Get started → **Load sample directory** (12 NYC listings, reviews, a claim). The lab seed still loads the larger 33-listing pack. Import fixture: `site-kit/seed/import/sample.csv`.
+## Connect it to your design
+
+Every Listora page is wrapped in `src/layouts/ListoraLayout.astro`, and that file hands the page to your site's own layout. It expects `src/layouts/Base.astro` taking `title` and `description`, which is what the EmDash templates ship. If your layout has another name or other props, change that one file. No Listora page needs editing, and a kit update never replaces it.
+
+Colours and fonts come from your site: the kit reads `--color-bg`, `--color-text`, `--color-surface`, `--color-border`, `--color-brand`, `--color-on-brand` and `--font-body` when they exist, and falls back to its own neutral set when they do not.
+
+Proven on two sites: the EmDash `starter` template and a clean `portfolio` template site, as guest, member and admin, in light and dark, at 1440 and 390.
+
+Collection: `npx emdash seed .emdash/listora-seed.json --no-content` in your site, after the setup command.
+
+Demo rows: Admin → Get started → **Load sample directory** (12 NYC listings, reviews, a claim). The lab seed still loads the larger 33-listing pack.
 
 Add four menu links: `/listings/`, `/listings/submit/`, `/listings/calendar/`, `/account/`.
+
+Import and export: `/listings/import/` is for site admins only (everyone else sees a short notice), so it needs no menu link. Settings in the admin links to it. A sample spreadsheet is at `/vendor/listora-sample.csv`.
 
 `astro.config.mjs` must load the sandbox runner and the plugin. See [Install](../docs/website/getting-started/install.md).
 

@@ -31,7 +31,7 @@
 		}
 	},
 
-	"capabilities": ["content:read", "content:write", "content:publish", "schema:read"],
+	"capabilities": ["content:read", "content:write", "content:publish", "schema:read", "email:send", "taxonomies:read", "taxonomies:write", "media:write"],
 	"allowedHosts": [],
 	"storage": {
 		"submissions": {
@@ -41,7 +41,7 @@
 			"indexes": ["savedAt", "contentId", "collection"]
 		},
 		"reviews": {
-			"indexes": ["status", "listingId", "member_id", "createdAt"]
+			"indexes": ["status", "listingId", "member_id", "createdAt", "reply_status"]
 		},
 		"claims": {
 			"indexes": ["status", "listingId", "member_id", "createdAt"]
@@ -49,8 +49,14 @@
 		"favorites": {
 			"indexes": ["member_id", "listingId", "createdAt"]
 		},
+		"photos": {
+			"indexes": ["status", "listingId", "member_id", "createdAt"]
+		},
+		"edits": {
+			"indexes": ["status", "listingId", "member_id", "createdAt"]
+		},
 		"contacts": {
-			"indexes": ["listingId", "createdAt", "status"]
+			"indexes": ["listingId", "createdAt", "status", "notice"]
 		},
 		"email_log": {
 			"indexes": ["template", "status", "createdAt"]
@@ -72,7 +78,7 @@
 			},
 			{
 				"path": "/queue",
-				"label": "Listora",
+				"label": "Listings queue",
 				"icon": "buildings",
 				"group": "Listings"
 			},
@@ -93,12 +99,25 @@
 				"label": "Messages",
 				"icon": "envelope",
 				"group": "Listings"
+			},
+			{
+				"path": "/settings",
+				"label": "Settings",
+				"icon": "settings",
+				"group": "Listings"
 			}
 		],
+		"widgets": [{ "id": "waiting", "title": "Listora: waiting for you", "size": "half" }],
 		"settingsSchema": {
 			"require_moderation": {
 				"label": "Require moderation",
 				"description": "Keep public submissions as drafts until someone approves them.",
+				"type": "boolean",
+				"default": true
+			},
+			"email_messages": {
+				"label": "Email the listing owner when a message arrives",
+				"description": "A short notice to the owner's account email. The message itself stays on the site. Needs a mail provider.",
 				"type": "boolean",
 				"default": true
 			},
@@ -118,6 +137,24 @@
 					{ "value": "place", "label": "Place" },
 					{ "value": "classified", "label": "Classified" }
 				]
+			},
+			"expiry_days": {
+				"label": "Listings expire after this many days (0 = never)",
+				"description": "0 means listings never expire.",
+				"type": "number",
+				"default": 0
+			},
+			"email_expiry": {
+				"label": "Email the owner 7 days before their listing expires",
+				"description": "One short notice to the owner's account email. Needs a mail provider.",
+				"type": "boolean",
+				"default": true
+			},
+			"photo_limit": {
+				"label": "Photos per listing",
+				"description": "How many photos an owner may add to one listing. 0 turns owner photos off.",
+				"type": "number",
+				"default": 5
 			},
 			"spam_keywords": {
 				"label": "Spam keywords",

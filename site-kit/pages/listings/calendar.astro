@@ -1,7 +1,7 @@
 ---
-import { getEmDashCollection } from "emdash";
-import Base from "../../layouts/Base.astro";
-import { formatEventWhen } from "../../lib/listora";
+import { getEmDashCollection, getSiteSettings } from "emdash";
+import Layout from "../../layouts/ListoraLayout.astro";
+import { formatEventWhen, siteZone } from "../../lib/listora";
 import "../../styles/listora-ui.css";
 
 const { entries, cacheHint } = await getEmDashCollection("listings", {
@@ -9,13 +9,15 @@ const { entries, cacheHint } = await getEmDashCollection("listings", {
 	where: { listing_type: "event" },
 });
 if (Astro.cache?.enabled) Astro.cache.set(cacheHint);
-const today = new Date().toISOString().slice(0, 10);
+const zone = siteZone((await getSiteSettings())?.timezone);
+// "Today" in the site's zone, so an event tonight is not dropped early.
+const today = new Intl.DateTimeFormat("en-CA", { timeZone: zone }).format(new Date());
 const events = entries
 	.filter((entry) => String(entry.data.event_end || entry.data.event_start || "").slice(0, 10) >= today)
 	.sort((a, b) => String(a.data.event_start).localeCompare(String(b.data.event_start)));
 ---
 
-<Base title="Listing calendar" description="Upcoming events in the Listora directory.">
+<Layout title="Listing calendar" description="Upcoming events in the directory.">
 	<div class="listora-block">
 		<header class="listora-page-head">
 			<div>
@@ -36,7 +38,7 @@ const events = entries
 					{events.map((event) => (
 						<article class="listora-card">
 							<div class="listora-card-body">
-								<p class="listora-meta">{formatEventWhen(event.data.event_start)}</p>
+								<p class="listora-meta">{formatEventWhen(event.data.event_start, zone)}</p>
 								<h2>
 									<a href={`/listings/${event.id}/`}>{event.data.title}</a>
 								</h2>
@@ -48,4 +50,4 @@ const events = entries
 			)
 		}
 	</div>
-</Base>
+</Layout>

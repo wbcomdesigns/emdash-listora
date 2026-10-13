@@ -1,5 +1,7 @@
 # Agent instructions
 
+**Before anything else:** load the `emdash-plugin-development` skill. It separates what EmDash core already gives every site, what a plugin may add, and what was decided with the owner. Then read `PLAN.md`, `SCOPE.md` and `ops/handoff.md` here.
+
 Read `ops/handoff.md` first. That is the session handoff for the next change.
 
 This product is Free only. No Pro plan in this pass. Check code completion and site-owner readiness with `docs/qa/`. Do not start, surface, or continue Pro work.
@@ -10,4 +12,4 @@ On a new machine, run `./scripts/setup-lab.sh` before the daily reset/prove loop
 
 Before editing this plugin, read `skills/creating-plugins/SKILL.md` completely. Codex discovers the same directory through `.agents/skills`; Claude discovers it through `.claude/skills` and reads these instructions through `.claude/CLAUDE.md`.
 Keep `emdash-plugin.jsonc` aligned with the runtime implementation, declare every capability and host the plugin uses, and run the generated validation, typecheck, test, and build scripts after changes.
-For branches, version bumps, and registry publish, follow `CONTRIBUTING.md`. Team handbook is `docs/website/`. Never add AI co-author trailers. Never use em-dashes.
+For branches, version bumps, and registry publish, follow `CONTRIBUTING.md`. Team handbook is `docs/website/`. Never add AI co-author trailers. Never use em-dashes. Work and QA findings go to GitHub issues only. Never Basecamp.

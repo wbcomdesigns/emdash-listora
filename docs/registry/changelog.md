@@ -1,3 +1,17 @@
+## 0.5.0
+
+New permissions: sending email, reading and assigning categories, adding files to the media library.
+
+- New: owners edit their listing, add photos, read visitors' messages, reply to reviews and renew, all from their account. Edits, photos and replies wait for approval.
+- New: listing expiry with a reminder email, and an hourly notice when messages wait.
+- New: browse by category and city. Listing pages show the details of their type.
+- New: import and export as a spreadsheet, a Settings page, and a dashboard card.
+- New: one setup command adds the directory pages, and an optional Listings block for post text.
+- Improve: site time zone, live search, admin lists with Load more.
+- Security: member ids never shown, stricter checks on every member action.
+
+Run `scripts/add-to-site.sh` again after updating.
+
 ## 0.4.1
 
 - New: Delete my data on the account page.
@@ -15,21 +29,4 @@
 
 Copy `site-kit/` again after updating, including `site-kit/public/vendor/`.
 
-## 0.3.1
-
-- Fix: approving a review or claim no longer publishes unfinished edits on the listing.
-- Fix: a bad record cannot stop the Listora admin pages from loading.
-- Security: members can only review, save or claim a public listing.
-
-## 0.3.0
-
-- New: members act as their signed-in account. Guests browse and can message a listing.
-- New: one review per member per listing, approved before it shows.
-- Improve: review approval updates the listing rating. Claim approval marks the listing claimed and sets its owner.
-- Improve: moderation tables show the listing name and the full text being approved.
-- Fix: submitting with moderation off publishes the listing.
-- Fix: Reviews and Claims admin pages load when they have rows.
-- Fix: dark mode follows the site theme. Search icons no longer overlap the placeholder.
-- Security: import, export and the claims list need an admin.
-
-Full history: https://github.com/wbcomdesigns/emdash-listora/blob/main/CHANGELOG.md
+Older versions: https://github.com/wbcomdesigns/emdash-listora/blob/main/CHANGELOG.md

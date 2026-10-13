@@ -173,6 +173,11 @@
 	margin-bottom: var(--listora-space-6);
 }
 
+/* A site may reset heading margins: keep the label off the cards. */
+.listora-featured > .listora-meta {
+	margin: 0 0 0.75rem;
+}
+
 .listora-featured__track {
 	display: grid;
 	grid-auto-flow: column;
@@ -266,8 +271,7 @@
 	background: var(--listora-border-default);
 }
 
-.listora-search__clear,
-.listora-search__near-me {
+.listora-search__clear {
 	position: absolute;
 	top: 50%;
 	inset-inline-end: 0.25rem;
@@ -294,9 +298,7 @@
 }
 
 .listora-search__clear:hover,
-.listora-search__near-me:hover,
-.listora-search__clear:focus-visible,
-.listora-search__near-me:focus-visible {
+.listora-search__clear:focus-visible {
 	color: var(--listora-fg-default);
 	background: var(--listora-bg-muted);
 }
@@ -346,6 +348,34 @@
 	scrollbar-width: none;
 	-webkit-overflow-scrolling: touch;
 	padding-block-end: 2px;
+}
+
+ul.listora-chips {
+	list-style: none;
+	margin: 0;
+	padding-inline-start: 0;
+}
+
+.listora-chip__count {
+	margin-inline-start: 0.35em;
+	opacity: 0.75;
+	font-variant-numeric: tabular-nums;
+}
+
+.listora-facets {
+	display: grid;
+	gap: var(--listora-space-3);
+	margin-block: var(--listora-space-4) var(--listora-space-6);
+}
+
+.listora-facets__row {
+	display: grid;
+	gap: var(--listora-space-2);
+	min-width: 0;
+}
+
+.listora-facets__row > .listora-meta {
+	margin: 0;
 }
 
 .listora-chips::-webkit-scrollbar {
@@ -474,11 +504,275 @@
 	min-height: 160px;
 }
 
+/* The photo fills the frame, so a card with a photo and a card without are the same height. */
 .listora-card-media img {
+	position: absolute;
+	inset: 0;
 	width: 100%;
 	height: 100%;
 	object-fit: cover;
 	display: block;
+}
+
+/* Photos under the cover: a row of thumbnails that open a large view. */
+.listora-gallery__thumbs {
+	display: flex;
+	gap: var(--listora-space-2);
+	margin: 0 0 var(--listora-space-6);
+	padding: 0;
+	list-style: none;
+	overflow-x: auto;
+}
+
+.listora-gallery__thumb {
+	display: block;
+	width: 6.5rem;
+	height: 4.75rem;
+	padding: 0;
+	border: 2px solid transparent;
+	border-radius: var(--listora-radius-md, 8px);
+	overflow: hidden;
+	background: var(--listora-bg-muted);
+	cursor: pointer;
+}
+
+.listora-gallery__thumb:hover,
+.listora-gallery__thumb:focus-visible {
+	border-color: var(--listora-primary);
+	outline: none;
+}
+
+.listora-gallery__thumb :is(img, picture) {
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+	display: block;
+}
+
+.listora-lightbox {
+	width: min(96vw, 70rem);
+	max-height: 94vh;
+	padding: var(--listora-space-4);
+	border: 1px solid var(--listora-border-default);
+	border-radius: var(--listora-radius-lg);
+	background: var(--listora-bg-base);
+	color: var(--listora-fg-default);
+}
+
+.listora-lightbox::backdrop {
+	background: rgb(0 0 0 / 0.72);
+}
+
+.listora-lightbox__bar,
+.listora-lightbox__nav {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--listora-space-3);
+}
+
+.listora-lightbox__stage {
+	margin-block: var(--listora-space-3);
+}
+
+.listora-lightbox__stage figure {
+	margin: 0;
+}
+
+.listora-lightbox__stage :is(img, picture) {
+	display: block;
+	width: 100%;
+	height: auto;
+	max-height: 72vh;
+	object-fit: contain;
+}
+
+/* An owner's photos in their account. */
+.listora-photos {
+	flex-basis: 100%;
+	display: grid;
+	gap: var(--listora-space-2);
+}
+
+.listora-photos__list {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--listora-space-3);
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.listora-photos__item {
+	display: grid;
+	gap: var(--listora-space-1, 0.25rem);
+	justify-items: start;
+	width: 7.5rem;
+	font-size: var(--listora-text-size-sm);
+}
+
+.listora-photos__item img {
+	width: 7.5rem;
+	height: 5.5rem;
+	object-fit: cover;
+	border-radius: var(--listora-radius-md, 8px);
+	background: var(--listora-bg-muted);
+}
+
+.listora-photos__name {
+	font-weight: 600;
+	overflow-wrap: anywhere;
+}
+
+.listora-photos__waiting {
+	display: block;
+	width: 7.5rem;
+	height: 5.5rem;
+	border: 2px dashed var(--listora-border-default);
+	border-radius: var(--listora-radius-md, 8px);
+	background: var(--listora-bg-muted);
+}
+
+.listora-photos__add input {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	opacity: 0;
+}
+
+.listora-photos__add:focus-within {
+	outline: 2px solid var(--listora-primary);
+	outline-offset: 2px;
+}
+
+/* A second heading inside one account tab needs room above it. */
+#dash-main section > * + h2 {
+	margin-block-start: var(--listora-space-6);
+}
+
+/* An owner's reply, set apart from the review it answers. */
+.listora-reply {
+	margin-block-start: var(--listora-space-2);
+	padding: var(--listora-space-3);
+	border-inline-start: 3px solid var(--listora-primary);
+	background: var(--listora-bg-muted);
+	border-radius: var(--listora-radius-md, 8px);
+	justify-self: stretch;
+}
+
+.listora-reply p {
+	margin: 0;
+}
+
+.listora-reply__label {
+	font-size: var(--listora-text-size-sm);
+	font-weight: 600;
+	margin-block-end: var(--listora-space-1, 0.25rem);
+}
+
+.listora-reply-form {
+	justify-self: stretch;
+}
+
+.listora-reply-form > summary {
+	display: inline-flex;
+	list-style: none;
+	cursor: pointer;
+}
+
+.listora-reply-form > summary::-webkit-details-marker {
+	display: none;
+}
+
+.listora-reply-form > form {
+	display: grid;
+	gap: var(--listora-space-2);
+	margin-block-start: var(--listora-space-3);
+	justify-items: start;
+}
+
+.listora-reply-form textarea {
+	width: 100%;
+}
+
+/* A dashboard row: what it is on the left, what you can do on the right. Stacks on a phone. */
+.listora-row {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--listora-space-3);
+}
+
+.listora-row__text {
+	flex: 1 1 16rem;
+	min-width: 0;
+}
+
+.listora-row__actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--listora-space-2);
+}
+
+.listora-row__actions:empty {
+	display: none;
+}
+
+/* A small inline label. (.listora-badge sits on top of a photo, so it cannot be used in text.) */
+.listora-tag {
+	display: inline-block;
+	padding: 0.1rem 0.5rem;
+	border-radius: var(--listora-radius-full, 999px);
+	background: var(--listora-primary-bg, var(--listora-primary));
+	color: var(--listora-primary-fg);
+	font-size: var(--listora-text-size-sm);
+	font-weight: 600;
+	line-height: 1.5;
+	vertical-align: middle;
+}
+
+.listora-message__head,
+.listora-message .listora-meta,
+.listora-message__body {
+	margin: 0;
+}
+
+/* One run of text, so the spacing around the email link is even. */
+.listora-message .listora-meta {
+	display: block;
+}
+
+.listora-message {
+	display: grid;
+	gap: var(--listora-space-2);
+	justify-items: start;
+}
+
+.listora-review.is-done {
+	opacity: 0.72;
+}
+
+.listora-review > .listora-btn {
+	margin-block-start: var(--listora-space-2);
+}
+
+/* A listing with no photo: the site's own colour, an icon for its type, and no outside image. */
+.listora-placeholder {
+	display: grid;
+	place-items: center;
+	width: 100%;
+	height: 100%;
+	min-height: inherit;
+	background: color-mix(in srgb, var(--listora-primary) 10%, var(--listora-bg-muted));
+	color: color-mix(in srgb, var(--listora-primary) 70%, var(--listora-fg-default));
+}
+
+.listora-placeholder svg {
+	width: clamp(2.5rem, 22%, 5.5rem);
+	height: auto;
+	aspect-ratio: 1;
+	opacity: 0.85;
 }
 
 .listora-card__rating {
@@ -875,6 +1169,7 @@
 	box-shadow: var(--listora-shadow-sm);
 }
 
+.listora-detail__sidebar h2,
 .listora-detail__sidebar h3 {
 	margin: 0 0 var(--listora-space-3);
 	font-size: var(--listora-text-size-base);
@@ -1061,6 +1356,18 @@
 
 .listora-facts dd {
 	margin: 0;
+}
+
+/* The facts of one listing type, side by side under its summary. */
+.listora-facts--row {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--listora-space-3) var(--listora-space-6);
+	margin: 0 0 var(--listora-space-4);
+}
+
+.listora-facts--row dd {
+	font-weight: var(--listora-weight-semibold);
 }
 
 .listora-map {
@@ -1425,6 +1732,82 @@ textarea.listora-input {
 	margin-bottom: var(--listora-space-4);
 }
 
+/* The Listings block inside article text. An article styles its own links, images and
+   headings, so every property that matters here is set again, with enough weight to win. */
+.listora-block.listora-inline {
+	padding: 0;
+	margin-block: var(--listora-space-8);
+}
+
+.listora-block.listora-inline > h2 {
+	margin: 0 0 var(--listora-space-4);
+}
+
+.listora-block.listora-inline .listora-card-media img {
+	width: 100%;
+	height: 100%;
+	margin: 0;
+	border-radius: 0;
+	object-fit: cover;
+}
+
+.listora-block.listora-inline .listora-inline__title {
+	margin: 0;
+	font-size: var(--listora-text-size-lg);
+	font-weight: 600;
+	line-height: 1.3;
+}
+
+.listora-block.listora-inline .listora-inline__title a {
+	color: inherit;
+	text-decoration: none;
+}
+
+.listora-block.listora-inline .listora-inline__title a:hover {
+	color: var(--listora-primary-text);
+	text-decoration: underline;
+}
+
+.listora-block.listora-inline .listora-meta {
+	margin: var(--listora-space-1) 0 0;
+	font-size: var(--listora-text-size-sm);
+	line-height: 1.4;
+}
+
+.listora-transfer {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: var(--listora-space-4);
+	align-items: start;
+}
+
+.listora-transfer .listora-form {
+	display: grid;
+	gap: var(--listora-space-3);
+	justify-items: start;
+	margin-bottom: var(--listora-space-4);
+}
+
+.listora-transfer .listora-panel > .listora-btn,
+.listora-transfer .listora-form,
+.listora-transfer .listora-status {
+	margin-top: var(--listora-space-3);
+}
+
+.listora-transfer__rows {
+	margin: 0 0 var(--listora-space-3);
+	padding-inline-start: var(--listora-space-5);
+}
+
+.listora-status h3 {
+	margin: var(--listora-space-3) 0 var(--listora-space-1);
+	font-size: var(--listora-text-size-base);
+}
+
+.listora-status > :last-child {
+	margin-bottom: 0;
+}
+
 .listora-status[data-tone="error"] {
 	background: var(--listora-danger-bg);
 	color: var(--listora-danger-fg);
@@ -1436,6 +1819,10 @@ textarea.listora-input {
 }
 
 @media (max-width: 1024px) {
+	.listora-transfer {
+		grid-template-columns: 1fr;
+	}
+
 	.listora-grid {
 		grid-template-columns: repeat(2, minmax(0, 1fr));
 	}

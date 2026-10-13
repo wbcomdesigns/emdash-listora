@@ -7,20 +7,23 @@ import {
 	getTermsForEntries,
 } from "emdash";
 import { Image } from "emdash/ui";
-import Base from "../../layouts/Base.astro";
+import Layout from "../../layouts/ListoraLayout.astro";
 import {
 	asNumber,
-	coverUrl,
+	imageUrl,
+	jsonForScript,
+	placeholderHtml,
 	hoursForWeek,
 	isOpenNow,
+	siteZone,
 	mapsDirectionsUrl,
 	parseHours,
 	schemaType,
+	typeFacts,
 	typeName,
 	websiteHref,
 	weekdayIndex,
 } from "../../lib/listora";
-import { resolveBlogSiteIdentity } from "../../utils/site-identity";
 import "../../styles/listora-ui.css";
 
 const slug = decodeSlug(Astro.params.slug);
@@ -30,7 +33,8 @@ const { entry: listing, cacheHint } = await getEmDashEntry("listings", slug);
 if (!listing) return Astro.rewrite("/404");
 if (Astro.cache?.enabled) Astro.cache.set(cacheHint);
 
-const { siteTitle } = resolveBlogSiteIdentity(await getSiteSettings());
+const site = await getSiteSettings();
+const siteTitle = site?.title ?? "";
 const seo = getSeoMeta(listing, {
 	siteTitle,
 	siteUrl: Astro.url.origin,
@@ -39,19 +43,24 @@ const seo = getSeoMeta(listing, {
 const data = listing.data;
 const categories =
 	(await getTermsForEntries("listings", [data.id], "listing_category")).get(data.id) ?? [];
-const address = [data.address, data.city, data.state, data.postal_code, data.country]
+// A street line that already names the city is not followed by the city and state again.
+const namesCity = Boolean(data.city) && String(data.address || "").toLowerCase().includes(String(data.city).toLowerCase());
+const address = [data.address, ...(namesCity ? [] : [data.city, data.state]), data.postal_code, data.country]
 	.filter(Boolean)
 	.join(", ");
 const place = [data.city, data.state, data.country].filter(Boolean).join(", ");
 const website = websiteHref(data.website);
 const hours = parseHours(data.hours);
-const zone = String(data.timezone || "America/New_York");
+// One zone for the whole directory: the site's own, from EmDash's settings.
+const zone = siteZone(site?.timezone);
 const open = hours.length ? isOpenNow(hours, zone) : null;
 const weekHours = hoursForWeek(hours);
 const today = weekdayIndex(zone);
 const lat = asNumber(data.lat);
 const lng = asNumber(data.lng);
 const hasMap = Number.isFinite(lat) && Number.isFinite(lng) && lat !== 0 && lng !== 0;
+// Photos beyond the cover. Rows an admin added in the editor and photos an owner sent both live here.
+const gallery = (Array.isArray(data.gallery) ? data.gallery : []).filter((row: { image?: unknown }) => row?.image) as Array<{ image: never }>;
 const expired = String(data.listing_status || "") === "expired";
 const claimed = Boolean(data.is_claimed);
 const services = (() => {
@@ -62,31 +71,46 @@ const services = (() => {
 		return [];
 	}
 })();
+// What this type of listing adds: an event's dates, a home's bedrooms and price, a job's salary.
+const facts = typeFacts(data, zone);
+const isEvent = data.listing_type === "event";
 const hasContact = Boolean(data.phone || website || data.email);
-const photo = coverUrl(slug, data.featured_image, String(data.listing_type || ""));
+// The share image is the listing's own photo, or none. Never a stock picture.
+const photoPath = imageUrl(data.featured_image, Astro.locals.emdash?.getPublicMediaUrl);
+// Share cards and search engines need a full address.
+const photo = photoPath ? new URL(photoPath, Astro.url.origin).href : undefined;
 const directions = hasMap ? mapsDirectionsUrl(lat, lng) : "";
+// Empty parts are left out, never written as null.
+const postal = {
+	"@type": "PostalAddress",
+	streetAddress: data.address || undefined,
+	addressLocality: data.city || undefined,
+	addressRegion: data.state || undefined,
+	postalCode: data.postal_code || undefined,
+	addressCountry: data.country || undefined,
+};
 const schema = {
 	"@context": "https://schema.org",
 	// The plugin adds the rating under the same @id, so search engines read one listing.
 	"@id": `${seo.canonical || Astro.url.href}#listing`,
 	"@type": schemaType(data.listing_type),
 	name: data.title,
-	description: data.excerpt || data.description,
-	telephone: data.phone,
+	description: data.excerpt || data.description || undefined,
+	// An event has no phone of its own in search engine data, and its place goes under "location".
+	telephone: isEvent ? undefined : data.phone || undefined,
 	url: website || undefined,
-	address: {
-		"@type": "PostalAddress",
-		streetAddress: data.address,
-		addressLocality: data.city,
-		addressRegion: data.state,
-		postalCode: data.postal_code,
-		addressCountry: data.country,
-	},
-	geo: hasMap ? { "@type": "GeoCoordinates", latitude: lat, longitude: lng } : undefined,
+	...(isEvent
+		? {
+				startDate: data.event_start || undefined,
+				endDate: data.event_end || undefined,
+				location: { "@type": "Place", name: data.address || place || data.title, address: postal },
+			}
+		: { address: postal, geo: hasMap ? { "@type": "GeoCoordinates", latitude: lat, longitude: lng } : undefined }),
+	image: photo,
 };
 ---
 
-<Base
+<Layout
 	title={seo.title}
 	pageTitle={seo.ogTitle}
 	description={seo.description || data.excerpt}
@@ -95,8 +119,8 @@ const schema = {
 	image={photo}
 	content={{ collection: "listings", id: data.id, slug }}
 >
-	<script type="application/ld+json" set:html={JSON.stringify(schema)} />
-	<div class="listora-block">
+	<script type="application/ld+json" set:html={jsonForScript(schema)} />
+	<div class="listora-block" data-zone={zone}>
 		<article class="listora-detail">
 			<nav class="listora-detail__breadcrumb" aria-label="Breadcrumb">
 				<ol>
@@ -121,10 +145,45 @@ const schema = {
 					data.featured_image ? (
 						<Image image={data.featured_image} alt={String(data.title)} />
 					) : (
-						<img src={photo} alt={String(data.title)} width="1600" height="900" />
+						<Fragment set:html={placeholderHtml(String(data.listing_type || ""))} />
 					)
 				}
 			</div>
+
+			{
+				gallery.length > 0 ? (
+					<section class="listora-gallery" aria-label="Photos">
+						<ul class="listora-gallery__thumbs">
+							{gallery.map((row, index) => (
+								<li>
+									<button type="button" class="listora-gallery__thumb" data-photo={index} aria-label={`Open photo ${index + 1} of ${gallery.length}`}>
+										<Image image={row.image} alt="" />
+									</button>
+								</li>
+							))}
+						</ul>
+						<dialog class="listora-lightbox" id="listora-lightbox" aria-label={`Photos of ${String(data.title)}`}>
+							<div class="listora-lightbox__bar">
+								<span id="listora-lightbox-count" aria-live="polite"></span>
+								<button type="button" class="listora-btn listora-btn--secondary" data-lightbox-close>Close</button>
+							</div>
+							<div class="listora-lightbox__stage">
+								{gallery.map((row, index) => (
+									<figure data-slide={index} hidden>
+										<Image image={row.image} alt={`${String(data.title)}, photo ${index + 1} of ${gallery.length}`} />
+									</figure>
+								))}
+							</div>
+							{gallery.length > 1 ? (
+								<div class="listora-lightbox__nav">
+									<button type="button" class="listora-btn listora-btn--secondary" data-lightbox-step="-1">Previous</button>
+									<button type="button" class="listora-btn listora-btn--secondary" data-lightbox-step="1">Next</button>
+								</div>
+							) : null}
+						</dialog>
+					</section>
+				) : null
+			}
 
 			<div class="listora-detail__content">
 				<div class="listora-detail__main">
@@ -159,8 +218,19 @@ const schema = {
 								</p>
 							) : null
 						}
-						{data.owner_name ? <p class="listora-meta">Listed by {data.owner_name}</p> : null}
 						{data.excerpt ? <p class="listora-detail__lead">{data.excerpt}</p> : null}
+						{
+							facts.length ? (
+								<dl class="listora-facts listora-facts--row">
+									{facts.map((fact) => (
+										<div>
+											<dt>{fact.label}</dt>
+											<dd>{fact.value}</dd>
+										</div>
+									))}
+								</dl>
+							) : null
+						}
 
 						<div class="listora-detail__actions">
 							<button class="listora-btn listora-btn--secondary" type="button" id="fav-btn" aria-pressed="false" data-id={data.id}>
@@ -199,10 +269,10 @@ const schema = {
 						<button class="listora-tab is-active" type="button" role="tab" aria-selected="true" aria-controls="tab-details" id="tab-btn-details" data-tab="details">
 							Details
 						</button>
-						<button class="listora-tab" type="button" role="tab" aria-selected="false" aria-controls="tab-reviews" id="tab-btn-reviews" data-tab="reviews">
+						<button class="listora-tab" type="button" role="tab" aria-selected="false" tabindex="-1" aria-controls="tab-reviews" id="tab-btn-reviews" data-tab="reviews">
 							Reviews
 						</button>
-						<button class="listora-tab" type="button" role="tab" aria-selected="false" aria-controls="tab-contact" id="tab-btn-contact" data-tab="contact">
+						<button class="listora-tab" type="button" role="tab" aria-selected="false" tabindex="-1" aria-controls="tab-contact" id="tab-btn-contact" data-tab="contact">
 							Contact
 						</button>
 					</div>
@@ -240,7 +310,7 @@ const schema = {
 							categories.length ? (
 								<p class="listora-chips">
 									{categories.map((term) => (
-										<span class="listora-chip">{term.label}</span>
+										<a class="listora-chip" href={`/listings/?category=${encodeURIComponent(term.slug)}`}>{term.label}</a>
 									))}
 								</p>
 							) : null
@@ -285,9 +355,9 @@ const schema = {
 					<div id="tab-contact" hidden role="tabpanel" aria-labelledby="tab-btn-contact">
 						<form id="listora-contact-form" class="listora-form listora-form-section">
 							<h2>Contact this listing</h2>
-							<p class="listora-helper">The owner sees this message. Do not send payment details.</p>
+							<p class="listora-helper">Do not send payment details.</p>
 							<div class="listora-honeypot">
-								<label>Company website<input name="company_website" tabindex="-1" autocomplete="off" /></label>
+								<label aria-hidden="true">Company website<input name="company_website" tabindex="-1" autocomplete="off" /></label>
 							</div>
 							<div class="listora-form-grid">
 								<div class="listora-field">
@@ -319,7 +389,7 @@ const schema = {
 					{
 						data.owner_name ? (
 							<div class="listora-detail__owner-card">
-								<h3>Listed by</h3>
+								<h2>Listed by</h2>
 								<p class="listora-detail__owner-name">{data.owner_name}</p>
 							</div>
 						) : null
@@ -328,7 +398,7 @@ const schema = {
 					{
 						hasContact ? (
 							<div class="listora-detail__contact-card">
-								<h3>Contact</h3>
+								<h2>Contact</h2>
 								{data.phone ? (
 									<a class="listora-detail__contact-item" href={`tel:${data.phone}`}>
 										<span class="listora-detail__contact-icon listora-detail__contact-icon--phone" aria-hidden="true">
@@ -369,7 +439,7 @@ const schema = {
 					{
 						hours.length ? (
 							<div class="listora-detail__hours-card">
-								<h3>Hours</h3>
+								<h2>Hours</h2>
 								{open === true ? (
 									<p class="listora-detail__hours-status is-open">Open now</p>
 								) : open === false ? (
@@ -395,10 +465,11 @@ const schema = {
 					}
 
 					{
-						hasMap ? (
+						hasMap || data.address ? (
 							<div class="listora-detail__map-card">
-								<h3>Location</h3>
-								<div id="detail-map" class="listora-detail__map-embed" data-lat={lat} data-lng={lng} data-title={data.title}></div>
+								<h2>Location</h2>
+								{/* A listing with no map position still shows where it is. */}
+								{hasMap ? <div id="detail-map" class="listora-detail__map-embed" data-lat={lat} data-lng={lng} data-title={data.title}></div> : null}
 								{address ? <p class="listora-detail__map-address">{address}</p> : null}
 								{directions ? (
 									<a class="listora-btn listora-btn--secondary listora-detail__map-directions" href={directions} rel="noopener noreferrer" target="_blank">
@@ -424,8 +495,8 @@ const schema = {
 						) : (
 							<div class="listora-detail__claim-card">
 								<form id="claim-form" class="listora-form">
-									<h3>Is this your business?</h3>
-									<p class="listora-helper">A claim goes to review. You will get email when it is decided.</p>
+									<h2>Is this your business?</h2>
+									<p class="listora-helper">A claim goes to review. The decision shows in your account, under Claims.</p>
 									<div class="listora-field">
 										<label class="listora-label" for="claim-name">
 											Name <span class="listora-req">(required)</span>
@@ -459,11 +530,11 @@ const schema = {
 			</div>
 		</article>
 	</div>
-</Base>
+</Layout>
 
 <link rel="stylesheet" href="/vendor/leaflet/leaflet.css" />
 <script>
-	import { api, esc, notify } from "../../lib/listora";
+	import { api, day, esc, notify, savedIds } from "../../lib/listora";
 
 	const favBtn = document.getElementById("fav-btn");
 	const listingId = favBtn?.getAttribute("data-id") || "";
@@ -473,9 +544,11 @@ const schema = {
 			document.querySelectorAll(".listora-tab").forEach((node) => {
 				node.classList.remove("is-active");
 				node.setAttribute("aria-selected", "false");
+				node.setAttribute("tabindex", "-1");
 			});
 			tab.classList.add("is-active");
 			tab.setAttribute("aria-selected", "true");
+			tab.setAttribute("tabindex", "0");
 			const id = tab.dataset.tab;
 			document.getElementById("tab-details")!.hidden = id !== "details";
 			document.getElementById("tab-reviews")!.hidden = id !== "reviews";
@@ -505,6 +578,47 @@ const schema = {
 		if (show) input?.focus();
 	}
 
+	// Photos: a thumbnail opens the large view. Arrow keys and a sideways swipe move between
+	// photos, Esc closes (the dialog element does that itself), and focus goes back to the thumbnail.
+	const lightbox = document.getElementById("listora-lightbox") as HTMLDialogElement | null;
+	if (lightbox) {
+		const slides = [...lightbox.querySelectorAll<HTMLElement>("[data-slide]")];
+		const count = document.getElementById("listora-lightbox-count");
+		let current = 0;
+		let opener: HTMLElement | null = null;
+		const show = (index: number) => {
+			current = (index + slides.length) % slides.length;
+			slides.forEach((slide, at) => (slide.hidden = at !== current));
+			if (count) count.textContent = `Photo ${current + 1} of ${slides.length}`;
+		};
+		document.querySelectorAll<HTMLButtonElement>("[data-photo]").forEach((button) => {
+			button.addEventListener("click", () => {
+				opener = button;
+				show(Number(button.dataset.photo) || 0);
+				lightbox.showModal();
+			});
+		});
+		lightbox.addEventListener("click", (event) => {
+			const target = event.target as HTMLElement;
+			const step = target.closest<HTMLElement>("[data-lightbox-step]");
+			if (step) show(current + Number(step.dataset.lightboxStep));
+			// A click on the dark area around the photo closes it.
+			if (target.closest("[data-lightbox-close]") || target === lightbox) lightbox.close();
+		});
+		lightbox.addEventListener("keydown", (event) => {
+			if (event.key === "ArrowRight") show(current + 1);
+			if (event.key === "ArrowLeft") show(current - 1);
+		});
+		let startX = 0;
+		lightbox.addEventListener("touchstart", (event) => (startX = event.touches[0].clientX), { passive: true });
+		lightbox.addEventListener("touchend", (event) => {
+			const moved = event.changedTouches[0].clientX - startX;
+			if (Math.abs(moved) > 50) show(current + (moved < 0 ? 1 : -1));
+		});
+		lightbox.addEventListener("close", () => opener?.focus());
+	}
+
+	// A date a person reads, in the visitor's own language: "13 Oct 2026".
 	async function loadReviews() {
 		const box = document.getElementById("listora-reviews");
 		if (!box) return;
@@ -527,7 +641,7 @@ const schema = {
 				: items
 						.map(
 							(item) =>
-								`<article class="listora-review"><strong>${esc(item.author || "Member")}</strong> <span class="listora-stars" aria-label="${Number(item.stars) || 0} out of 5">${"★".repeat(Number(item.stars) || 0)}</span><h3>${esc(item.title)}</h3><p>${esc(item.body)}</p>${item.owner_reply ? `<p>Owner: ${esc(item.owner_reply)}</p>` : ""}</article>`,
+								`<article class="listora-review"><strong>${esc(item.author || "Member")}</strong> <span class="listora-stars" aria-label="${Number(item.stars) || 0} out of 5">${"★".repeat(Number(item.stars) || 0)}</span><h3>${esc(item.title)}</h3><p>${esc(item.body)}</p>${item.owner_reply ? `<div class="listora-reply"><p class="listora-reply__label">Reply from the owner${item.owner_reply_at ? ` · ${esc(day(item.owner_reply_at))}` : ""}</p><p>${esc(item.owner_reply)}</p></div>` : ""}</article>`,
 						)
 						.join("");
 	}
@@ -582,6 +696,15 @@ const schema = {
 		}
 	});
 
+	const showSaved = (saved: boolean) => {
+		if (!favBtn) return;
+		favBtn.classList.toggle("is-saved", saved);
+		favBtn.setAttribute("aria-pressed", String(saved));
+		(favBtn.querySelector("[data-label]") ?? favBtn).textContent = saved ? "Saved" : "Save";
+	};
+	// The page is the same for every visitor, so whether this member saved it is asked after it loads.
+	if (favBtn) savedIds().then((ids) => showSaved(ids.has(listingId)));
+
 	favBtn?.addEventListener("click", async () => {
 		const saved = favBtn.classList.contains("is-saved");
 		const result = await api("favorites", { listingId }, saved ? "DELETE" : "POST");
@@ -589,10 +712,7 @@ const schema = {
 			notify(favBtn.parentElement ?? favBtn, result, "");
 			return;
 		}
-		favBtn.classList.toggle("is-saved", !saved);
-		favBtn.setAttribute("aria-pressed", String(!saved));
-		const label = favBtn.querySelector("[data-label]") ?? favBtn;
-		label.textContent = saved ? "Save" : "Saved";
+		showSaved(!saved);
 	});
 
 	document.getElementById("share-btn")?.addEventListener("click", async () => {

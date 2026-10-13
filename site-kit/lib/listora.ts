@@ -38,7 +38,22 @@ export function parseHours(value: unknown): HourRow[] {
 	}
 }
 
-export function isOpenNow(hours: HourRow[], timeZone = "America/New_York"): boolean {
+/**
+ * The site's own time zone, from EmDash's site settings. One zone for the whole directory.
+ * An empty or unknown value falls back to UTC so a page never fails over it.
+ */
+export function siteZone(value: unknown): string {
+	const zone = typeof value === "string" ? value.trim() : "";
+	if (!zone) return "UTC";
+	try {
+		new Intl.DateTimeFormat("en-US", { timeZone: zone });
+		return zone;
+	} catch {
+		return "UTC";
+	}
+}
+
+export function isOpenNow(hours: HourRow[], timeZone = "UTC"): boolean {
 	if (!hours.length) return false;
 	const parts = new Intl.DateTimeFormat("en-US", {
 		timeZone,
@@ -107,7 +122,7 @@ export function sortListings<T extends { data: Record<string, unknown> }>(items:
 
 export const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
-export function weekdayIndex(timeZone = "America/New_York"): number {
+export function weekdayIndex(timeZone = "UTC"): number {
 	const map: Record<string, number> = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
 	const weekday = new Intl.DateTimeFormat("en-US", { timeZone, weekday: "short" }).format(new Date());
 	return map[weekday] ?? 0;
@@ -126,33 +141,82 @@ export function hoursForWeek(hours: HourRow[]) {
 	});
 }
 
-const TYPE_COVERS: Record<string, string> = {
-	business: "photo-1441986300917-64674bd600d8",
-	restaurant: "photo-1414235077428-338989a2e8c0",
-	"real-estate": "photo-1568605114967-8130f3a36994",
-	hotel: "photo-1566073771259-6a8506099945",
-	event: "photo-1540575467063-178a50c2df87",
-	job: "photo-1521737711867-e3b97375f902",
-	healthcare: "photo-1519494026892-80bbd2d6fd0d",
-	education: "photo-1503676260728-1c00da094a0b",
-	place: "photo-1449824913935-59a10b8d2000",
-	classified: "photo-1556742049-0cfed4f6a45d",
-};
-
-export function coverUrl(slug: string, featured?: { src?: string } | null, type?: string): string {
-	const src = featured && typeof featured === "object" ? featured.src : "";
-	if (src) return src;
-	const id = TYPE_COVERS[type || ""] || TYPE_COVERS.business;
-	return `https://images.unsplash.com/${id}?auto=format&fit=crop&w=1600&h=900&q=80&sig=${encodeURIComponent(slug)}`;
+/**
+ * The public address of a stored image, for a share image or structured data.
+ * (To draw an image on the page, use EmDash's own Image component.)
+ */
+export function imageUrl(image: unknown, publicUrl?: (key: string) => string): string {
+	const ref = (image ?? {}) as { src?: unknown; url?: unknown; meta?: { storageKey?: unknown } };
+	const key = typeof ref.meta?.storageKey === "string" ? ref.meta.storageKey : "";
+	const candidate =
+		(typeof ref.src === "string" && ref.src) ||
+		(typeof ref.url === "string" && ref.url) ||
+		(/^[A-Za-z0-9._-]+$/.test(key) ? (publicUrl ? publicUrl(key) : `/_emdash/api/media/file/${key}`) : "");
+	return safeImageUrl(candidate);
 }
 
-export function formatEventWhen(value: unknown): string {
+/** Only a web address or a path on this site. Anything else (javascript:, data:, markup) is dropped. */
+export function safeImageUrl(value: string): string {
+	if (!value || /[\s<>"'`\\]/.test(value)) return "";
+	if (value.startsWith("/") && !value.startsWith("//")) return value;
+	try {
+		const parsed = new URL(value);
+		return parsed.protocol === "https:" || parsed.protocol === "http:" ? parsed.href : "";
+	} catch {
+		return "";
+	}
+}
+
+/**
+ * JSON for a script block. Listing text is written by members, so the characters that could
+ * close the block or start markup are written as escapes. The data itself is unchanged.
+ */
+export function jsonForScript(value: unknown): string {
+	return JSON.stringify(value)
+		.replace(/</g, "\\u003c")
+		.replace(/>/g, "\\u003e")
+		.replace(/&/g, "\\u0026")
+		.replace(/\u2028/g, "\\u2028")
+		.replace(/\u2029/g, "\\u2029");
+}
+
+// One simple line icon per listing type, drawn inside a 24 by 24 box.
+const TYPE_ICONS: Record<string, string> = {
+	business: '<path d="M3 9h18l-1.5-5h-15L3 9Z"/><path d="M4 9v11h16V9M9 20v-6h6v6"/>',
+	restaurant:
+		'<path d="M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2M7 2v20M21 15V2a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3Zm0 0v7"/>',
+	"real-estate": '<path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M9 22V12h6v10"/>',
+	hotel: '<path d="M2 4v16M2 8h18a2 2 0 0 1 2 2v10M2 17h20M6 8v9"/>',
+	event: '<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>',
+	job: '<rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/>',
+	healthcare: '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M12 8v8M8 12h8"/>',
+	education: '<path d="M22 10 12 5 2 10l10 5 10-5Z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/>',
+	place: '<path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/>',
+	classified:
+		'<path d="M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z"/><circle cx="7.5" cy="7.5" r="1"/>',
+};
+
+/**
+ * What a listing with no photo shows: a panel in the site's own colours with an icon for
+ * its type. It is clearly not a photograph, and nothing is loaded from another website.
+ * The icon set is fixed here, so the markup is safe to place with set:html or innerHTML.
+ */
+export function placeholderHtml(type?: string): string {
+	const icon = TYPE_ICONS[type || ""] || TYPE_ICONS.business;
+	return `<div class="listora-placeholder" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">${icon}</svg></div>`;
+}
+
+export function formatEventWhen(value: unknown, timeZone = "UTC"): string {
 	const raw = String(value || "").trim();
 	if (!raw) return "";
 	const dateOnly = /^(\d{4})-(\d{2})-(\d{2})$/.exec(raw);
+	// A time typed with no zone ("2026-10-18T15:00") means that clock time in the site's zone,
+	// so it is shown as typed. A value that carries an offset is converted to the site's zone.
+	const naive = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?$/.test(raw);
+	if (naive) timeZone = "UTC";
 	const date = dateOnly
 		? new Date(Number(dateOnly[1]), Number(dateOnly[2]) - 1, Number(dateOnly[3]))
-		: new Date(raw);
+		: new Date(naive ? `${raw}Z` : raw);
 	if (Number.isNaN(date.getTime())) return raw;
 	if (dateOnly) {
 		return new Intl.DateTimeFormat("en-US", {
@@ -169,8 +233,56 @@ export function formatEventWhen(value: unknown): string {
 		year: "numeric",
 		hour: "numeric",
 		minute: "2-digit",
-		timeZone: "America/New_York",
+		timeZone,
 	}).format(date);
+}
+
+/** The extra fields each listing type has. The add-a-listing form asks for them and the listing page shows them. */
+export const TYPE_FIELDS: Record<string, Array<{ key: string; label: string; help: string; type?: string }>> = {
+	restaurant: [
+		{ key: "cuisine", label: "Cuisine", help: "Italian, Korean, and so on." },
+		{ key: "price_range", label: "Price range", help: "Use $ to $$$." },
+	],
+	hotel: [{ key: "star_rating", label: "Stars", help: "1 to 5." }],
+	"real-estate": [
+		{ key: "beds", label: "Bedrooms", help: "Whole number." },
+		{ key: "baths", label: "Bathrooms", help: "Whole number." },
+		{ key: "price", label: "Price", help: "Asking or nightly rate." },
+	],
+	event: [
+		{ key: "event_start", label: "Starts", help: "Date and time, in this site's time zone.", type: "datetime-local" },
+		{ key: "event_end", label: "Ends", help: "Date and time, in this site's time zone.", type: "datetime-local" },
+	],
+	job: [
+		{ key: "salary", label: "Salary", help: "Range is fine." },
+		{ key: "job_type", label: "Job type", help: "Full-time, contract, or intern." },
+	],
+	healthcare: [{ key: "specialty", label: "Specialty", help: "What the practice treats." }],
+	education: [{ key: "program", label: "Program", help: "Course or school name." }],
+	classified: [{ key: "asking_price", label: "Asking price", help: "What you want for the item." }],
+	place: [{ key: "place_kind", label: "Kind of place", help: "Park, museum, or trail." }],
+	business: [{ key: "year_founded", label: "Year founded", help: "Four digits if you know it." }],
+};
+
+/**
+ * The filled-in extra fields of one listing, as label and value, ready to show. A few are
+ * fields of their own on the listing; the rest are stored together in `type_fields`.
+ */
+export function typeFacts(data: Record<string, unknown>, timeZone = "UTC"): Array<{ label: string; value: string }> {
+	let extra: Record<string, unknown> = {};
+	try {
+		const parsed = typeof data.type_fields === "string" ? JSON.parse(data.type_fields || "{}") : data.type_fields;
+		if (parsed && typeof parsed === "object") extra = parsed as Record<string, unknown>;
+	} catch {
+		extra = {};
+	}
+	return (TYPE_FIELDS[String(data.listing_type || "")] ?? [])
+		.map((field) => {
+			const raw = data[field.key] ?? extra[field.key];
+			const text = raw === null || raw === undefined ? "" : String(raw).trim();
+			return { label: field.label, value: field.type === "datetime-local" ? formatEventWhen(text, timeZone) : text };
+		})
+		.filter((fact) => fact.value !== "");
 }
 
 export function mapsDirectionsUrl(lat: number, lng: number): string {
@@ -187,12 +299,64 @@ export function esc(value: unknown): string {
 }
 
 export function signInUrl(): string {
+	// About to sign in: forget that this browser was last seen as a guest.
+	try {
+		localStorage.removeItem("listora-guest");
+	} catch {
+		// Storage can be blocked.
+	}
 	return `/_emdash/admin/login?redirect=${encodeURIComponent(location.pathname + location.search)}`;
 }
 
 export type ApiResult = { ok: boolean; error?: { code?: string; message?: string }; [key: string]: unknown };
 
 /** Call a Listora plugin route. Member routes answer SIGN_IN_REQUIRED for guests. */
+/** What an owner may upload as a listing photo. Checked again on the server from the file itself. */
+export const PHOTO_TYPES = ["image/jpeg", "image/png", "image/webp"];
+export const PHOTO_MAX_BYTES = 5 * 1024 * 1024;
+
+/** Send one file as the body of a request. Like `api`, it never throws. */
+export async function uploadPhoto(listingId: string, file: File): Promise<ApiResult> {
+	if (!PHOTO_TYPES.includes(file.type)) return { ok: false, error: { code: "WRONG_TYPE", message: "Use a JPEG, PNG or WebP photo." } };
+	if (file.size > PHOTO_MAX_BYTES) return { ok: false, error: { code: "TOO_BIG", message: "That photo is larger than 5 MB." } };
+	try {
+		const response = await fetch(`/_emdash/api/plugins/listora/photo?listingId=${encodeURIComponent(listingId)}&name=${encodeURIComponent(file.name)}`, {
+			method: "POST",
+			credentials: "same-origin",
+			headers: { "Content-Type": "application/octet-stream", "X-EmDash-Request": "1" },
+			body: file,
+		});
+		if (response.status === 401) return { ok: false, error: { code: "SIGN_IN_REQUIRED", message: "Sign in to continue." } };
+		if (response.status === 413) return { ok: false, error: { code: "TOO_BIG", message: "That photo is larger than 5 MB." } };
+		const json = await response.json().catch(() => null);
+		if (!response.ok || !json) {
+			return { ok: false, error: { code: "FAILED", message: json?.error?.message || "The photo could not be added. Try again." } };
+		}
+		return json.data ?? { ok: false };
+	} catch {
+		return { ok: false, error: { code: "OFFLINE", message: "Could not reach the site. Check your connection and try again." } };
+	}
+}
+
+// Pages are the same for every visitor, so the browser keeps a note when a member request was
+// refused. It saves a guest from repeating a request that would be refused on every page. With
+// no note, the page asks: a member on a new device sees their saved listings straight away.
+function remember(guest: boolean): void {
+	try {
+		if (guest) localStorage.setItem("listora-guest", "1");
+		else localStorage.removeItem("listora-guest");
+	} catch {
+		// Storage can be blocked. The only cost is one extra request.
+	}
+}
+function knownGuest(): boolean {
+	try {
+		return localStorage.getItem("listora-guest") === "1";
+	} catch {
+		return false;
+	}
+}
+
 export async function api(path: string, body?: unknown, method = body ? "POST" : "GET"): Promise<ApiResult> {
 	// Never throws: a dropped connection or a server error comes back as a result the page can show.
 	try {
@@ -202,7 +366,11 @@ export async function api(path: string, body?: unknown, method = body ? "POST" :
 			headers: { "Content-Type": "application/json", "X-EmDash-Request": "1" },
 			body: body ? JSON.stringify(body) : undefined,
 		});
-		if (response.status === 401) return { ok: false, error: { code: "SIGN_IN_REQUIRED", message: "Sign in to continue." } };
+		if (response.status === 401) {
+			remember(true);
+			return { ok: false, error: { code: "SIGN_IN_REQUIRED", message: "Sign in to continue." } };
+		}
+		remember(false);
 		const json = await response.json().catch(() => null);
 		if (!response.ok || !json) {
 			return { ok: false, error: { code: "FAILED", message: json?.error?.message || "Something went wrong. Try again." } };
@@ -211,6 +379,30 @@ export async function api(path: string, body?: unknown, method = body ? "POST" :
 	} catch {
 		return { ok: false, error: { code: "OFFLINE", message: "Could not reach the site. Check your connection and try again." } };
 	}
+}
+
+/**
+ * A date a person reads, in the visitor's language and the site's time zone ("13 Oct 2026"),
+ * so the same moment reads as the same day on every screen. The zone comes from the page
+ * (`data-zone` on <body> or any element), which got it from EmDash's settings.
+ */
+export function day(value: unknown): string {
+	const date = new Date(String(value || ""));
+	if (Number.isNaN(date.getTime())) return "";
+	const timeZone = document.querySelector<HTMLElement>("[data-zone]")?.dataset.zone || undefined;
+	try {
+		return date.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric", timeZone });
+	} catch {
+		return date.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
+	}
+}
+
+/** The listings this member has saved. Empty for a guest or when the request fails. A browser last seen as a guest is not asked again until it signs in. */
+export async function savedIds(): Promise<Set<string>> {
+	if (knownGuest()) return new Set();
+	const result = await api("favorites");
+	const items = result.ok && Array.isArray(result.items) ? (result.items as Array<{ data?: { listingId?: string }; listingId?: string }>) : [];
+	return new Set(items.map((item) => String(item.data?.listingId ?? item.listingId ?? "")).filter(Boolean));
 }
 
 /** Show a result next to a form: success text, the API's error, or a sign-in link for guests. */
