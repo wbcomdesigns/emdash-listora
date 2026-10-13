@@ -56,6 +56,7 @@ Three roles, always in this order: **guest**, **member** (subscriber role), **ad
 | M-10 | Request `import` and the `admin` route directly | 403 each | |
 | M-11 | Submit nine listings inside an hour | The ninth is refused with a clear message. Works again after an hour | limits a member to eight writes |
 | M-12 | Send another member's id in a request body | Ignored. You only ever see and change your own rows | ignores a member id sent in the request |
+| M-14 | Call review, claims or favorites with the id of a draft or missing listing | "That listing is not available." Nothing is stored | refuses member actions on a listing that is not public |
 | M-13 | Dashboard at 390 | Tabs are one sideways-scrolling row. Content starts above the fold | |
 
 ## Admin
@@ -73,6 +74,8 @@ Three roles, always in this order: **guest**, **member** (subscriber role), **ad
 | A-9 | Decide the same claim twice from two tabs | Second decision refused: "already handled" | refuses a second decision |
 | A-10 | Approve a claim | Listing shows as claimed with the claimant as owner. It appears in the claimant's My listings | |
 | A-11 | A member erases their data after a review of theirs was approved, then you open any Listora admin page | The listing rating no longer counts that review | marks the listing on erase |
+| A-13 | Edit a published listing in admin and save without publishing. Then approve a review on it | The unfinished edit stays unpublished. The rating changes after you publish the listing and open a Listora admin page | updates the live rating on approval and leaves a listing with unpublished edits alone |
+| A-14 | Same listing: approve a claim on it | Refused with "has unpublished edits". The claim stays pending | |
 | A-12 | Get started on a site with no listings collection | Clear "create the collection first" message, no crash | tells the owner to create the listings collection first |
 
 ## Presentation, every screen

@@ -69,33 +69,39 @@ export async function publishNow(ctx: PluginContext, id: string): Promise<boolea
 	return true;
 }
 
-/** Change fields on a listing and keep it live. Updating a published entry only saves a draft. */
+/**
+ * Change fields on a published listing and keep it live. Updating a published entry saves a
+ * draft, so this republishes. If the listing already has unpublished edits, publishing would
+ * push someone's unfinished work live, so nothing is written and "busy" is returned.
+ */
 export async function patchListing(
 	ctx: PluginContext,
 	id: string,
 	patch: Record<string, unknown>,
-): Promise<Record<string, unknown> | null> {
+): Promise<{ state: "done"; data: Record<string, unknown> } | { state: "busy" | "missing" }> {
 	// A deleted listing or a missing collection must not break moderation of its reviews.
 	const listing = await ctx.content?.get?.(LISTINGS, id).catch(() => null);
-	if (!listing || !ctx.content?.update) return null;
+	if (!listing || !ctx.content?.update) return { state: "missing" };
+	if ((listing as { draftRevisionId?: string | null }).draftRevisionId) return { state: "busy" };
 	const data = { ...listing.data, ...patch };
 	await ctx.content.update(LISTINGS, id, data);
 	if (listing.status === "published") await publishNow(ctx, id);
-	return data;
+	return { state: "done", data };
 }
 
-export async function syncRating(ctx: PluginContext, listingId: string): Promise<void> {
+/** Recalculate a listing's rating from its published reviews. False when the listing was busy. */
+export async function syncRating(ctx: PluginContext, listingId: string): Promise<boolean> {
 	const found = await ctx.storage.reviews.query({ where: { listingId }, limit: 200 });
 	const stars = rows(found)
 		.filter((row) => row.status === "published")
 		.map((row) => asNumber(row.stars) ?? 0);
 	const avg = stars.length ? stars.reduce((sum, value) => sum + value, 0) / stars.length : 0;
-	await patchListing(ctx, listingId, {
+	const result = await patchListing(ctx, listingId, {
 		rating_avg: Math.round(avg * 10) / 10,
 		rating_count: stars.length,
 	});
+	return result.state !== "busy";
 }
-
 
 const RATING_DIRTY = "rating_dirty";
 
@@ -112,11 +118,20 @@ export async function markRatingDirty(ctx: PluginContext, listingId: string): Pr
 	});
 }
 
+/**
+ * Runs on admin page loads. Markers are written by members, so this must never be able to
+ * break the page: a few per load, each isolated, and a marker that throws is dropped.
+ */
 export async function drainRatingDirty(ctx: PluginContext): Promise<void> {
-	const found = await ctx.storage.events.query({ where: { collection: RATING_DIRTY }, limit: 50 });
-	for (const row of rows(found)) {
-		await syncRating(ctx, asString(row.contentId));
-		await ctx.storage.events.delete(row.id);
+	try {
+		const found = await ctx.storage.events.query({ where: { collection: RATING_DIRTY }, limit: 5 });
+		for (const row of rows(found)) {
+			const settled = await syncRating(ctx, asString(row.contentId)).catch(() => true);
+			// A busy listing keeps its marker and is retried on a later load.
+			if (settled) await ctx.storage.events.delete(row.id);
+		}
+	} catch {
+		// Rating catch-up is best effort. Moderation pages load regardless.
 	}
 }
 
@@ -138,4 +153,9 @@ export async function listingRefs(ctx: PluginContext, ids: string[]): Promise<Ma
 		});
 	});
 	return refs;
+}
+
+/** True when the listing exists and is public. Members may only act on public listings. */
+export async function isPublicListing(ctx: PluginContext, id: string): Promise<boolean> {
+	return (await listingRefs(ctx, [id])).get(id)?.published === true;
 }

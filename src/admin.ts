@@ -1,6 +1,13 @@
 import type { PluginContext } from "emdash/plugin";
 
-import { drainRatingDirty, listingRefs, patchListing, publishNow, syncRating } from "./lib/listings-query";
+import {
+	drainRatingDirty,
+	listingRefs,
+	markRatingDirty,
+	patchListing,
+	publishNow,
+	syncRating,
+} from "./lib/listings-query";
 import { getOnboardState, loadSampleDirectory } from "./lib/onboard";
 import { LISTING_TYPES, LISTINGS } from "./lib/types";
 import { asBoolean, asRecord, asString } from "./lib/util";
@@ -474,7 +481,9 @@ export async function handleAdmin(
 			...existing,
 			status: action === "approve" ? "published" : "rejected",
 		});
-		await syncRating(ctx, asString(existing.listingId));
+		const listingId = asString(existing.listingId);
+		// Listing has unpublished edits: leave them alone, the rating catches up later.
+		if (!(await syncRating(ctx, listingId))) await markRatingDirty(ctx, listingId);
 		return renderReviewQueue(ctx, { toast: { message: "Review updated.", type: "success" } });
 	}
 
@@ -483,13 +492,18 @@ export async function handleAdmin(
 		const existing = asRecord(await ctx.storage.claims.get(id));
 		const stale = staleRow(existing, stamp);
 		if (stale) return renderClaimQueue(ctx, { toast: { message: stale, type: "error" } });
-		await ctx.storage.claims.put(id, {
-			...existing,
-			status: action === "approve" ? "approved" : "rejected",
-		});
 		if (action === "approve") {
 			const listingId = asString(existing.listingId);
-			const listing = await patchListing(ctx, listingId, { is_claimed: true, owner_name: asString(existing.name) });
+			const patched = await patchListing(ctx, listingId, { is_claimed: true, owner_name: asString(existing.name) });
+			if (patched.state === "busy") {
+				return renderClaimQueue(ctx, {
+					toast: {
+						message: "That listing has unpublished edits. Publish or discard them, then approve the claim.",
+						type: "error",
+					},
+				});
+			}
+			const listing = patched.state === "done" ? patched.data : null;
 			const submission = asRecord(await ctx.storage.submissions.get(listingId));
 			await ctx.storage.submissions.put(listingId, {
 				listingId,
@@ -501,6 +515,10 @@ export async function handleAdmin(
 				member_id: existing.member_id,
 			});
 		}
+		await ctx.storage.claims.put(id, {
+			...existing,
+			status: action === "approve" ? "approved" : "rejected",
+		});
 		return renderClaimQueue(ctx, { toast: { message: "Claim updated.", type: "success" } });
 	}
 

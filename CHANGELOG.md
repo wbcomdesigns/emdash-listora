@@ -2,6 +2,15 @@
 
 Versions match `package.json`, the git tag, and the EmDash registry release. Newest first. Never publish a version that is not on `origin/main`.
 
+## [0.3.1] - 2026-10-13
+
+Safety follow-up to 0.3.0. No kit changes: you do not need to copy `site-kit/` again.
+
+- Fix      - Approving a review or a claim no longer publishes unfinished edits that were sitting on the listing. The rating waits and catches up once the listing is published.
+- Fix      - A bad record can no longer stop the Listora admin pages from loading.
+- Security - Members can only review, save or claim a public listing.
+- Security - The member dashboard only shows a listing's name when the listing is public or the member submitted it.
+
 ## [0.3.0] - 2026-10-13
 
 Members sign in, the core flows finish, and the directory works in dark mode. Copy `site-kit/` again after you update: the pages and the CSS changed.

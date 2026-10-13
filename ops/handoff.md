@@ -1,4 +1,4 @@
-# Handoff (2026-10-13, after 0.3.0 work)
+# Handoff (2026-10-13, after 0.3.1)
 
 Read this first in a new session. Then `AGENTS.md`, `CONTRIBUTING.md`, and `docs/website/getting-started/new-machine.md`.
 
@@ -9,8 +9,7 @@ This product is Free only. No Pro. Work is tracked as GitHub issues under the `0
 | Thing | Where |
 | --- | --- |
 | Plugin (source of truth) | this repo, `main` |
-| Registry | `@vapvarun.bsky.social/listora`. Live version is `0.2.1` until `0.3.0` is published |
-| Working branch | `fix/0-3-0-core-flows` until its PR merges |
+| Registry | `@vapvarun.bsky.social/listora`. Live version is `0.3.1` |
 | Lab host | sibling EmDash site `emdash-local` (not this git repo) |
 | WordPress Listora | scope and visual reference only. Do not copy PHP |
 
@@ -23,7 +22,8 @@ GitHub tag, `package.json`, and the registry version must stay the same number. 
 - `import` is admin only. `reviews` is read only. New member route `review`
 - Moderation clicks carry the version the admin saw (`rev`). A rewritten or already-handled row is refused
 - Block Kit tables need `page_action_id`. Without it the whole admin page fails to render
-- Updating a published listing only saves a draft. `patchListing` in `src/lib/listings-query.ts` updates and republishes
+- Updating a published listing only saves a draft. `patchListing` in `src/lib/listings-query.ts` updates and republishes, and refuses (`busy`) when the listing already has unpublished edits so it never publishes someone's draft
+- Anything a member can write that an admin page later reads must not be able to break that page. `drainRatingDirty` is the pattern: small batch, each item isolated
 - Kit colours use `light-dark()` and follow the site theme. There is no `.dark` class block
 - Kit pages share `api`, `esc`, `notify` from `site-kit/lib/listora.ts`. Anything from the API goes through `esc` before `innerHTML`
 - Registry media: `icon.png`, `images/`, `docs/registry/*.md`, wired in `emdash-plugin.jsonc`
@@ -45,7 +45,7 @@ Override lab folder with `LISTORA_LAB`. After a kit change: edit `site-kit/`, th
 
 ## Next, in order
 
-1. Merge the 0.3.0 PR, tag `v0.3.0`, publish, then check the registry page shows the icon and screenshots.
+1. Confirm the registry page shows the icon, banner and screenshots once the listing checks pass.
 2. Milestone `0.4.0`: contacts admin screen and mail, paging, kit free of starter-only imports plus the second-site prove, categories and locations as filters, gallery, listing expiry, admin pages for import and settings.
 3. Milestone `Later`: type editor, reminders, health check.
 

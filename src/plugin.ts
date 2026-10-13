@@ -2,7 +2,14 @@ import type { SandboxedPlugin } from "emdash/plugin";
 
 import { handleAdmin } from "./admin";
 import { maybeSeedDemo } from "./lib/onboard";
-import { filterListings, listPublished, listingRefs, markRatingDirty, publishNow } from "./lib/listings-query";
+import {
+	filterListings,
+	isPublicListing,
+	listPublished,
+	listingRefs,
+	markRatingDirty,
+	publishNow,
+} from "./lib/listings-query";
 import { LISTING_TYPES, LISTINGS, listingTypeBySlug } from "./lib/types";
 import {
 	asBoolean,
@@ -99,6 +106,8 @@ const REVIEW_TITLE_MAX = 120;
 const REVIEW_BODY_MAX = 1000;
 
 type Member = { id: string; name: string | null; role: number };
+
+const NO_LISTING = { ok: false, error: { code: "NOT_FOUND", message: "That listing is not available." } };
 
 const SIGN_IN = { ok: false, error: { code: "SIGN_IN_REQUIRED", message: "Sign in to continue." } };
 
@@ -345,6 +354,7 @@ const plugin: SandboxedPlugin = {
 				if (!listingId || !body) {
 					return { ok: false, error: { code: "VALIDATION_ERROR", message: "Listing and review text are required." } };
 				}
+				if (!(await isPublicListing(ctx, listingId))) return NO_LISTING;
 				if (await ctx.storage.blocked.exists(user.id)) {
 					return { ok: false, error: { code: "BLOCKED", message: "This member cannot review." } };
 				}
@@ -383,6 +393,7 @@ const plugin: SandboxedPlugin = {
 				if (!listingId) {
 					return { ok: false, error: { code: "VALIDATION_ERROR", message: "Listing is required." } };
 				}
+				if (!(await isPublicListing(ctx, listingId))) return NO_LISTING;
 				if (await rateLimited(ctx, `claim:${user.id}`)) return RATE_LIMITED;
 				const id = `claim-${listingId}-${user.id}`;
 				await ctx.storage.claims.put(id, {
@@ -407,6 +418,7 @@ const plugin: SandboxedPlugin = {
 				const listingId = asString(asRecord(routeCtx.input).listingId);
 				const id = `${user.id}:${listingId}`;
 				if (routeCtx.request.method === "POST" && listingId) {
+					if (!(await isPublicListing(ctx, listingId))) return NO_LISTING;
 					await ctx.storage.favorites.put(id, { member_id: user.id, listingId, createdAt: nowIso() });
 					return { ok: true, favorited: true };
 				}
@@ -433,12 +445,13 @@ const plugin: SandboxedPlugin = {
 				// Names and links for every row, so the member never sees a bare id.
 				const all = [listings, reviews, claims, favorites].map(rows);
 				const refs = await listingRefs(ctx, all.flat().map((row) => asString(row.listingId)));
-				const named = (items: ReturnType<typeof rows>) =>
+				const named = (items: ReturnType<typeof rows>, own = false) =>
 					items.map((row) => {
 						const ref = refs.get(asString(row.listingId));
 						return {
 							...row,
-							listing_title: ref?.title ?? asString(row.title) ?? "",
+							// A listing that is not public only shows the title the member typed themselves.
+							listing_title: ref?.published ? ref.title : own ? asString(row.title) : "",
 							listing_url: ref?.published ? `/listings/${ref.slug}/` : "",
 						};
 					});
@@ -451,7 +464,7 @@ const plugin: SandboxedPlugin = {
 						claims: claims.items.length,
 						favorites: favorites.items.length,
 					},
-					listings: named(all[0]),
+					listings: named(all[0], true),
 					reviews: named(all[1]),
 					claims: named(all[2]),
 					favorites: named(all[3]),

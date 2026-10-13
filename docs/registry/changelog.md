@@ -1,3 +1,9 @@
+## 0.3.1
+
+- Fix: approving a review or claim no longer publishes unfinished edits on the listing.
+- Fix: a bad record cannot stop the Listora admin pages from loading.
+- Security: members can only review, save or claim a public listing.
+
 ## 0.3.0
 
 - New: members act as their signed-in account. Guests browse and can message a listing.
