@@ -3,6 +3,8 @@ import Base from "../../layouts/Base.astro";
 import "../../styles/listora-ui.css";
 
 const tab = Astro.url.searchParams.get("tab") || "overview";
+// This page differs per visitor. Sites cache pages without regard to cookies, so say so.
+Astro.response.headers.set("Cache-Control", "private, no-store");
 const user = Astro.locals.user as { name?: string | null; email?: string } | undefined;
 const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.pathname + Astro.url.search)}`;
 ---

@@ -19,4 +19,7 @@ cp "$PLUGIN/site-kit/pages/listings/submit.astro" "$LAB/src/pages/listings/submi
 cp "$PLUGIN/site-kit/pages/listings/calendar.astro" "$LAB/src/pages/listings/calendar.astro"
 cp "$PLUGIN/site-kit/pages/account/index.astro" "$LAB/src/pages/account/index.astro"
 
+mkdir -p "$LAB/public/vendor"
+cp -R "$PLUGIN/site-kit/public/vendor/." "$LAB/public/vendor/"
+
 echo "Copied site-kit into $LAB"

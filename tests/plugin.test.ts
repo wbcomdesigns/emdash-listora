@@ -6,6 +6,10 @@ import {
 	type PluginTestHost,
 } from "@emdash-cms/plugin-test";
 
+import manifestText from "../emdash-plugin.jsonc?raw";
+import submitPage from "../site-kit/pages/listings/submit.astro?raw";
+import { LISTING_TYPES as KIT_TYPES } from "../site-kit/lib/listora";
+import { LISTING_TYPES } from "../src/lib/types";
 // @ts-expect-error plain module shared with the lab seed
 import { listingsCollection } from "../site-kit/seed/collection.mjs";
 
@@ -397,5 +401,30 @@ describe("listing guards", () => {
 		// The rename was not pushed live and the claim is still waiting.
 		expect(await host!.invokeRoute("search", { q: "Half finished" })).toMatchObject({ total: 0 });
 		expect(await host!.storage("claims").get(`claim-${a}-ana`)).toMatchObject({ status: "pending" });
+	});
+});
+
+// The plugin and the kit are separate packages, so each keeps a list of listing types.
+// These tests are what stops the copies drifting apart.
+describe("listing types stay in step", () => {
+	it("matches between the plugin and the kit: slug, name, colour and schema type", () => {
+		expect(KIT_TYPES.map((t) => [t.slug, t.name, t.color, t.schema])).toEqual(
+			LISTING_TYPES.map((t) => [t.slug, t.name, t.color, t.schemaType]),
+		);
+	});
+
+	it("matches the default-type choices in the manifest", () => {
+		const options = [...manifestText.matchAll(/\{ "value": "([^"]+)", "label": "([^"]+)" \}/g)].map((m) => [m[1], m[2]]);
+		expect(options).toEqual(LISTING_TYPES.map((t) => [t.slug, t.name]));
+	});
+
+	it("matches the extra fields on the submit page", () => {
+		for (const type of LISTING_TYPES) {
+			for (const field of type.fields) {
+				// Event dates are fixed inputs on the form, not per-type extras.
+				if (type.slug === "event") continue;
+				expect(submitPage, `${type.slug}.${field.key}`).toContain(`key: "${field.key}"`);
+			}
+		}
 	});
 });

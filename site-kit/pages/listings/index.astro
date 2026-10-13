@@ -280,7 +280,7 @@ function amenityList(value: unknown): string[] {
 	</div>
 </Base>
 
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<link rel="stylesheet" href="/vendor/leaflet/leaflet.css" />
 <script>
 	import { api, signInUrl } from "../../lib/listora";
 
@@ -513,7 +513,7 @@ function amenityList(value: unknown): string[] {
 		if (points.length) {
 			mapEl.hidden = false;
 			const leaflet = document.createElement("script");
-			leaflet.src = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
+			leaflet.src = "/vendor/leaflet/leaflet.js";
 			leaflet.onload = () => {
 				const L = (window as unknown as { L: { map: Function; tileLayer: Function; marker: Function } }).L;
 				const map = L.map(mapEl).setView([points[0].lat, points[0].lng], 12);

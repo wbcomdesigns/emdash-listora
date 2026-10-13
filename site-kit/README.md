@@ -22,6 +22,10 @@ cp path/to/listora/site-kit/pages/listings/\[slug\].astro src/pages/listings/\[s
 cp path/to/listora/site-kit/pages/listings/submit.astro src/pages/listings/submit.astro
 cp path/to/listora/site-kit/pages/listings/calendar.astro src/pages/listings/calendar.astro
 cp path/to/listora/site-kit/pages/account/index.astro src/pages/account/index.astro
+
+# The map library, served from your own site (no outside host)
+mkdir -p public/vendor
+cp -R path/to/listora/site-kit/public/vendor/. public/vendor/
 ```
 
 Collection: create a `listings` collection with the same fields the lab seed uses, or run `site-kit/seed/listings.mjs` the way the lab reset does.
@@ -31,6 +35,17 @@ Demo rows: Admin → Get started → **Load sample directory** (12 NYC listings,
 Add four menu links: `/listings/`, `/listings/submit/`, `/listings/calendar/`, `/account/`.
 
 `astro.config.mjs` must load the sandbox runner and the plugin. See [Install](../docs/website/getting-started/install.md).
+
+## Before you add it to a live site
+
+- **EmDash version.** Built and tested on EmDash 1.2. Update the site first.
+- **Maps.** Leaflet ships in `site-kit/public/vendor/leaflet/`, so a site that only allows its own scripts and styles needs no change. Map tiles are images from `tile.openstreetmap.org`.
+- **Caching.** `/account/` and `/listings/submit/` differ per visitor and send `Cache-Control: private, no-store`. If your site's Worker adds its own cache rules, make sure these two paths stay uncached.
+- **Slugs.** A page with the slug `listings` or `account` would be hidden by the kit pages. Rename it first.
+- **Sign-in.** The sign-in links go to `/_emdash/admin/login`. If your admin lives on another host, change `signInUrl()` in `src/lib/listora.ts`.
+- **Members.** Turn on member sign-up in EmDash, or only your own staff can add listings and reviews.
+- **Permissions.** The plugin can create, change and publish content. It only ever touches the `listings` collection.
+- **Try it on a preview first.** Deploy a preview version, walk `docs/qa/QA_CHECKLIST.md` there, then go live.
 
 ## Who can do what
 

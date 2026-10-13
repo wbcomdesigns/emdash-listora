@@ -2,6 +2,22 @@
 
 Versions match `package.json`, the git tag, and the EmDash registry release. Newest first. Never publish a version that is not on `origin/main`.
 
+## [0.4.0] - 2026-10-13
+
+Bigger directories, a Messages screen, and a kit that suits existing sites. Copy `site-kit/` again after you update, including the new `site-kit/public/vendor/` folder.
+
+- New      - Paging. The archive shows 24 listings per page with Previous and Next, and the directory is no longer cut off at 80 listings.
+- New      - Messages admin page. Read what visitors sent from a listing, mark it handled or delete it.
+- New      - The map library ships inside the kit, so a site that only allows its own scripts needs no change.
+- Improve  - Ratings are kept in the plugin's own storage. Approving a review never touches or republishes the listing.
+- Improve  - A rating updates at once when a member rewrites or erases their review.
+- Improve  - The account and submit pages tell the site never to cache them, because they differ per visitor.
+- Improve  - Public listing reads are cached for 30 seconds, so a busy page does not repeat the same work.
+- Fix      - The submit form was missing the Bathrooms field for real estate listings.
+- Fix      - A contact message is only accepted for a public listing, and is capped at 1000 characters.
+- Dev      - New public route `ratings`. `listings` and `search` take `page` and `per_page` and return `total`, `page`, `pages`.
+- Dev      - Tests fail if the listing-type lists in the plugin, the kit, the manifest and the submit page drift apart.
+
 ## [0.3.1] - 2026-10-13
 
 Safety follow-up to 0.3.0. No kit changes: you do not need to copy `site-kit/` again.

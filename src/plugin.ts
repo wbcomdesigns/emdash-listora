@@ -109,6 +109,10 @@ const REVIEW_BODY_MAX = 1000;
 
 type Member = { id: string; name: string | null; role: number };
 
+// Public reads are the same for every visitor, so the edge can answer repeats.
+// Short enough that an approved review or a new listing shows within a minute.
+const CACHE = "public, max-age=30, stale-while-revalidate=120";
+
 const NO_LISTING = { ok: false, error: { code: "NOT_FOUND", message: "That listing is not available." } };
 
 const SIGN_IN = { ok: false, error: { code: "SIGN_IN_REQUIRED", message: "Sign in to continue." } };
@@ -199,10 +203,12 @@ const plugin: SandboxedPlugin = {
 		},
 		types: {
 			public: true,
+			cacheControl: CACHE,
 			handler: async () => ({ ok: true, items: LISTING_TYPES }),
 		},
 		listings: {
 			public: true,
+			cacheControl: CACHE,
 			handler: async (routeCtx, ctx) => {
 				const filtered = await filterListings(ctx, routeCtx.input);
 				return { ok: true, ...paginate(filtered.items, routeCtx.input) };
@@ -210,6 +216,7 @@ const plugin: SandboxedPlugin = {
 		},
 		search: {
 			public: true,
+			cacheControl: CACHE,
 			handler: async (routeCtx, ctx) => {
 				const raw = asRecord(routeCtx.input);
 				const action = asString(raw.action);
@@ -330,6 +337,7 @@ const plugin: SandboxedPlugin = {
 		},
 		duplicate: {
 			public: true,
+			cacheControl: CACHE,
 			handler: async (routeCtx, ctx) => {
 				const title = asString(asRecord(routeCtx.input).title).toLowerCase();
 				if (!title) return { ok: true, matches: [] };
@@ -343,6 +351,7 @@ const plugin: SandboxedPlugin = {
 		// Ratings for a page of server-rendered cards: ?ids=a,b,c (80 max).
 		ratings: {
 			public: true,
+			cacheControl: CACHE,
 			methods: ["GET"],
 			handler: async (routeCtx, ctx) => {
 				const ids = asString(asRecord(routeCtx.input).ids).split(",").map((id) => id.trim()).filter(Boolean).slice(0, 80);
@@ -357,6 +366,7 @@ const plugin: SandboxedPlugin = {
 		},
 		reviews: {
 			public: true,
+			cacheControl: CACHE,
 			methods: ["GET"],
 			handler: async (routeCtx, ctx) => {
 				const raw = asRecord(routeCtx.input);

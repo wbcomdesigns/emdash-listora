@@ -16,12 +16,15 @@ export async function ratingsMap(ctx: PluginContext): Promise<Map<string, Rating
 }
 
 const PAGE_SIZE = 100;
-const MAX_LISTINGS = 1000;
+const MAX_PAGES = 5;
 
 /**
  * Every published listing, read page by page.
- * ponytail: filters and sorts in memory over up to 1000 listings per request. Move the
- * filters into the content query once a directory outgrows that.
+ * The public listing routes call this, so the work per request is bounded: at most
+ * MAX_PAGES content reads (500 listings) plus one ratings read, and those routes are
+ * served from the edge cache for a short time (see CACHE in plugin.ts).
+ * ponytail: filters and sorts in memory. Move the filters into the content query once a
+ * directory outgrows 500 listings.
  */
 export async function listPublished(ctx: PluginContext): Promise<ListingCard[]> {
 	if (!ctx.content) return [];
@@ -29,11 +32,12 @@ export async function listPublished(ctx: PluginContext): Promise<ListingCard[]> 
 		const ratings = await ratingsMap(ctx);
 		const cards: ListingCard[] = [];
 		let cursor: string | undefined;
-		do {
+		for (let read = 0; read < MAX_PAGES; read += 1) {
 			const page = await ctx.content.list(LISTINGS, { limit: PAGE_SIZE, cursor, where: { status: "published" } });
 			for (const item of page.items) cards.push(listingFromContent(item, ratings.get(item.id)));
-			cursor = page.hasMore ? page.cursor : undefined;
-		} while (cursor && cards.length < MAX_LISTINGS);
+			if (!page.hasMore || !page.cursor) break;
+			cursor = page.cursor;
+		}
 		return cards;
 	} catch {
 		return [];
