@@ -64,6 +64,7 @@
       "folder": "developer-guide",
       "description": "Plugin versus site kit, routes, and how to publish a version.",
       "pages": [
+        { "slug": "handoff", "title": "Session handoff" },
         { "slug": "plugin-and-site-kit", "title": "Plugin, site kit, and host" },
         { "slug": "wordpress-vs-emdash", "title": "WordPress Listora versus this plugin" },
         { "slug": "routes", "title": "Plugin routes" },

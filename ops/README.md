@@ -4,6 +4,7 @@ Long-form research from the first port. The docs the team should read first are 
 
 | File | Use |
 | --- | --- |
+| `handoff.md` | Next-session brief. Read this first |
 | `listora-as-built.md` | What WordPress Listora 1.9.0 actually ships |
 | `feature-catalog-emdash.tsv` | Catalog rows and verdicts |
 | `free-first-plan.md` | Free only. No Pro plan in this pass |

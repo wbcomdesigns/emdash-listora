@@ -1,5 +1,7 @@
 # Agent instructions
 
+Read `ops/handoff.md` first. That is the session handoff for the next change.
+
 This product is Free only. No Pro plan in this pass. Check code completion and site-owner readiness with `docs/qa/`. Do not start, surface, or continue Pro work.
 
 Do not add Google Maps, credits, plans, coupons, Needs, Compare, quick view, SEO landings, coming soon, BuddyPress, photo or multi-criteria reviews, verification badges, lead forms, saved searches, infinite scroll, or Places import. Do not add a Credits tab, a Compare button, or a Pro upsell on any form. The 10 listing types are WordPress Listora Free defaults. They are not Pro.
