@@ -10,7 +10,7 @@ import {
 	syncRating,
 } from "./lib/listings-query";
 import { getOnboardState, loadSampleDirectory } from "./lib/onboard";
-import { LISTING_TYPES, LISTINGS } from "./lib/types";
+import { LISTING_TYPES, LISTINGS, NOTIFY_CRON } from "./lib/types";
 import { asBoolean, asRecord, asString } from "./lib/util";
 
 export type BlockMap = Record<string, unknown> & { type: string };
@@ -456,6 +456,10 @@ function staleRow(row: Record<string, unknown>, stamp: string): string | null {
 }
 
 async function renderMessages(ctx: PluginContext, extra?: Pick<BlockResponse, "toast">): Promise<BlockResponse> {
+	// Sites that updated from a version without notices get the hourly task here.
+	if (ctx.cron && !(await ctx.cron.list()).some((task) => task.name === "notify")) {
+		await ctx.cron.schedule("notify", { schedule: NOTIFY_CRON });
+	}
 	const found = await ctx.storage.contacts.query({
 		where: { status: "new" },
 		orderBy: { createdAt: "desc" },
@@ -473,8 +477,8 @@ async function renderMessages(ctx: PluginContext, extra?: Pick<BlockResponse, "t
 			emailed:
 				data.notice === "sent"
 					? "Owner notified"
-					: data.notice === "recent"
-						? "Owner notified earlier this hour"
+					: data.notice === "waiting"
+						? "Notice goes out within the hour"
 						: "Owner not notified",
 			action: {
 				type: "menu",
@@ -492,7 +496,7 @@ async function renderMessages(ctx: PluginContext, extra?: Pick<BlockResponse, "t
 			{ type: "header", text: "Messages" },
 			{
 				type: "section",
-				text: "Messages visitors sent from a listing page. The member who added or claimed the listing reads them in their account, and gets an email notice (one per listing per hour) when the site has a mail provider. Anything marked Owner not notified has no owner account, so pass it on yourself.",
+				text: "Messages visitors sent from a listing page. The member who added or claimed the listing reads them in their account. Once an hour they get a short email saying messages are waiting, when the site has a mail provider. Anything marked Owner not notified has no owner account, so pass it on yourself.",
 			},
 			table.length === 0
 				? { type: "empty", title: "No new messages", description: "Messages from the contact form on a listing wait here." }
@@ -596,8 +600,9 @@ export async function handleAdmin(
 				title: asString(listing?.title),
 				listing_type: asString(listing?.listing_type),
 				city: asString(listing?.city),
-				status: "approved",
 				...submission,
+				// A claim is only approved on a public listing, so the new owner's row is approved too.
+				status: "approved",
 				member_id: existing.member_id,
 			});
 		}

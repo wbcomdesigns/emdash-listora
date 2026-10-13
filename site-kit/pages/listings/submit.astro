@@ -1,4 +1,5 @@
 ---
+import { getTaxonomyTerms } from "emdash";
 import Layout from "../../layouts/ListoraLayout.astro";
 import { LISTING_TYPES } from "../../lib/listora";
 import "../../styles/listora-ui.css";
@@ -6,6 +7,8 @@ import "../../styles/listora-ui.css";
 // This page differs per visitor. Sites cache pages without regard to cookies, so say so.
 Astro.response.headers.set("Cache-Control", "private, no-store");
 const user = Astro.locals.user;
+// The site's own categories. A site with none still gets a working form.
+const categories = await getTaxonomyTerms("listing_category").catch(() => []);
 const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.pathname)}`;
 ---
 
@@ -150,11 +153,8 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 				<div class="listora-field">
 					<label class="listora-label" for="category">Category</label>
 					<select id="category" class="listora-input" name="category">
-						<option value="fine-dining">Fine Dining</option>
-						<option value="casual">Casual</option>
-						<option value="services">Services</option>
-						<option value="retail">Retail</option>
-						<option value="apartment">Apartment</option>
+						<option value="">No category</option>
+						{categories.map((term) => <option value={term.slug}>{term.label}</option>)}
 					</select>
 				</div>
 				<div class="listora-form-grid">
@@ -335,6 +335,7 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 			const result = await api("submit", {
 					title,
 					listing_type: String(data.get("listing_type") ?? "business"),
+					category: String(data.get("category") ?? ""),
 					excerpt: String(data.get("excerpt") ?? ""),
 					description: String(data.get("description") ?? ""),
 					phone: String(data.get("phone") ?? ""),

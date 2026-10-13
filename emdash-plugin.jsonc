@@ -31,7 +31,7 @@
 		}
 	},
 
-	"capabilities": ["content:read", "content:write", "content:publish", "schema:read", "email:send"],
+	"capabilities": ["content:read", "content:write", "content:publish", "schema:read", "email:send", "taxonomies:read", "taxonomies:write"],
 	"allowedHosts": [],
 	"storage": {
 		"submissions": {
@@ -50,7 +50,7 @@
 			"indexes": ["member_id", "listingId", "createdAt"]
 		},
 		"contacts": {
-			"indexes": ["listingId", "createdAt", "status"]
+			"indexes": ["listingId", "createdAt", "status", "notice"]
 		},
 		"email_log": {
 			"indexes": ["template", "status", "createdAt"]

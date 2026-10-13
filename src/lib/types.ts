@@ -133,3 +133,6 @@ export function listingTypeBySlug(slug: string): ListingType {
 
 export const LISTINGS = "listings";
 export const DEMO_MEMBER = "demo-member";
+
+/** The owner-notice task runs once an hour. */
+export const NOTIFY_CRON = "7 * * * *";

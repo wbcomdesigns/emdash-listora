@@ -47,6 +47,10 @@ Three roles, always in this order: **guest**, **member** (subscriber role), **ad
 | G-15 | Watch the network panel on the archive and a listing page | The map script and style load from `/vendor/leaflet/` on the site. Nothing from unpkg |
 | G-16 | Check response headers of `/account/` and `/listings/submit/` | `Cache-Control: private, no-store` |
 | G-17 | Open the archive | Rated listings show stars and a number on the card after load. Unrated ones show nothing |
+| G-18 | Open `/listings/` | A Category row and a City row of chips, each with a count. Only categories and cities that have live listings |
+| G-19 | Click a category chip | Only that category's listings, the count matches the chip, the chip is marked active, the featured row is hidden. Click it again to clear |
+| G-20 | With a category active, type a search and press Search | The category stays applied. Typing alone does not reload the page |
+| G-21 | Click a city chip | The city fills the location box and the list narrows to it |
 | G-12 | Request `import`, `dashboard`, `favorites`, `privacy` routes directly | 401 each | prove: guests refused |
 
 ## Member (subscriber role)
@@ -67,9 +71,10 @@ Three roles, always in this order: **guest**, **member** (subscriber role), **ad
 | M-12 | Send another member's id in a request body | Ignored. You only ever see and change your own rows | ignores a member id sent in the request |
 | M-14 | Call review, claims or favorites with the id of a draft or missing listing | "That listing is not available." Nothing is stored | refuses member actions on a listing that is not public |
 | M-15 | Profile tab, Delete my data: click once, then again | First click asks you to click again and deletes nothing. Second click deletes your reviews, claims and saved listings, and the counts drop to zero |
-| M-16 | Open `/account/?tab=messages` as the member who added a listing, after a visitor messaged it | The message, the sender's name and a mail link, the date. Markup in a message shows as text. Another member sees none | notifies the owner's account address once an hour |
+| M-16 | Open `/account/?tab=messages` as the member who added a listing, after a visitor messaged it | The message, the sender's name and a mail link, the date. Markup in a message shows as text. Another member sees none. After a claim by someone else is approved, the messages move to that member | notifies the current owner from the hourly task |
 | M-17 | With expiry on, open My listings | Each live listing shows "Expires <date>". Renew shows when expired or inside 30 days. Renew confirms "Renewed until <date>". A failed request says so and the button works again | dates a listing on approval |
 | M-18 | Call `renew` for someone else's listing | Refused | same test |
+| M-19 | Add a listing and pick a category on step 4 | The list shows the site's own categories plus "No category". After approval the listing page shows the category as a link, and the directory count for it goes up by one | |
 | M-13 | Dashboard at 390 | Tabs are one sideways-scrolling row. Content starts above the fold | |
 
 ## Admin
@@ -91,7 +96,7 @@ Three roles, always in this order: **guest**, **member** (subscriber role), **ad
 | A-14 | Same listing: approve a claim on it | Refused with "has unpublished edits". The claim stays pending | |
 | A-15 | Open Messages after a visitor sent one | Listing name, sender, the full message, date. Mark as handled removes it from the list |
 | A-16 | Open Messages with none waiting | Empty state |
-| A-17 | Messages, Owner column | "Owner notified" when the listing has an owner account and the site can send mail, "Owner notified earlier this hour" for the next ones, "Owner not notified" when there is no owner account. The mail goes to the owner's account address and holds nothing the visitor typed | notifies the owner's account address once an hour |
+| A-17 | Messages, Owner column | "Notice goes out within the hour" for a new message on a listing with an owner. After the hourly task: "Owner notified", or "Owner not notified" when there is no owner account or no mail provider. One mail per owner per hour, to their account address, with nothing the visitor typed | notifies the current owner from the hourly task |
 | A-18 | Turn off "Email the listing owner when a message arrives" and save | Stays off after reload. New messages are stored and marked Owner not notified |
 | A-19 | Set "Listings expire after this many days" to 10, save, reload | Shows 10. A listing approved after that carries a date 10 days ahead | dates a listing on approval |
 | A-20 | A listing past its date, after the daily check | Gone from the directory and search. Its page says it has expired | marks a listing past its date as expired |

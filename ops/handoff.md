@@ -71,7 +71,9 @@ Every case in `docs/qa/QA_CHECKLIST.md` is run in a browser as guest, subscriber
 | --- | --- |
 | Live-site preview | Kit is proven on a clean second site (`portfolio` template). Not yet proven on a preview deploy of a live fleet site (Cloudflare, EmDash 1.1) |
 | Directory size | Reads at most 500 listings and filters in memory |
-| Contact | Stored, shown in admin Messages and in the owner's account. Owner notice by email goes only to the account address, with no visitor text, once per listing per hour (`notifyOwner`). Listings with no owner account (imported, admin-made, unclaimed) notify nobody. Needs the new `email:send` permission, so the next release widens what the plugin may do |
+| Contact | Stored, shown in admin Messages and in the owner's account. Nothing is mailed from the visitor's request. The hourly `notify` task (`notifyOwners`) sends each owner one notice to their account address, with no visitor text. Owner = the member on the listing's approved submission row (`listingOwner`); approving a claim moves that row. The address lives only in kv `member-email:<id>`, refreshed on member routes, deleted on erase |
+| Permissions | The next release adds `email:send`, `taxonomies:read`, `taxonomies:write`. That widens what the plugin may do, so decide the version number with the owner |
+| Categories | Filtering by category is done by the kit page, not the search route, so a search inside a category reloads the page |
 | Expiry | Off by default (0 days). The daily task is scheduled when the owner saves a number above 0. 50 listings per run |
 | Dashboard rows | Renew only. No edit |
 | Featured row | The same listings repeat at the top of the grid below it |

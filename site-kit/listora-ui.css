@@ -353,6 +353,34 @@
 	padding-block-end: 2px;
 }
 
+ul.listora-chips {
+	list-style: none;
+	margin: 0;
+	padding-inline-start: 0;
+}
+
+.listora-chip__count {
+	margin-inline-start: 0.35em;
+	opacity: 0.75;
+	font-variant-numeric: tabular-nums;
+}
+
+.listora-facets {
+	display: grid;
+	gap: var(--listora-space-3);
+	margin-block: var(--listora-space-4) var(--listora-space-6);
+}
+
+.listora-facets__row {
+	display: grid;
+	gap: var(--listora-space-2);
+	min-width: 0;
+}
+
+.listora-facets__row > .listora-meta {
+	margin: 0;
+}
+
 .listora-chips::-webkit-scrollbar {
 	display: none;
 }

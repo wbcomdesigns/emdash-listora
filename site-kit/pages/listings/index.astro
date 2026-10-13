@@ -1,5 +1,5 @@
 ---
-import { getEmDashCollection } from "emdash";
+import { getEmDashCollection, getTermsForEntries } from "emdash";
 import { Image } from "emdash/ui";
 import Layout from "../../layouts/ListoraLayout.astro";
 import {
@@ -17,6 +17,7 @@ import "../../styles/listora-ui.css";
 const type = Astro.url.searchParams.get("type") || "";
 const q = Astro.url.searchParams.get("q") || "";
 const location = Astro.url.searchParams.get("location") || "";
+const category = Astro.url.searchParams.get("category") || "";
 const view = Astro.url.searchParams.get("view") || "grid";
 const sort = Astro.url.searchParams.get("sort") || "featured";
 
@@ -27,9 +28,30 @@ const { entries, cacheHint } = await getEmDashCollection("listings", {
 if (Astro.cache?.enabled) Astro.cache.set(cacheHint);
 
 const published = entries.filter((entry) => entry.data.listing_status !== "expired");
+// Categories are the site's own `listing_category` terms. One read covers every listing on the page.
+type Term = { slug: string; label: string };
+const termsByListing: Map<string, Term[]> = published.length
+	? await getTermsForEntries("listings", published.map((entry) => entry.data.id), "listing_category").catch(() => new Map())
+	: new Map();
+const inCategory = (id: string, slug: string) => (termsByListing.get(id) ?? []).some((term) => term.slug === slug);
+const tally = <T extends { label: string }>(map: Map<string, T & { count: number }>, key: string, value: T) =>
+	map.set(key, { ...value, count: (map.get(key)?.count ?? 0) + 1 });
+const categoryCounts = new Map<string, Term & { count: number }>();
+const cityCounts = new Map<string, { label: string; count: number }>();
+for (const entry of published) {
+	for (const term of termsByListing.get(entry.data.id) ?? []) tally(categoryCounts, term.slug, term);
+	const city = String(entry.data.city || "").trim();
+	if (city) tally(cityCounts, city.toLowerCase(), { label: city });
+}
+const byCount = <T extends { label: string; count: number }>(map: Map<string, T>) =>
+	[...map.values()].sort((a, b) => b.count - a.count || a.label.localeCompare(b.label)).slice(0, 12);
+const categoryFacets = byCount(categoryCounts);
+const cityFacets = byCount(cityCounts);
+
 const filtered = sortListings(
 	published.filter((entry) => {
 		if (type && entry.data.listing_type !== type) return false;
+		if (category && !inCategory(entry.data.id, category)) return false;
 		if (!matchesPlace(entry.data, location)) return false;
 		if (!q) return true;
 		const hay = `${entry.data.title} ${entry.data.excerpt} ${placeOf(entry.data)} ${entry.data.listing_type}`.toLowerCase();
@@ -46,10 +68,14 @@ const querySuffix = [
 	type ? `type=${encodeURIComponent(type)}` : "",
 	q ? `q=${encodeURIComponent(q)}` : "",
 	location ? `location=${encodeURIComponent(location)}` : "",
+	category ? `category=${encodeURIComponent(category)}` : "",
 	sort !== "featured" ? `sort=${encodeURIComponent(sort)}` : "",
 ]
 	.filter(Boolean)
 	.join("&");
+// A facet link keeps the listing type and swaps only its own filter.
+const facetHref = (key: "category" | "location", value: string) =>
+	`/listings/?${new URLSearchParams({ ...(type ? { type } : {}), ...(value ? { [key]: value } : {}) })}`;
 const withQuery = (extra: string) => `/listings/?${[extra, querySuffix].filter(Boolean).join("&")}`;
 
 function amenityLabel(item: string): string {
@@ -150,10 +176,59 @@ function amenityList(value: unknown): string[] {
 					))
 				}
 			</div>
+			{category ? <input type="hidden" name="category" value={category} /> : null}
 		</form>
 
 		{
-			featured.length > 0 && !q && !type && !location ? (
+			categoryFacets.length > 0 || cityFacets.length > 1 ? (
+				<nav class="listora-facets" aria-label="Browse the directory">
+					{categoryFacets.length > 0 ? (
+						<div class="listora-facets__row">
+							<h2 class="listora-meta" id="facet-category">Category</h2>
+							<ul class="listora-chips" aria-labelledby="facet-category">
+								{categoryFacets.map((item) => (
+									<li>
+										<a
+											class:list={{ "listora-chip": true, "is-active": category === item.slug }}
+											href={facetHref("category", category === item.slug ? "" : item.slug)}
+											aria-current={category === item.slug ? "true" : undefined}
+											data-facet
+										>
+											{item.label} <span class="listora-chip__count">{item.count}</span>
+										</a>
+									</li>
+								))}
+							</ul>
+						</div>
+					) : null}
+					{cityFacets.length > 1 ? (
+						<div class="listora-facets__row">
+							<h2 class="listora-meta" id="facet-city">City</h2>
+							<ul class="listora-chips" aria-labelledby="facet-city">
+								{cityFacets.map((item) => {
+									const on = location.toLowerCase() === item.label.toLowerCase();
+									return (
+										<li>
+											<a
+												class:list={{ "listora-chip": true, "is-active": on }}
+												href={facetHref("location", on ? "" : item.label)}
+												aria-current={on ? "true" : undefined}
+												data-facet
+											>
+												{item.label} <span class="listora-chip__count">{item.count}</span>
+											</a>
+										</li>
+									);
+								})}
+							</ul>
+						</div>
+					) : null}
+				</nav>
+			) : null
+		}
+
+		{
+			featured.length > 0 && !q && !type && !location && !category ? (
 				<section class="listora-featured" aria-label="Featured listings">
 					<h2 class="listora-meta">Featured</h2>
 					<div class="listora-featured__track">
@@ -295,6 +370,7 @@ function amenityList(value: unknown): string[] {
 	const featuredEl = document.querySelector(".listora-featured");
 	const clearBtn = document.getElementById("listora-clear") as HTMLButtonElement | null;
 	let activeType = new URLSearchParams(location.search).get("type") || "";
+	const activeCategory = new URLSearchParams(location.search).get("category") || "";
 	let near: { lat: string; lng: string } | null = null;
 
 	const TYPE_COVERS: Record<string, string> = {
@@ -374,6 +450,17 @@ function amenityList(value: unknown): string[] {
 
 	async function runSearch(extra: Record<string, string> = {}) {
 		if (!results || !form) return;
+		// A category filter is applied by the page itself, so keep it by loading the filtered page.
+		if (activeCategory) {
+			window.location.href = `/listings/?${new URLSearchParams({
+				...(q?.value ? { q: q.value } : {}),
+				...(locationInput?.value ? { location: locationInput.value } : {}),
+				...(activeType ? { type: activeType } : {}),
+				...(sortSelect && sortSelect.value !== "featured" ? { sort: sortSelect.value } : {}),
+				category: activeCategory,
+			})}`;
+			return;
+		}
 		form.classList.add("is-busy");
 		form.setAttribute("aria-busy", "true");
 		const params = new URLSearchParams({
@@ -445,12 +532,12 @@ function amenityList(value: unknown): string[] {
 	q?.addEventListener("input", () => {
 		if (clearBtn) clearBtn.hidden = !q.value;
 		window.clearTimeout((q as HTMLInputElement & { t?: number }).t);
-		(q as HTMLInputElement & { t?: number }).t = window.setTimeout(() => runSearch(), 220);
+		(q as HTMLInputElement & { t?: number }).t = window.setTimeout(() => (activeCategory ? undefined : runSearch()), 220);
 	});
 
 	locationInput?.addEventListener("input", () => {
 		window.clearTimeout((locationInput as HTMLInputElement & { t?: number }).t);
-		(locationInput as HTMLInputElement & { t?: number }).t = window.setTimeout(() => runSearch(), 220);
+		(locationInput as HTMLInputElement & { t?: number }).t = window.setTimeout(() => (activeCategory ? undefined : runSearch()), 220);
 	});
 
 	form?.addEventListener("submit", (event) => {

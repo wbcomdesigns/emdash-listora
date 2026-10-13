@@ -239,7 +239,7 @@ const schema = {
 							categories.length ? (
 								<p class="listora-chips">
 									{categories.map((term) => (
-										<span class="listora-chip">{term.label}</span>
+										<a class="listora-chip" href={`/listings/?category=${encodeURIComponent(term.slug)}`}>{term.label}</a>
 									))}
 								</p>
 							) : null

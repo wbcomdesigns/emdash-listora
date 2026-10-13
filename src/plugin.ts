@@ -16,7 +16,7 @@ import {
 	syncRating,
 	publishNow,
 } from "./lib/listings-query";
-import { LISTING_TYPES, LISTINGS, listingTypeBySlug } from "./lib/types";
+import { LISTING_TYPES, LISTINGS, NOTIFY_CRON, listingTypeBySlug } from "./lib/types";
 import {
 	asBoolean,
 	asNumber,
@@ -127,39 +127,74 @@ function renewable(ref: { expires_at: string; expired: boolean }): boolean {
 
 type Ctx = Parameters<typeof expireDue>[0];
 
-/** The member who answers for a listing: whoever added it, else whoever's claim was approved. */
-async function listingOwner(ctx: Ctx, listingId: string): Promise<{ id: string; email: string } | null> {
-	const added = asRecord(await ctx.storage.submissions.get(listingId));
-	if (added.member_id) return { id: asString(added.member_id), email: asString(added.member_email) };
-	const claims = rows(await ctx.storage.claims.query({ where: { listingId }, limit: 20 }));
-	const won = claims.find((row) => row.status === "approved");
-	return won ? { id: asString(won.member_id), email: asString(won.member_email) } : null;
+/**
+ * The one rule for who answers for a listing, read fresh every time it matters: the member
+ * on its approved submission row. Approving a claim moves that row to the claimant, so
+ * there is never more than one owner. A pending or rejected row gives nothing.
+ */
+async function listingOwner(ctx: Ctx, listingId: string): Promise<string> {
+	const row = asRecord(await ctx.storage.submissions.get(listingId));
+	return row.status === "approved" ? asString(row.member_id) : "";
+}
+
+// A member's current account address, kept in one place: refreshed whenever they use
+// a member route, removed when they erase their data. Never copied onto other rows.
+const emailKey = (memberId: string) => `member-email:${memberId}`;
+
+async function rememberEmail(ctx: Ctx, user: Member): Promise<void> {
+	const email = asString(user.email);
+	if (!EMAIL_RE.test(email)) return;
+	if ((await ctx.kv.get<string>(emailKey(user.id))) !== email) await ctx.kv.set(emailKey(user.id), email);
 }
 
 /**
- * Tell a listing's owner that a message is waiting. Called from a public route, so:
- * - it goes only to the owner's own account address, never to an address typed into a form
- * - it carries nothing a visitor wrote and no link, so it cannot be used to send someone a lure
- * - one notice per listing per hour, however many messages arrive
+ * Hourly task: tell owners that messages are waiting. It runs on the site's own schedule,
+ * one run at a time, so a visitor cannot trigger or multiply mail. Each owner gets at most
+ * one notice per run. The notice goes to the owner's account address and carries nothing a
+ * visitor wrote and no link.
  */
-async function notifyOwner(ctx: Ctx, listingId: string): Promise<"sent" | "recent" | "none"> {
-	if (!ctx.email || (await ctx.settings.get<boolean>("email_messages")) === false) return "none";
-	const owner = await listingOwner(ctx, listingId);
-	if (!owner || !EMAIL_RE.test(owner.email)) return "none";
-	const key = `notified:${listingId}`;
-	if (Date.now() - (Number(await ctx.kv.get<string>(key)) || 0) < RATE_WINDOW_MS) return "recent";
+async function notifyOwners(ctx: Ctx): Promise<void> {
+	const waiting = rows(await ctx.storage.contacts.query({ where: { notice: "waiting" }, limit: 100 }));
+	if (!waiting.length) return;
+	const mark = (row: (typeof waiting)[number], notice: string) => {
+		const { id, ...data } = row;
+		return ctx.storage.contacts.put(id, { ...data, notice });
+	};
+	if (!ctx.email || (await ctx.settings.get<boolean>("email_messages")) === false) {
+		for (const row of waiting) await mark(row, "none");
+		return;
+	}
 	const site = asString(ctx.site?.name).replace(/\s+/g, " ").trim().slice(0, 80);
-	// Stamped before sending, so a burst of messages cannot each send one.
-	await ctx.kv.set(key, String(Date.now()));
-	try {
-		await ctx.email.send({
-			to: owner.email,
-			subject: "You have a new message about your listing",
-			text: `A visitor sent a message about one of your listings${site ? ` on ${site}` : ""}.\n\nSign in to your account on the site and open Messages to read it.`,
-		});
-		return "sent";
-	} catch {
-		return "none";
+	const owners = new Map<string, string>();
+	const result = new Map<string, string>();
+	for (const row of waiting) {
+		const listingId = asString(row.listingId);
+		if (!owners.has(listingId)) owners.set(listingId, await listingOwner(ctx, listingId));
+		const owner = owners.get(listingId) || "";
+		if (!owner) {
+			await mark(row, "none");
+			continue;
+		}
+		if (!result.has(owner)) {
+			const to = asString(await ctx.kv.get<string>(emailKey(owner)));
+			let outcome = "none";
+			if (EMAIL_RE.test(to)) {
+				try {
+					await ctx.email.send({
+						to,
+						subject: "You have new messages about your listing",
+						text: `Visitors sent messages about your listing${site ? ` on ${site}` : ""}.\n\nSign in to your account on the site and open Messages to read them.`,
+					});
+					outcome = "sent";
+				} catch {
+					// Left waiting, so the next run tries again.
+					outcome = "waiting";
+				}
+			}
+			result.set(owner, outcome);
+		}
+		const outcome = result.get(owner) || "none";
+		if (outcome !== "waiting") await mark(row, outcome);
 	}
 }
 
@@ -170,31 +205,34 @@ const SIGN_IN = { ok: false, error: { code: "SIGN_IN_REQUIRED", message: "Sign i
 // ponytail: KV read-then-write is not atomic, so a burst of parallel requests can each
 // read the same count and slip a few past the cap. Fine for throttling abuse; move to a
 // host rate-limit primitive if one ships.
-async function rateLimited(
-	ctx: { kv: { get<T>(key: string): Promise<T | null>; set(key: string, value: string): Promise<void> } },
-	who: string,
-): Promise<boolean> {
+async function rateLimited(ctx: Pick<Ctx, "kv">, who: string): Promise<boolean> {
 	if (!who) return false;
 	const key = `rate:${who}`;
-	const [start, count] = ((await ctx.kv.get<string>(key)) || "0|0").split("|").map(Number);
-	const now = Date.now();
-	if (now - start > RATE_WINDOW_MS) {
-		await ctx.kv.set(key, `${now}|1`);
-		return false;
+	// Compare-and-set, so requests arriving together cannot each slip under the limit.
+	for (let attempt = 0; attempt < 4; attempt += 1) {
+		const seen = await ctx.kv.getVersioned<string>(key);
+		const [start, count] = (seen?.value || "0|0").split("|").map(Number);
+		const now = Date.now();
+		const fresh = now - start > RATE_WINDOW_MS;
+		if (!fresh && count >= RATE_MAX) return true;
+		const next = fresh ? `${now}|1` : `${start}|${count + 1}`;
+		if ((await ctx.kv.compareAndSet(key, seen?.revision ?? null, next)).applied) return false;
 	}
-	if (count >= RATE_MAX) return true;
-	await ctx.kv.set(key, `${start}|${count + 1}`);
-	return false;
+	// Still losing the race after four tries means a burst: refuse.
+	return true;
 }
 
 const RATE_LIMITED = { ok: false, error: { code: "RATE_LIMITED", message: "Too many requests. Try again in an hour." } };
 
 const plugin: SandboxedPlugin = {
 	hooks: {
+		"plugin:install": { handler: async (_event, ctx) => void (await ctx.cron?.schedule("notify", { schedule: NOTIFY_CRON })) },
+		"plugin:activate": { handler: async (_event, ctx) => void (await ctx.cron?.schedule("notify", { schedule: NOTIFY_CRON })) },
 		// The daily task set up when the owner saves an expiry period.
 		cron: {
 			handler: async (event, ctx) => {
 				if (event.name === "expire") await expireDue(ctx);
+				if (event.name === "notify") await notifyOwners(ctx);
 			},
 		},
 		// Adds the rating to a listing page's structured data. Nothing for unrated listings.
@@ -313,6 +351,7 @@ const plugin: SandboxedPlugin = {
 			handler: async (routeCtx, ctx) => {
 				const user = routeCtx.user as Member | undefined;
 				if (!user) return SIGN_IN;
+				await rememberEmail(ctx, user);
 				const parsed = parseSubmit(routeCtx.input);
 				if (!parsed.ok) {
 					return { ok: false, error: { code: "VALIDATION_ERROR", message: parsed.error } };
@@ -373,10 +412,20 @@ const plugin: SandboxedPlugin = {
 				// Moderation off means the listing goes live now, not into a queue nobody reads.
 				const published = !requireModeration && (await publishNow(ctx, created.id));
 
+				// Only a category the site already has. A member cannot create one.
+				const wanted = asString(asRecord(routeCtx.input).category);
+				if (wanted && ctx.taxonomies?.addEntryTerms) {
+					try {
+						const term = (await ctx.taxonomies.getTerms("listing_category")).find((item) => item.slug === wanted);
+						if (term) await ctx.taxonomies.addEntryTerms(LISTINGS, created.id, "listing_category", [term.id]);
+					} catch {
+						// The listing is saved. An admin can set the category in the editor.
+					}
+				}
+
 				await ctx.storage.submissions.put(created.id, {
 					listingId: created.id,
 					member_id: user.id,
-					member_email: asString(user.email),
 					title: parsed.data.title,
 					listing_type: listingType,
 					city: parsed.data.city,
@@ -497,12 +546,11 @@ const plugin: SandboxedPlugin = {
 				}
 				if (!(await isPublicListing(ctx, listingId))) return NO_LISTING;
 				if (await rateLimited(ctx, `claim:${user.id}`)) return RATE_LIMITED;
+				await rememberEmail(ctx, user);
 				const id = `claim-${listingId}-${user.id}`;
 				await ctx.storage.claims.put(id, {
 					listingId,
 					member_id: user.id,
-					// The signed-in account's own address. The one typed below is never mailed.
-					member_email: asString(user.email),
 					name: (asString(raw.name) || user.name || "").slice(0, REVIEW_TITLE_MAX),
 					email: asString(raw.email).slice(0, REVIEW_TITLE_MAX),
 					message: asString(raw.message).slice(0, REVIEW_BODY_MAX),
@@ -546,14 +594,14 @@ const plugin: SandboxedPlugin = {
 					ctx.storage.favorites.query(mine),
 					ctx.storage.submissions.query(mine),
 				]);
-				// Messages for listings this member added or won a claim on.
+				await rememberEmail(ctx, user);
+				// Messages for listings this member answers for right now. listingOwner decides,
+				// so a rejected listing or one since handed to a claimant gives no access.
 				// ponytail: 25 listings, 10 messages each. Page it if an owner outgrows that.
-				const owned = [
-					...new Set([
-						...rows(listings).map((row) => asString(row.listingId) || row.id),
-						...rows(claims).filter((row) => row.status === "approved").map((row) => asString(row.listingId)),
-					]),
-				].slice(0, 25);
+				const maybe = rows(listings).map((row) => asString(row.listingId) || row.id).slice(0, 25);
+				const owned = (
+					await Promise.all(maybe.map(async (id) => ((await listingOwner(ctx, id)) === user.id ? id : "")))
+				).filter(Boolean);
 				const inbox = {
 					items: (
 						await Promise.all(
@@ -570,8 +618,9 @@ const plugin: SandboxedPlugin = {
 				const named = (items: ReturnType<typeof rows>, own = false) =>
 					items.map((row) => {
 						const ref = refs.get(asString(row.listingId));
+						const { member_id: _member, member_email: _email, rev: _rev, ...shown } = row as Record<string, unknown>;
 						return {
-							...row,
+							...shown,
 							// A listing that is not public only shows the title the member typed themselves.
 							listing_title: ref?.published ? ref.title : own ? asString(row.title) : "",
 							listing_url: ref?.published ? `/listings/${ref.slug}/` : "",
@@ -629,13 +678,11 @@ const plugin: SandboxedPlugin = {
 					// Capped so the admin table can show every character.
 					message: message.slice(0, 1000),
 					status: "new",
-					notice: "none",
+					// Picked up by the hourly task. Nothing is mailed from this request.
+					notice: "waiting",
 					createdAt: nowIso(),
 				};
-				// Stored first, so a mail failure never loses the message.
 				await ctx.storage.contacts.put(id, row);
-				const notice = await notifyOwner(ctx, listingId);
-				if (notice !== "none") await ctx.storage.contacts.put(id, { ...row, notice });
 				return { ok: true, id };
 			},
 		},
@@ -728,6 +775,7 @@ const plugin: SandboxedPlugin = {
 						...claims.items.map((row) => ctx.storage.claims.delete(row.id)),
 						...favorites.items.map((row) => ctx.storage.favorites.delete(row.id)),
 					]);
+					await ctx.kv.delete(emailKey(user.id));
 					for (const id of new Set(rows(reviews).map((row) => asString(row.listingId)))) await syncRating(ctx, id);
 					return { ok: true, erased: true };
 				}
