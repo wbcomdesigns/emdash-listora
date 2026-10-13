@@ -228,6 +228,41 @@ describe("moderation uses the version the admin saw", () => {
 	});
 });
 
+describe("rating after a member changes a live review", () => {
+	it("marks the listing on erase and clears the mark on the next admin page load", async () => {
+		host = await createPluginTestHost();
+		await host.invokeRoute("review", { listingId: "a", body: "Great." }, { method: "POST", user: ana });
+		const rev = (await host.storage<{ rev: string }>("reviews").get("rev-a-ana"))!.rev;
+		await host.invokeRoute("admin", {
+			type: "block_action",
+			action_id: "review_mod",
+			value: `approve|${rev}|rev-a-ana`,
+			page: "/reviews",
+		});
+		await host.invokeRoute("privacy", { action: "erase" }, { method: "POST", user: ana });
+		expect(await host.storage("events").get("rating_dirty:a")).toMatchObject({ contentId: "a" });
+		await host.invokeRoute("admin", { type: "page_load", page: "/reviews" });
+		expect(await host.storage("events").get("rating_dirty:a")).toBeNull();
+	});
+
+	it("marks the listing when a live review is rewritten, not when a pending one is", async () => {
+		host = await createPluginTestHost();
+		const post = { method: "POST", user: ana };
+		await host.invokeRoute("review", { listingId: "a", body: "First." }, post);
+		await host.invokeRoute("review", { listingId: "a", body: "Second, still pending." }, post);
+		expect(await host.storage("events").get("rating_dirty:a")).toBeNull();
+		const rev = (await host.storage<{ rev: string }>("reviews").get("rev-a-ana"))!.rev;
+		await host.invokeRoute("admin", {
+			type: "block_action",
+			action_id: "review_mod",
+			value: `approve|${rev}|rev-a-ana`,
+			page: "/reviews",
+		});
+		await host.invokeRoute("review", { listingId: "a", body: "Rewritten after approval." }, post);
+		expect(await host.storage("events").get("rating_dirty:a")).toMatchObject({ contentId: "a" });
+	});
+});
+
 describe("moderation pages with rows", () => {
 	it("renders valid Block Kit for pending reviews and claims", async () => {
 		const runtime = await createPluginRuntimeTestHost();

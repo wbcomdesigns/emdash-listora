@@ -2,7 +2,7 @@ import type { SandboxedPlugin } from "emdash/plugin";
 
 import { handleAdmin } from "./admin";
 import { maybeSeedDemo } from "./lib/onboard";
-import { filterListings, listPublished, publishNow } from "./lib/listings-query";
+import { filterListings, listPublished, listingRefs, markRatingDirty, publishNow } from "./lib/listings-query";
 import { LISTING_TYPES, LISTINGS, listingTypeBySlug } from "./lib/types";
 import {
 	asBoolean,
@@ -350,9 +350,12 @@ const plugin: SandboxedPlugin = {
 				}
 				if (await rateLimited(ctx, `review:${user.id}`)) return RATE_LIMITED;
 				// One review per member per listing. Writing again replaces it and sends it back to moderation.
-				// The listing rating is only ever recalculated by an admin decision: a member route must
-				// not write to or publish a listing.
+				// A member route must not write to or publish a listing. Replacing a live review
+				// marks the rating dirty; the next admin page load recalculates it.
 				const id = `rev-${listingId}-${user.id}`;
+				if (asRecord(await ctx.storage.reviews.get(id)).status === "published") {
+					await markRatingDirty(ctx, listingId);
+				}
 				await ctx.storage.reviews.put(id, {
 					listingId,
 					member_id: user.id,
@@ -427,6 +430,18 @@ const plugin: SandboxedPlugin = {
 					ctx.storage.favorites.query(mine),
 					ctx.storage.submissions.query(mine),
 				]);
+				// Names and links for every row, so the member never sees a bare id.
+				const all = [listings, reviews, claims, favorites].map(rows);
+				const refs = await listingRefs(ctx, all.flat().map((row) => asString(row.listingId)));
+				const named = (items: ReturnType<typeof rows>) =>
+					items.map((row) => {
+						const ref = refs.get(asString(row.listingId));
+						return {
+							...row,
+							listing_title: ref?.title ?? asString(row.title) ?? "",
+							listing_url: ref?.published ? `/listings/${ref.slug}/` : "",
+						};
+					});
 				return {
 					ok: true,
 					member: { id: user.id, name: user.name },
@@ -436,10 +451,10 @@ const plugin: SandboxedPlugin = {
 						claims: claims.items.length,
 						favorites: favorites.items.length,
 					},
-					listings: rows(listings),
-					reviews: rows(reviews),
-					claims: rows(claims),
-					favorites: rows(favorites),
+					listings: named(all[0]),
+					reviews: named(all[1]),
+					claims: named(all[2]),
+					favorites: named(all[3]),
 				};
 			},
 		},
@@ -556,6 +571,9 @@ const plugin: SandboxedPlugin = {
 				]);
 				if (asString(asRecord(routeCtx.input).action) === "erase") {
 					await Promise.all([
+						...rows(reviews)
+							.filter((row) => row.status === "published")
+							.map((row) => markRatingDirty(ctx, asString(row.listingId))),
 						...reviews.items.map((row) => ctx.storage.reviews.delete(row.id)),
 						...claims.items.map((row) => ctx.storage.claims.delete(row.id)),
 						...favorites.items.map((row) => ctx.storage.favorites.delete(row.id)),

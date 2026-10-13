@@ -1420,6 +1420,19 @@ textarea.listora-input {
 	.listora-detail__content,
 	.listora-dash {
 		grid-template-columns: minmax(0, 1fr);
+		gap: var(--listora-space-4);
+	}
+
+	/* One sideways-scrolling row of tabs, so the content starts above the fold. */
+	.listora-dash nav {
+		display: flex;
+		overflow-x: auto;
+		padding-block-end: var(--listora-space-2);
+		scrollbar-width: thin;
+	}
+
+	.listora-dash nav .listora-chip {
+		flex: 0 0 auto;
 	}
 
 	.listora-detail__sidebar {

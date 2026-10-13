@@ -75,7 +75,8 @@ export async function patchListing(
 	id: string,
 	patch: Record<string, unknown>,
 ): Promise<Record<string, unknown> | null> {
-	const listing = await ctx.content?.get?.(LISTINGS, id);
+	// A deleted listing or a missing collection must not break moderation of its reviews.
+	const listing = await ctx.content?.get?.(LISTINGS, id).catch(() => null);
 	if (!listing || !ctx.content?.update) return null;
 	const data = { ...listing.data, ...patch };
 	await ctx.content.update(LISTINGS, id, data);
@@ -95,3 +96,46 @@ export async function syncRating(ctx: PluginContext, listingId: string): Promise
 	});
 }
 
+
+const RATING_DIRTY = "rating_dirty";
+
+/**
+ * A member changed a live review (rewrote or erased it). Members must not write to a
+ * listing, so leave a marker; the next admin page load recalculates the rating.
+ */
+export async function markRatingDirty(ctx: PluginContext, listingId: string): Promise<void> {
+	if (!listingId) return;
+	await ctx.storage.events.put(`${RATING_DIRTY}:${listingId}`, {
+		collection: RATING_DIRTY,
+		contentId: listingId,
+		savedAt: new Date().toISOString(),
+	});
+}
+
+export async function drainRatingDirty(ctx: PluginContext): Promise<void> {
+	const found = await ctx.storage.events.query({ where: { collection: RATING_DIRTY }, limit: 50 });
+	for (const row of rows(found)) {
+		await syncRating(ctx, asString(row.contentId));
+		await ctx.storage.events.delete(row.id);
+	}
+}
+
+export type ListingRef = { title: string; slug: string; published: boolean };
+
+/** Title and slug for a set of listing ids, so screens show names instead of ids. */
+export async function listingRefs(ctx: PluginContext, ids: string[]): Promise<Map<string, ListingRef>> {
+	const unique = [...new Set(ids.filter(Boolean))];
+	// One read per distinct listing. Callers pass at most one page of rows.
+	const found = await Promise.all(unique.map((id) => ctx.content?.get?.(LISTINGS, id).catch(() => null)));
+	const refs = new Map<string, ListingRef>();
+	unique.forEach((id, index) => {
+		const item = found[index];
+		if (!item) return;
+		refs.set(id, {
+			title: asString(asRecord(item.data).title) || id,
+			slug: item.slug || id,
+			published: item.status === "published",
+		});
+	});
+	return refs;
+}

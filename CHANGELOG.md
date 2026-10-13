@@ -12,6 +12,8 @@ Members sign in, the core flows finish, and the directory works in dark mode. Co
 - Improve  - Approving or rejecting a review recalculates the listing rating.
 - Improve  - Approving a claim marks the listing as claimed and makes the claimant its owner.
 - Improve  - Reviews and Claims tables show the listing name, the star count and the full text being approved.
+- Improve  - The member dashboard shows listing names, links and plain status wording, and its tabs scroll in one row on a phone.
+- Improve  - A rating catches up after a member rewrites or erases an approved review.
 - Improve  - Spam keywords can be edited in Settings.
 - Improve  - The submit limit is eight per hour per member instead of a permanent block.
 - Improve  - Listing schema uses the listing type's own schema.org type.
@@ -25,6 +27,7 @@ Members sign in, the core flows finish, and the directory works in dark mode. Co
 - Security - Kit pages escape review, listing and dashboard text before showing it.
 - Security - A review or claim rewritten after the admin loaded the page cannot be approved without a second look.
 - Dev      - `reviews` is read only. `favorites`, `dashboard`, `privacy`, `renew`, `claims` and `submit` are member routes. `import` is admin only.
+- Dev      - `docs/qa/QA_CHECKLIST.md` lists the release cases by role. `scripts/lab-role.sh` switches the lab account to a subscriber.
 - Dev      - One `api`, `esc` and `notify` helper in `site-kit/lib/listora.ts`. Typecheck runs inside `npm test`.
 
 ## [0.2.1] - 2026-10-13
