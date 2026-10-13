@@ -7,7 +7,8 @@ import {
 	isPublicListing,
 	listPublished,
 	listingRefs,
-	markRatingDirty,
+	ratingsMap,
+	syncRating,
 	publishNow,
 } from "./lib/listings-query";
 import { LISTING_TYPES, LISTINGS, listingTypeBySlug } from "./lib/types";
@@ -135,6 +136,33 @@ const RATE_LIMITED = { ok: false, error: { code: "RATE_LIMITED", message: "Too m
 
 const plugin: SandboxedPlugin = {
 	hooks: {
+		// Adds the rating to a listing page's structured data. Nothing for unrated listings.
+		"page:metadata": {
+			handler: async (event, ctx) => {
+				const content = event.page.content;
+				if (!content || content.collection !== LISTINGS) return null;
+				const rating = asRecord(await ctx.storage.ratings.get(content.id));
+				const count = asNumber(rating.count) ?? 0;
+				if (!count) return null;
+				return {
+					kind: "jsonld",
+					id: "listora-rating",
+					graph: {
+						"@context": "https://schema.org",
+						"@type": "LocalBusiness",
+						name: event.page.pageTitle || event.page.title || undefined,
+						url: event.page.canonical || event.page.url,
+						aggregateRating: {
+							"@type": "AggregateRating",
+							ratingValue: rating.average,
+							reviewCount: count,
+							bestRating: 5,
+							worstRating: 1,
+						},
+					},
+				};
+			},
+		},
 		"content:afterSave": {
 			handler: async (event, ctx) => {
 				if (event.collection !== LISTINGS) return;
@@ -319,6 +347,21 @@ const plugin: SandboxedPlugin = {
 				};
 			},
 		},
+		// Ratings for a page of server-rendered cards: ?ids=a,b,c (80 max).
+		ratings: {
+			public: true,
+			methods: ["GET"],
+			handler: async (routeCtx, ctx) => {
+				const ids = asString(asRecord(routeCtx.input).ids).split(",").map((id) => id.trim()).filter(Boolean).slice(0, 80);
+				const all = await ratingsMap(ctx);
+				const ratings: Record<string, { average: number; count: number }> = {};
+				for (const id of ids) {
+					const rating = all.get(id);
+					if (rating) ratings[id] = rating;
+				}
+				return { ok: true, ratings };
+			},
+		},
 		reviews: {
 			public: true,
 			methods: ["GET"],
@@ -360,12 +403,9 @@ const plugin: SandboxedPlugin = {
 				}
 				if (await rateLimited(ctx, `review:${user.id}`)) return RATE_LIMITED;
 				// One review per member per listing. Writing again replaces it and sends it back to moderation.
-				// A member route must not write to or publish a listing. Replacing a live review
-				// marks the rating dirty; the next admin page load recalculates it.
+				// A member route must not write to or publish a listing. Ratings live in plugin
+				// storage, so keeping one right is safe from here.
 				const id = `rev-${listingId}-${user.id}`;
-				if (asRecord(await ctx.storage.reviews.get(id)).status === "published") {
-					await markRatingDirty(ctx, listingId);
-				}
 				await ctx.storage.reviews.put(id, {
 					listingId,
 					member_id: user.id,
@@ -379,6 +419,8 @@ const plugin: SandboxedPlugin = {
 					owner_reply: "",
 					createdAt: nowIso(),
 				});
+				// A rewrite sends a live review back to pending, so the rating drops it straight away.
+				await syncRating(ctx, listingId);
 				return { ok: true, review: { id, status: "pending" } };
 			},
 		},
@@ -584,13 +626,11 @@ const plugin: SandboxedPlugin = {
 				]);
 				if (asString(asRecord(routeCtx.input).action) === "erase") {
 					await Promise.all([
-						...rows(reviews)
-							.filter((row) => row.status === "published")
-							.map((row) => markRatingDirty(ctx, asString(row.listingId))),
 						...reviews.items.map((row) => ctx.storage.reviews.delete(row.id)),
 						...claims.items.map((row) => ctx.storage.claims.delete(row.id)),
 						...favorites.items.map((row) => ctx.storage.favorites.delete(row.id)),
 					]);
+					for (const id of new Set(rows(reviews).map((row) => asString(row.listingId)))) await syncRating(ctx, id);
 					return { ok: true, erased: true };
 				}
 				return { ok: true, reviews: rows(reviews), claims: rows(claims), favorites: rows(favorites) };

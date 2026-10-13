@@ -55,6 +55,9 @@
 		"email_log": {
 			"indexes": ["template", "status", "createdAt"]
 		},
+		"ratings": {
+			"indexes": ["count"]
+		},
 		"blocked": {
 			"indexes": ["member_id", "createdAt"]
 		}

@@ -4,14 +4,12 @@ import { Image } from "emdash/ui";
 import Base from "../../layouts/Base.astro";
 import {
 	LISTING_TYPES,
-	asNumber,
 	coverUrl,
 	isOpenNow,
 	matchesPlace,
 	parseHours,
 	placeOf,
 	sortListings,
-	stars,
 	typeName,
 } from "../../lib/listora";
 import "../../styles/listora-ui.css";
@@ -214,7 +212,6 @@ function amenityList(value: unknown): string[] {
 					filtered.map((listing) => {
 						const hours = parseHours(listing.data.hours);
 						const open = hours.length ? isOpenNow(hours, String(listing.data.timezone || "America/New_York")) : null;
-						const rating = asNumber(listing.data.rating_avg);
 						const amenities = amenityList(listing.data.amenities);
 						const owner = String(listing.data.owner_name || "");
 						return (
@@ -227,7 +224,7 @@ function amenityList(value: unknown): string[] {
 									)}
 									<span class="listora-badge">{typeName(listing.data.listing_type)}</span>
 									{listing.data.is_featured ? <span class="listora-badge listora-badge--featured">Featured</span> : null}
-									{rating ? <span class="listora-card__rating">{stars(rating)} {rating.toFixed(1)}</span> : null}
+									<span class="listora-card__rating" data-rating={listing.data.id} hidden></span>
 									<button class="listora-card__favorite" type="button" data-favorite={listing.data.id} aria-label={`Save ${listing.data.title}`}>
 										<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
 											<path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"></path>
@@ -392,6 +389,25 @@ function amenityList(value: unknown): string[] {
 		form.removeAttribute("aria-busy");
 		if (clearBtn) clearBtn.hidden = !(q?.value || "");
 	}
+
+	// Ratings are not in the page HTML: they come from plugin storage in one request.
+	async function fillRatings() {
+		const slots = [...document.querySelectorAll<HTMLElement>("[data-rating]")];
+		const ids = [...new Set(slots.map((node) => node.dataset.rating ?? ""))].filter(Boolean).slice(0, 80);
+		if (!ids.length) return;
+		const data = await api(`ratings?ids=${encodeURIComponent(ids.join(","))}`);
+		const ratings = (data.ratings ?? {}) as Record<string, { average: number; count: number }>;
+		slots.forEach((node) => {
+			const rating = ratings[node.dataset.rating ?? ""];
+			if (!rating) return;
+			node.hidden = false;
+			node.textContent = `${"★".repeat(Math.max(1, Math.round(rating.average)))} ${rating.average.toFixed(1)}`;
+			node.setAttribute("aria-label", `Rated ${rating.average.toFixed(1)} out of 5 from ${rating.count} reviews`);
+		});
+	}
+	// Sorting by rating needs the stored ratings, so that order comes from the search route.
+	if (new URLSearchParams(location.search).get("sort") === "rating") runSearch();
+	else fillRatings();
 
 	q?.addEventListener("input", () => {
 		if (clearBtn) clearBtn.hidden = !q.value;

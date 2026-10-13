@@ -1,13 +1,6 @@
 import type { PluginContext } from "emdash/plugin";
 
-import {
-	drainRatingDirty,
-	listingRefs,
-	markRatingDirty,
-	patchListing,
-	publishNow,
-	syncRating,
-} from "./lib/listings-query";
+import { backfillRatings, listingRefs, patchListing, publishNow, syncRating } from "./lib/listings-query";
 import { getOnboardState, loadSampleDirectory } from "./lib/onboard";
 import { LISTING_TYPES, LISTINGS } from "./lib/types";
 import { asBoolean, asRecord, asString } from "./lib/util";
@@ -438,8 +431,7 @@ export async function handleAdmin(
 	const type = asString(raw.type);
 	const page = asString(raw.page);
 
-	// Ratings that members made stale (rewrote or erased a live review) catch up here.
-	if (type === "page_load") await drainRatingDirty(ctx);
+	if (type === "page_load") await backfillRatings(ctx);
 
 	if (type === "block_action" && asString(raw.action_id) === "load_sample") {
 		const result = await loadSampleDirectory(ctx);
@@ -481,9 +473,7 @@ export async function handleAdmin(
 			...existing,
 			status: action === "approve" ? "published" : "rejected",
 		});
-		const listingId = asString(existing.listingId);
-		// Listing has unpublished edits: leave them alone, the rating catches up later.
-		if (!(await syncRating(ctx, listingId))) await markRatingDirty(ctx, listingId);
+		await syncRating(ctx, asString(existing.listingId));
 		return renderReviewQueue(ctx, { toast: { message: "Review updated.", type: "success" } });
 	}
 

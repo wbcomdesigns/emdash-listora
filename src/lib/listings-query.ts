@@ -4,14 +4,25 @@ import { haversineKm, listingFromContent, matchesQuery, type ListingCard } from 
 import { LISTINGS } from "./types";
 import { asNumber, asRecord, asString, rows } from "./util";
 
+export type Rating = { average: number; count: number };
+
+/** Every listing's rating, from plugin storage. One read for a whole page of cards. */
+export async function ratingsMap(ctx: PluginContext): Promise<Map<string, Rating>> {
+	// ponytail: reads up to 500 rating rows. Query by the page's ids once directories outgrow that.
+	const found = await ctx.storage.ratings.query({ limit: 500 });
+	return new Map(
+		rows(found).map((row) => [row.id, { average: asNumber(row.average) ?? 0, count: asNumber(row.count) ?? 0 }]),
+	);
+}
+
 export async function listPublished(ctx: PluginContext, limit = 100): Promise<ListingCard[]> {
 	if (!ctx.content) return [];
 	try {
-		const result = await ctx.content.list(LISTINGS, {
-			limit,
-			where: { status: "published" },
-		});
-		return result.items.map(listingFromContent);
+		const [result, ratings] = await Promise.all([
+			ctx.content.list(LISTINGS, { limit, where: { status: "published" } }),
+			ratingsMap(ctx),
+		]);
+		return result.items.map((item) => listingFromContent(item, ratings.get(item.id)));
 	} catch {
 		return [];
 	}
@@ -89,49 +100,38 @@ export async function patchListing(
 	return { state: "done", data };
 }
 
-/** Recalculate a listing's rating from its published reviews. False when the listing was busy. */
-export async function syncRating(ctx: PluginContext, listingId: string): Promise<boolean> {
-	const found = await ctx.storage.reviews.query({ where: { listingId }, limit: 200 });
+/**
+ * Recalculate a listing's rating from its published reviews and keep it in plugin storage.
+ * It never touches the listing itself, so it is safe to call from a member route and can
+ * never publish someone's unfinished edits.
+ */
+export async function syncRating(ctx: PluginContext, listingId: string): Promise<void> {
+	if (!listingId) return;
+	// ponytail: reads up to 500 reviews per listing. Keep running totals on the rating row
+	// if one listing ever collects more than that.
+	const found = await ctx.storage.reviews.query({ where: { listingId }, limit: 500 });
 	const stars = rows(found)
 		.filter((row) => row.status === "published")
 		.map((row) => asNumber(row.stars) ?? 0);
-	const avg = stars.length ? stars.reduce((sum, value) => sum + value, 0) / stars.length : 0;
-	const result = await patchListing(ctx, listingId, {
-		rating_avg: Math.round(avg * 10) / 10,
-		rating_count: stars.length,
-	});
-	return result.state !== "busy";
-}
-
-const RATING_DIRTY = "rating_dirty";
-
-/**
- * A member changed a live review (rewrote or erased it). Members must not write to a
- * listing, so leave a marker; the next admin page load recalculates the rating.
- */
-export async function markRatingDirty(ctx: PluginContext, listingId: string): Promise<void> {
-	if (!listingId) return;
-	await ctx.storage.events.put(`${RATING_DIRTY}:${listingId}`, {
-		collection: RATING_DIRTY,
-		contentId: listingId,
-		savedAt: new Date().toISOString(),
+	if (!stars.length) {
+		await ctx.storage.ratings.delete(listingId);
+		return;
+	}
+	await ctx.storage.ratings.put(listingId, {
+		average: Math.round((stars.reduce((sum, value) => sum + value, 0) / stars.length) * 10) / 10,
+		count: stars.length,
 	});
 }
 
-/**
- * Runs on admin page loads. Markers are written by members, so this must never be able to
- * break the page: a few per load, each isolated, and a marker that throws is dropped.
- */
-export async function drainRatingDirty(ctx: PluginContext): Promise<void> {
+/** One-time: build rating rows for sites that kept ratings on the listing before 0.4.0. */
+export async function backfillRatings(ctx: PluginContext): Promise<void> {
+	if ((await ctx.kv.get<string>("ratings_v1")) === "1") return;
 	try {
-		const found = await ctx.storage.events.query({ where: { collection: RATING_DIRTY }, limit: 5 });
-		for (const row of rows(found)) {
-			const settled = await syncRating(ctx, asString(row.contentId)).catch(() => true);
-			// A busy listing keeps its marker and is retried on a later load.
-			if (settled) await ctx.storage.events.delete(row.id);
-		}
+		const found = await ctx.storage.reviews.query({ where: { status: "published" }, limit: 500 });
+		for (const id of new Set(rows(found).map((row) => asString(row.listingId)))) await syncRating(ctx, id);
+		await ctx.kv.set("ratings_v1", "1");
 	} catch {
-		// Rating catch-up is best effort. Moderation pages load regardless.
+		// Tried again on the next admin page load.
 	}
 }
 

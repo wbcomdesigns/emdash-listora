@@ -251,38 +251,69 @@ describe("moderation uses the version the admin saw", () => {
 	});
 });
 
-describe("rating after a member changes a live review", () => {
-	it("marks the listing on erase and clears the mark on the next admin page load", async () => {
-		const { a } = await directory();
-		await host!.invokeRoute("review", { listingId: a, body: "Great." }, { method: "POST", user: ana });
-		const rev = (await host!.storage<{ rev: string }>("reviews").get(`rev-${a}-ana`))!.rev;
-		await host!.invokeRoute("admin", {
+describe("ratings live in plugin storage", () => {
+	const approve = async (a: string, who: string) => {
+		const rev = (await host!.storage<{ rev: string }>("reviews").get(`rev-${a}-${who}`))!.rev;
+		return host!.invokeRoute("admin", {
 			type: "block_action",
 			action_id: "review_mod",
-			value: `approve|${rev}|rev-${a}-ana`,
+			value: `approve|${rev}|rev-${a}-${who}`,
 			page: "/reviews",
 		});
+	};
+	const rating = async (a: string) => {
+		const got = (await host!.invokeRoute("ratings", { ids: a }, { method: "GET" })) as {
+			ratings: Record<string, { average: number; count: number }>;
+		};
+		return got.ratings[a] ?? null;
+	};
+
+	it("follows approval, a member rewrite and a member erase, without touching the listing", async () => {
+		const { a, rt } = await directory();
+		const before = await rt.inspect.content.get("listings", a);
+		await host!.invokeRoute("review", { listingId: a, stars: 5, body: "Great." }, { method: "POST", user: ana });
+		await host!.invokeRoute("review", { listingId: a, stars: 2, body: "Meh." }, { method: "POST", user: ben });
+		expect(await rating(a)).toBeNull();
+		await approve(a, "ana");
+		expect(await rating(a)).toEqual({ average: 5, count: 1 });
+		await approve(a, "ben");
+		expect(await rating(a)).toEqual({ average: 3.5, count: 2 });
+
+		// A rewrite goes back to pending and leaves the rating at once.
+		await host!.invokeRoute("review", { listingId: a, stars: 1, body: "Changed." }, { method: "POST", user: ben });
+		expect(await rating(a)).toEqual({ average: 5, count: 1 });
+
 		await host!.invokeRoute("privacy", { action: "erase" }, { method: "POST", user: ana });
-		expect(await host!.storage("events").get(`rating_dirty:${a}`)).toMatchObject({ contentId: a });
-		await host!.invokeRoute("admin", { type: "page_load", page: "/reviews" });
-		expect(await host!.storage("events").get(`rating_dirty:${a}`)).toBeNull();
+		expect(await rating(a)).toBeNull();
+
+		// None of this wrote to the listing.
+		const after = await rt.inspect.content.get("listings", a);
+		expect(after!.updatedAt).toBe(before!.updatedAt);
+		expect(after!.status).toBe("published");
 	});
 
-	it("marks the listing when a live review is rewritten, not when a pending one is", async () => {
+	it("shows the stored rating on cards and in search order", async () => {
 		const { a } = await directory();
-		const post = { method: "POST", user: ana };
-		await host!.invokeRoute("review", { listingId: a, body: "First." }, post);
-		await host!.invokeRoute("review", { listingId: a, body: "Second, still pending." }, post);
-		expect(await host!.storage("events").get(`rating_dirty:${a}`)).toBeNull();
-		const rev = (await host!.storage<{ rev: string }>("reviews").get(`rev-${a}-ana`))!.rev;
-		await host!.invokeRoute("admin", {
-			type: "block_action",
-			action_id: "review_mod",
-			value: `approve|${rev}|rev-${a}-ana`,
-			page: "/reviews",
+		await host!.invokeRoute("review", { listingId: a, stars: 4, body: "Good." }, { method: "POST", user: ana });
+		await approve(a, "ana");
+		const found = (await host!.invokeRoute("search", { q: "probe", sort: "rating" })) as {
+			items: Array<{ rating_avg: number; rating_count: number }>;
+		};
+		expect(found.items[0]).toMatchObject({ rating_avg: 4, rating_count: 1 });
+	});
+
+	it("adds the rating to a listing page's structured data only when there is one", async () => {
+		const { a, rt } = await directory();
+		const page = {
+			page: { url: "https://x.test/listings/probe-cafe", path: "/listings/probe-cafe", locale: null, kind: "content", pageType: "listing", title: "Probe Cafe", description: null, canonical: null, image: null, content: { collection: "listings", id: a, slug: "probe-cafe" } },
+		};
+		expect(await rt.transport.invokeHook("page:metadata", page)).toBeNull();
+		await host!.invokeRoute("review", { listingId: a, stars: 4, body: "Good." }, { method: "POST", user: ana });
+		await approve(a, "ana");
+		expect(await rt.transport.invokeHook("page:metadata", page)).toMatchObject({
+			kind: "jsonld",
+			graph: { aggregateRating: { ratingValue: 4, reviewCount: 1 } },
 		});
-		await host!.invokeRoute("review", { listingId: a, body: "Rewritten after approval." }, post);
-		expect(await host!.storage("events").get(`rating_dirty:${a}`)).toMatchObject({ contentId: a });
 	});
 });
 
@@ -309,30 +340,21 @@ describe("listing guards", () => {
 		}
 	});
 
-	it("updates the live rating on approval and leaves a listing with unpublished edits alone", async () => {
+	it("refuses to approve a claim on a listing that has unpublished edits", async () => {
 		const { a, rt } = await directory();
-		const approve = async () => {
-			const rev = (await host!.storage<{ rev: string }>("reviews").get(`rev-${a}-ana`))!.rev;
-			return host!.invokeRoute("admin", {
-				type: "block_action",
-				action_id: "review_mod",
-				value: `approve|${rev}|rev-${a}-ana`,
-				page: "/reviews",
-			});
-		};
-		await host!.invokeRoute("review", { listingId: a, stars: 4, body: "Good." }, { method: "POST", user: ana });
-		await approve();
-		expect((await rt.inspect.content.get("listings", a))!.data).toMatchObject({ rating_avg: 4, rating_count: 1 });
-
-		// An editor leaves unpublished edits on the listing.
+		await host!.invokeRoute("claims", { listingId: a, name: "Ana" }, { method: "POST", user: ana });
 		const draft = await rt.inspect.content.get("listings", a);
 		await rt.actions.content.update("listings", a, { data: { ...draft!.data, title: "Half finished rename" } } as never);
-		await host!.invokeRoute("review", { listingId: a, stars: 1, body: "Changed my mind." }, { method: "POST", user: ana });
-		await approve();
-		const after = await rt.inspect.content.get("listings", a);
-		expect(after!.status).toBe("published");
-		// The rename was not pushed live, and the rating waits behind a marker.
+		const rev = (await host!.storage<{ rev: string }>("claims").get(`claim-${a}-ana`))!.rev;
+		const result = await host!.invokeRoute("admin", {
+			type: "block_action",
+			action_id: "claim_mod",
+			value: `approve|${rev}|claim-${a}-ana`,
+			page: "/claims",
+		});
+		expect(result).toMatchObject({ toast: { type: "error" } });
+		// The rename was not pushed live and the claim is still waiting.
 		expect(await host!.invokeRoute("search", { q: "Half finished" })).toMatchObject({ total: 0 });
-		expect(await host!.storage("events").get(`rating_dirty:${a}`)).toMatchObject({ contentId: a });
+		expect(await host!.storage("claims").get(`claim-${a}-ana`)).toMatchObject({ status: "pending" });
 	});
 });
