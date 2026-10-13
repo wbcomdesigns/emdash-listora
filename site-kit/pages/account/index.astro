@@ -92,7 +92,7 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 </Layout>
 
 <script>
-	import { api, esc } from "../../lib/listora";
+	import { api, esc, uploadPhoto } from "../../lib/listora";
 
 	const tab = document.getElementById("dash-main")?.getAttribute("data-tab") || "overview";
 	const panels: Record<string, string> = {
@@ -146,7 +146,7 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 						const edit = item.can_edit
 							? ` <a class="listora-btn listora-btn--secondary" href="/listings/submit/?edit=${id}">${item.edit_pending ? "Edit again" : "Edit"}</a>`
 							: "";
-						return `<li class="listora-review listora-row"><span class="listora-row__text"><strong>${title}</strong>${rest.length ? ` · ${rest.join(" · ")}` : ""}${waiting}</span><span class="listora-row__actions">${edit}${renew}</span></li>`;
+						return `<li class="listora-review listora-row"><span class="listora-row__text"><strong>${title}</strong>${rest.length ? ` · ${rest.join(" · ")}` : ""}${waiting}</span><span class="listora-row__actions">${edit}${renew}</span>${photosHtml(item)}</li>`;
 					})
 					.join("")}</ul>`
 			: `<div class="listora-empty"><h2>Nothing here yet</h2><p>This tab fills as you use the directory.</p></div>`;
@@ -160,10 +160,74 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 			: date.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
 	}
 
+	// An owner's photos for one listing: what is there, what is waiting, and a way to add one.
+	// Only present when the site has photos turned on.
+	function photosHtml(item: Record<string, unknown>): string {
+		const limit = Number(item.photo_limit) || 0;
+		if (!limit) return "";
+		const photos = (item.photos ?? []) as Array<{ id: string; url: string; status: string }>;
+		const id = esc(item.listingId || item.id);
+		const shown = photos
+			.map(
+				(photo, index) =>
+					// A waiting photo has no address to show: only the site's admin can see it until it is approved.
+					photo.status === "approved" && photo.url
+						? `<li class="listora-photos__item"><img src="${esc(photo.url)}" alt="Photo ${index + 1}" width="120" height="88" loading="lazy" /><span>On your listing</span></li>`
+						: `<li class="listora-photos__item"><span class="listora-photos__waiting" aria-hidden="true"></span><span>Photo ${index + 1}: waiting for approval</span><button type="button" class="listora-btn listora-btn--secondary" data-photo-remove="${esc(photo.id)}">Remove</button></li>`,
+			)
+			.join("");
+		const add =
+			photos.length < limit
+				? `<label class="listora-btn listora-btn--secondary listora-photos__add"><input type="file" accept="image/jpeg,image/png,image/webp" data-photo-add="${id}" />Add a photo</label>`
+				: "";
+		return `<div class="listora-photos"><p class="listora-meta">Photos: ${photos.length} of ${limit}. JPEG, PNG or WebP, up to 5 MB each. Each one shows after it is approved.</p>${shown ? `<ul class="listora-photos__list">${shown}</ul>` : ""}<div>${add} <span class="listora-status" role="status" data-photo-status="${id}" hidden></span></div></div>`;
+	}
+
 	function fill(id: string, html: string) {
 		const node = document.getElementById(id);
 		if (node) node.innerHTML = html;
 	}
+
+	// Add a photo: the file is sent as soon as it is chosen.
+	document.addEventListener("change", async (event) => {
+		const input = (event.target as HTMLElement).closest<HTMLInputElement>("[data-photo-add]");
+		const file = input?.files?.[0];
+		if (!input || !file) return;
+		const listingId = input.dataset.photoAdd || "";
+		const status = document.querySelector<HTMLElement>(`[data-photo-status="${CSS.escape(listingId)}"]`);
+		const say = (text: string, tone: string) => {
+			if (!status) return;
+			status.hidden = false;
+			status.dataset.tone = tone;
+			status.textContent = text;
+		};
+		input.disabled = true;
+		say("Adding your photo...", "info");
+		const data = await uploadPhoto(listingId, file);
+		input.disabled = false;
+		input.value = "";
+		if (!data.ok) return say(data.error?.message || "The photo could not be added. Try again.", "error");
+		await load();
+		const after = document.querySelector<HTMLElement>(`[data-photo-status="${CSS.escape(listingId)}"]`);
+		if (after) {
+			after.hidden = false;
+			after.dataset.tone = "success";
+			after.textContent = "Photo added. It shows on your listing after it is approved.";
+		}
+	});
+
+	document.addEventListener("click", async (event) => {
+		const button = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-photo-remove]");
+		if (!button) return;
+		button.disabled = true;
+		const data = await api("photo_remove", { id: button.dataset.photoRemove });
+		if (data.ok) return load();
+		button.disabled = false;
+		button.insertAdjacentHTML(
+			"afterend",
+			`<span class="listora-status" data-tone="error" role="alert">${esc(data.error?.message || "Could not remove that photo.")}</span>`,
+		);
+	});
 
 	document.addEventListener("submit", async (event) => {
 		const form = (event.target as HTMLElement).closest<HTMLFormElement>("form[data-reply]");

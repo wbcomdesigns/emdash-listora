@@ -12,6 +12,7 @@ import {
 } from "./lib/listings-query";
 import { getOnboardState, loadSampleDirectory } from "./lib/onboard";
 import { editPatch } from "./lib/edits";
+import { galleryReady, photoLimit } from "./lib/photos";
 import { LISTING_TYPES, LISTINGS, NOTIFY_CRON } from "./lib/types";
 import { asBoolean, asRecord, asString } from "./lib/util";
 
@@ -41,6 +42,8 @@ async function loadSettings(ctx: PluginContext): Promise<{
 	emailMessages: boolean;
 	expiryDays: number;
 	emailExpiry: boolean;
+	photoLimit: number;
+	galleryReady: boolean;
 	spamKeywords: string;
 }> {
 	return {
@@ -49,6 +52,8 @@ async function loadSettings(ctx: PluginContext): Promise<{
 		emailMessages: (await ctx.settings.get<boolean>("email_messages")) !== false,
 		expiryDays: await expiryDays(ctx),
 		emailExpiry: (await ctx.settings.get<boolean>("email_expiry")) !== false,
+		photoLimit: await photoLimit(ctx),
+		galleryReady: await galleryReady(ctx),
 		defaultListingType: (await ctx.settings.get<string>("default_listing_type")) || "business",
 	};
 }
@@ -259,6 +264,7 @@ export async function renderQueue(
 			{ type: "header", text: "Pending queue" },
 			...queueBlocks,
 			...(await editBlocks(ctx)),
+			...(await photoBlocks(ctx)),
 		],
 		toast: extra?.toast,
 	};
@@ -311,6 +317,34 @@ async function reviewListing(
 	await ctx.storage.submissions.put(listingId, { ...next, status: "approved" });
 	ctx.log.info("Listora listing approved", { listingId });
 	return renderQueue(ctx, { toast: { message: "Listing published.", type: "success" } });
+}
+
+/** Photos owners added, waiting. One block each: the listing and the picture itself. */
+async function photoBlocks(ctx: PluginContext): Promise<BlockMap[]> {
+	const found = await ctx.storage.photos.query({ where: { status: "pending" }, orderBy: { createdAt: "asc" }, limit: 12 });
+	if (found.items.length === 0) return [];
+	const titles = await listingTitles(ctx, found.items);
+	const blocks: BlockMap[] = [
+		{ type: "divider" },
+		{ type: "header", text: "Photos waiting" },
+		{ type: "context", text: "An owner added a photo to their listing. It shows on the listing once you approve it. Rejecting deletes the file." },
+	];
+	for (const item of found.items) {
+		const photo = asRecord(item.data);
+		const title = titles.get(asString(photo.listingId)) ?? "Listing not yet public";
+		blocks.push(
+			{ type: "section", text: `${title}  ·  added ${day(ctx, photo.createdAt)}` },
+			{ type: "image", url: asString(photo.url), alt: `Photo added to ${title}` },
+			{
+				type: "actions",
+				elements: [
+					{ type: "button", label: "Approve the photo", action_id: "photo_mod", style: "primary", value: stamped("approve", item.id, photo) },
+					{ type: "button", label: "Reject and delete", action_id: "photo_mod", value: stamped("reject", item.id, photo) },
+				],
+			},
+		);
+	}
+	return blocks;
 }
 
 /** Owner replies waiting. One block each: the review it answers and the reply, both in full. */
@@ -527,6 +561,9 @@ const HELP = {
 		"Listings expire after this many days: 0 means listings never expire. Above 0, a listing leaves the directory after that many days, its page says it has expired, and its owner can renew it from their account.",
 		"Email the owner 7 days before: one short notice to the owner's account email, telling them to sign in and renew. Needs email set up on your site.",
 	],
+	photos: [
+		"Photos an owner may add: the owner adds photos from their account, up to this number per listing, JPEG, PNG or WebP, 5 MB each. Each photo waits in the Listings queue until you approve it. 0 turns owner photos off. You can always add photos yourself by editing the listing.",
+	],
 	messages: [
 		"Email the listing owner when a message arrives: one short notice an hour to the owner's account email. The message itself stays on the site. Needs email set up on your site.",
 	],
@@ -596,6 +633,34 @@ export async function renderSettings(
 				submit: { label: "Save lifetime", action_id: "save_lifetime" },
 			},
 			{ type: "divider" },
+			{ type: "header", text: "Photos" },
+			...lines(HELP.photos),
+			...(settings.galleryReady
+				? []
+				: [
+						{
+							type: "banner",
+							title: "Photos are off: the listings collection has no Photos field",
+							description: 'In Content Types, open Listings and add a field named "gallery" of type Repeater with one Image sub-field named "image". New sites set up from the Listora seed already have it.',
+							variant: "alert",
+						},
+					]),
+			{
+				type: "form",
+				block_id: "settings_photos",
+				fields: [
+					{
+						type: "number_input",
+						action_id: "photo_limit",
+						label: "Photos an owner may add to one listing (0 = none)",
+						min: 0,
+						max: 20,
+						initial_value: settings.photoLimit,
+					},
+				],
+				submit: { label: "Save photos", action_id: "save_photos" },
+			},
+			{ type: "divider" },
 			{ type: "header", text: "Messages" },
 			...lines(HELP.messages),
 			{
@@ -618,7 +683,8 @@ export async function renderSettings(
 
 /** The card on the EmDash dashboard: what is waiting, with a way to each list. */
 export async function renderWaiting(ctx: PluginContext): Promise<BlockResponse> {
-	const [replies, edits, listings, reviews, claims, messages] = await Promise.all([
+	const [photos, replies, edits, listings, reviews, claims, messages] = await Promise.all([
+		ctx.storage.photos.count({ status: "pending" }),
 		ctx.storage.reviews.count({ reply_status: "pending" }),
 		ctx.storage.edits.count({ status: "pending" }),
 		ctx.storage.submissions.count({ status: "pending" }),
@@ -626,7 +692,7 @@ export async function renderWaiting(ctx: PluginContext): Promise<BlockResponse> 
 		ctx.storage.claims.count({ status: "pending" }),
 		ctx.storage.contacts.count({ status: "new" }),
 	]);
-	const total = listings + edits + reviews + replies + claims + messages;
+	const total = listings + edits + photos + reviews + replies + claims + messages;
 	const link = (label: string, path: string) => ({
 		type: "link",
 		label,
@@ -641,6 +707,7 @@ export async function renderWaiting(ctx: PluginContext): Promise<BlockResponse> 
 						items: [
 							{ label: "Listings", value: listings },
 							{ label: "Changes", value: edits },
+							{ label: "Photos", value: photos },
 							{ label: "Reviews", value: reviews },
 							{ label: "Replies", value: replies },
 							{ label: "Claims", value: claims },
@@ -847,6 +914,14 @@ export async function handleAdmin(
 				else await ctx.cron?.cancel("expire").catch(() => undefined);
 				return saved(days ? `Listings now expire after ${days} days.` : "Listings no longer expire.");
 			}
+			case "save_photos": {
+				const limit = Number(values.photo_limit);
+				if (!Number.isInteger(limit) || limit < 0 || limit > 20) {
+					return renderSettings(ctx, { toast: { message: "Enter a whole number from 0 to 20. Nothing was changed.", type: "error" } });
+				}
+				await ctx.settings.set("photo_limit", limit);
+				return saved(limit ? `Owners can add up to ${limit} photos per listing.` : "Owner photos are off.");
+			}
 			case "save_messages":
 				await ctx.settings.set("email_messages", asBoolean(values.email_messages));
 				return saved("Messages saved.");
@@ -859,6 +934,51 @@ export async function handleAdmin(
 		const action = split === -1 ? value : value.slice(0, split);
 		const listingId = split === -1 ? "" : value.slice(split + 1);
 		return reviewListing(ctx, action, listingId);
+	}
+
+	if (type === "block_action" && asString(raw.action_id) === "photo_mod") {
+		const { action, id, stamp } = parseStamped(raw.value);
+		const photo = asRecord(await ctx.storage.photos.get(id));
+		const stale = staleRow(photo, stamp);
+		if (stale) return renderQueue(ctx, { toast: { message: stale, type: "error" } });
+		const listingId = asString(photo.listingId);
+		if (action !== "approve") {
+			await ctx.storage.photos.delete(id);
+			await ctx.media?.delete?.(asString(photo.mediaId)).catch(() => false);
+			return renderQueue(ctx, { toast: { message: "Photo rejected and deleted.", type: "success" } });
+		}
+		// The sender must still be the one the listing belongs to.
+		const owner = asRecord(await ctx.storage.submissions.get(listingId));
+		if (owner.member_id !== photo.member_id || owner.status === "rejected") {
+			return renderQueue(ctx, { toast: { message: "The member who added that photo no longer owns the listing. Reject it to clear it.", type: "error" } });
+		}
+		const listing = await ctx.content?.get?.(LISTINGS, listingId).catch(() => null);
+		if (!listing) {
+			return renderQueue(ctx, { toast: { message: "That listing no longer exists. Reject the photo to clear it.", type: "error" } });
+		}
+		// The value an image field holds: a pointer to the file in the media library.
+		const image = {
+			provider: "local",
+			id: asString(photo.mediaId),
+			mimeType: asString(photo.mime),
+			filename: asString(photo.filename),
+			...(photo.width && photo.height ? { width: Number(photo.width), height: Number(photo.height) } : {}),
+			meta: { storageKey: asString(photo.storageKey) },
+		};
+		const data = asRecord(listing.data);
+		const gallery = Array.isArray(data.gallery) ? data.gallery : [];
+		// The first photo also becomes the cover when the listing has none.
+		const patched = await patchListing(ctx, listingId, {
+			gallery: [...gallery, { image }],
+			...(data.featured_image ? {} : { featured_image: image }),
+		});
+		if (patched.state !== "done") {
+			return renderQueue(ctx, {
+				toast: { message: "That listing has unpublished edits of your own. Publish or discard them, then approve the photo.", type: "error" },
+			});
+		}
+		await ctx.storage.photos.updateIf(id, { where: { status: "pending" }, set: { status: "approved" } });
+		return renderQueue(ctx, { toast: { message: "Photo added to the listing.", type: "success" } });
 	}
 
 	if (type === "block_action" && asString(raw.action_id) === "reply_mod") {

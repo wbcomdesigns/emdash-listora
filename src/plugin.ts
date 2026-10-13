@@ -17,6 +17,8 @@ import {
 	publishNow,
 } from "./lib/listings-query";
 import { clean, EDITABLE, editPatch, filled } from "./lib/edits";
+import { galleryReady, imageType, PHOTO_MAX_BYTES, photoLimit } from "./lib/photos";
+export { imageType } from "./lib/photos";
 import { LISTING_TYPES, LISTINGS, NOTIFY_CRON, listingTypeBySlug } from "./lib/types";
 import {
 	asBoolean,
@@ -196,39 +198,74 @@ async function notifyOwners(ctx: Ctx): Promise<void> {
 
 /**
  * A handle for a stored row that can be shown to someone other than its owner. Row ids are
- * built from the member's account id, which is not for other people to see.
+ * built from the member's account id, which is not for other people to see. The handle is
+ * keyed with a secret made once per site, so it cannot be worked out from a guessed id.
  */
-export async function refOf(id: string): Promise<string> {
-	const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(`listora-ref:${id}`));
-	return [...new Uint8Array(digest)].slice(0, 12).map((byte) => byte.toString(16).padStart(2, "0")).join("");
+export async function refOf(ctx: Pick<Ctx, "kv">, id: string): Promise<string> {
+	let secret = await ctx.kv.get<string>("ref-secret");
+	if (!secret) {
+		secret = [...crypto.getRandomValues(new Uint8Array(32))].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+		// Whoever writes first wins, so two first requests end up with the same secret.
+		if (!(await ctx.kv.compareAndSet("ref-secret", null, secret)).applied) secret = (await ctx.kv.get<string>("ref-secret")) || secret;
+	}
+	const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+	const mac = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(id));
+	return [...new Uint8Array(mac)].slice(0, 16).map((byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+/**
+ * "Delete my data": every place this plugin keeps something of a member's, read to the end
+ * (not just a first page), in one function so a new store cannot be forgotten.
+ * Kept on purpose: the listings they added (those stay in the directory, with the member as
+ * the one who can still edit them) and photos already approved on a listing.
+ */
+async function eraseMember(ctx: Ctx, memberId: string): Promise<void> {
+	const mine = { where: { member_id: memberId }, limit: 100 };
+	type Store = "reviews" | "claims" | "favorites" | "edits" | "photos";
+	// Each pass deletes what it read, so asking again brings the next rows until none are left.
+	const drain = async (store: Store, each: (row: ReturnType<typeof rows>[number]) => Promise<boolean>) => {
+		for (let pass = 0; pass < 50; pass += 1) {
+			const batch = rows(await ctx.storage[store].query(mine));
+			let removed = 0;
+			for (const row of batch) if (await each(row)) removed += 1;
+			if (batch.length === 0 || removed === 0) break;
+		}
+	};
+	const rated = new Set<string>();
+	await drain("reviews", async (row) => {
+		rated.add(asString(row.listingId));
+		return ctx.storage.reviews.delete(row.id);
+	});
+	await drain("claims", (row) => ctx.storage.claims.delete(row.id));
+	await drain("favorites", (row) => ctx.storage.favorites.delete(row.id));
+	await drain("edits", (row) => ctx.storage.edits.delete(row.id));
+	await drain("photos", async (row) => {
+		if (row.status === "approved") {
+			// The picture stays with the listing. The link from the row to the member does not.
+			await ctx.storage.photos.updateIf(row.id, { where: {}, set: { member_id: "" } });
+			return true;
+		}
+		await ctx.media?.delete?.(asString(row.mediaId)).catch(() => false);
+		return ctx.storage.photos.delete(row.id);
+	});
+	// Replies this member wrote as a listing owner, public or still waiting, and their done marks.
+	for (const listing of rows(await ctx.storage.submissions.query({ where: { member_id: memberId }, limit: 200 }))) {
+		const listingId = asString(listing.listingId) || listing.id;
+		for (const review of rows(await ctx.storage.reviews.query({ where: { listingId }, limit: 200 }))) {
+			if (review.reply_by !== memberId) continue;
+			await ctx.storage.reviews.updateIf(review.id, {
+				where: {},
+				set: { owner_reply: "", owner_reply_at: "", reply_draft: "", reply_status: "none", reply_by: "", reply_rev: "" },
+			});
+		}
+	}
+	// Their stored address, and the counters kept under their account id.
+	await ctx.kv.delete(emailKey(memberId));
+	for (const name of ["submit", "claim", "review", "edit", "photo", "reply"]) await ctx.kv.delete(`rate:${name}:${memberId}`);
+	for (const listingId of rated) await syncRating(ctx, listingId);
 }
 
 /* ---- Photos ---- */
-
-const PHOTO_MAX_BYTES = 5 * 1024 * 1024;
-
-/** The real type of a file, read from its first bytes. A name or a header can lie. */
-export function imageType(bytes: Uint8Array): { mime: string; ext: string } | null {
-	const at = (index: number) => bytes[index] ?? -1;
-	if (at(0) === 0xff && at(1) === 0xd8 && at(2) === 0xff) return { mime: "image/jpeg", ext: "jpg" };
-	if (at(0) === 0x89 && at(1) === 0x50 && at(2) === 0x4e && at(3) === 0x47) return { mime: "image/png", ext: "png" };
-	const text = (from: number) => String.fromCharCode(at(from), at(from + 1), at(from + 2), at(from + 3));
-	if (text(0) === "RIFF" && text(8) === "WEBP") return { mime: "image/webp", ext: "webp" };
-	return null;
-}
-
-/** How many photos an owner may add to one listing. 0 turns owner photos off. */
-export async function photoLimit(ctx: Ctx): Promise<number> {
-	const saved = await ctx.settings.get("photo_limit");
-	const limit = saved === undefined || saved === null ? 5 : Math.floor(Number(saved) || 0);
-	return Math.min(Math.max(limit, 0), 20);
-}
-
-/** Photos need a "gallery" field on the listings collection. A plugin cannot add one itself. */
-export async function galleryReady(ctx: Ctx): Promise<boolean> {
-	const collection = await ctx.schema?.getCollection(LISTINGS).catch(() => null);
-	return Boolean(collection?.fields.some((field) => field.slug === "gallery"));
-}
 
 /** The member who may add photos: whoever sent the listing in, while it is live or still waiting. */
 async function ownsSubmission(ctx: Ctx, listingId: string, memberId: string): Promise<boolean> {
@@ -748,7 +785,9 @@ const plugin: SandboxedPlugin = {
 				for (const row of rows(await ctx.storage.photos.query({ where: { member_id: user.id }, orderBy: { createdAt: "asc" }, limit: 200 }))) {
 					if (row.status === "rejected") continue;
 					const key = asString(row.listingId);
-					photosBy.set(key, [...(photosBy.get(key) ?? []), { id: row.id, url: asString(row.url), status: asString(row.status) }]);
+					// An approved photo is public on the listing. A waiting one has no address here.
+					const status = asString(row.status);
+					photosBy.set(key, [...(photosBy.get(key) ?? []), { id: row.id, url: status === "approved" ? asString(row.url) : "", status }]);
 				}
 				const named = (items: ReturnType<typeof rows>, own = false) =>
 					items.map((row) => {
@@ -791,7 +830,7 @@ const plugin: SandboxedPlugin = {
 						named(all[5]).map(async (row) => {
 							const item = row as Record<string, unknown>;
 							return {
-								ref: await refOf(asString(item.id)),
+								ref: await refOf(ctx, asString(item.id)),
 								listingId: asString(item.listingId),
 								listing_title: item.listing_title,
 								listing_url: item.listing_url,
@@ -851,7 +890,9 @@ const plugin: SandboxedPlugin = {
 				const filename = `listing-${listingId.slice(-8).toLowerCase()}-${Date.now()}.${type.ext}`;
 				const uploaded = await ctx.media.upload(filename, type.mime, bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer);
 				const media = await ctx.media.get(uploaded.mediaId).catch(() => null);
-				const id = `photo-${listingId}-${uploaded.mediaId}`;
+				// A random id: the media id would be enough to fetch the file, so it must not be in a
+				// value the member is given.
+				const id = `photo-${crypto.randomUUID()}`;
 				await ctx.storage.photos.put(id, {
 					listingId,
 					member_id: user.id,
@@ -866,7 +907,9 @@ const plugin: SandboxedPlugin = {
 					rev: crypto.randomUUID(),
 					createdAt: nowIso(),
 				});
-				return { ok: true, id, status: "pending", url: uploaded.url };
+				// The address of the file is not given back: until an admin approves it, nobody but
+				// the admin is told where it is.
+				return { ok: true, id, status: "pending" };
 			},
 		},
 		// The owner takes back a photo that is still waiting. An approved photo is the admin's to remove.
@@ -903,7 +946,7 @@ const plugin: SandboxedPlugin = {
 				// The owner is given a handle for each review, never its stored id.
 				let id = "";
 				for (const row of rows(await ctx.storage.reviews.query({ where: { listingId }, limit: 100 }))) {
-					if (row.status === "published" && (await refOf(row.id)) === asString(raw.ref)) id = row.id;
+					if (row.status === "published" && (await refOf(ctx, row.id)) === asString(raw.ref)) id = row.id;
 				}
 				if (!id) return NOT_YOURS;
 				if (!text) return { ok: false, error: { code: "VALIDATION_ERROR", message: "Write your reply first." } };
@@ -1107,33 +1150,7 @@ const plugin: SandboxedPlugin = {
 					ctx.storage.favorites.query(mine),
 				]);
 				if (asString(asRecord(routeCtx.input).action) === "erase") {
-					await Promise.all([
-						...reviews.items.map((row) => ctx.storage.reviews.delete(row.id)),
-						...claims.items.map((row) => ctx.storage.claims.delete(row.id)),
-						...favorites.items.map((row) => ctx.storage.favorites.delete(row.id)),
-					]);
-					for (const row of (await ctx.storage.photos.query({ where: { member_id: user.id }, limit: 200 })).items) {
-						// A photo still waiting is theirs to take back. One already on a listing stays with the listing.
-						if (asRecord(row.data).status !== "pending") continue;
-						await ctx.storage.photos.delete(row.id);
-						await ctx.media?.delete?.(asString(asRecord(row.data).mediaId)).catch(() => false);
-					}
-					for (const row of (await ctx.storage.edits.query({ where: { member_id: user.id }, limit: 200 })).items) {
-						await ctx.storage.edits.delete(row.id);
-					}
-					// Replies this member wrote as a listing owner, public or still waiting.
-					for (const listing of rows(await ctx.storage.submissions.query(mine))) {
-						const listingId = asString(listing.listingId) || listing.id;
-						for (const review of rows(await ctx.storage.reviews.query({ where: { listingId }, limit: 100 }))) {
-							if (review.reply_by !== user.id) continue;
-							await ctx.storage.reviews.updateIf(review.id, {
-								where: {},
-								set: { owner_reply: "", owner_reply_at: "", reply_draft: "", reply_status: "none", reply_by: "", reply_rev: "" },
-							});
-						}
-					}
-					await ctx.kv.delete(emailKey(user.id));
-					for (const id of new Set(rows(reviews).map((row) => asString(row.listingId)))) await syncRating(ctx, id);
+					await eraseMember(ctx, user.id);
 					return { ok: true, erased: true };
 				}
 				// What "my data" covers, so the account page can say it plainly.

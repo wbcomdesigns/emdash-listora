@@ -257,6 +257,33 @@ export function signInUrl(): string {
 export type ApiResult = { ok: boolean; error?: { code?: string; message?: string }; [key: string]: unknown };
 
 /** Call a Listora plugin route. Member routes answer SIGN_IN_REQUIRED for guests. */
+/** What an owner may upload as a listing photo. Checked again on the server from the file itself. */
+export const PHOTO_TYPES = ["image/jpeg", "image/png", "image/webp"];
+export const PHOTO_MAX_BYTES = 5 * 1024 * 1024;
+
+/** Send one file as the body of a request. Like `api`, it never throws. */
+export async function uploadPhoto(listingId: string, file: File): Promise<ApiResult> {
+	if (!PHOTO_TYPES.includes(file.type)) return { ok: false, error: { code: "WRONG_TYPE", message: "Use a JPEG, PNG or WebP photo." } };
+	if (file.size > PHOTO_MAX_BYTES) return { ok: false, error: { code: "TOO_BIG", message: "That photo is larger than 5 MB." } };
+	try {
+		const response = await fetch(`/_emdash/api/plugins/listora/photo?listingId=${encodeURIComponent(listingId)}`, {
+			method: "POST",
+			credentials: "same-origin",
+			headers: { "Content-Type": "application/octet-stream", "X-EmDash-Request": "1" },
+			body: file,
+		});
+		if (response.status === 401) return { ok: false, error: { code: "SIGN_IN_REQUIRED", message: "Sign in to continue." } };
+		if (response.status === 413) return { ok: false, error: { code: "TOO_BIG", message: "That photo is larger than 5 MB." } };
+		const json = await response.json().catch(() => null);
+		if (!response.ok || !json) {
+			return { ok: false, error: { code: "FAILED", message: json?.error?.message || "The photo could not be added. Try again." } };
+		}
+		return json.data ?? { ok: false };
+	} catch {
+		return { ok: false, error: { code: "OFFLINE", message: "Could not reach the site. Check your connection and try again." } };
+	}
+}
+
 export async function api(path: string, body?: unknown, method = body ? "POST" : "GET"): Promise<ApiResult> {
 	// Never throws: a dropped connection or a server error comes back as a result the page can show.
 	try {

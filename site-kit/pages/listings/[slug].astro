@@ -56,6 +56,8 @@ const today = weekdayIndex(zone);
 const lat = asNumber(data.lat);
 const lng = asNumber(data.lng);
 const hasMap = Number.isFinite(lat) && Number.isFinite(lng) && lat !== 0 && lng !== 0;
+// Photos beyond the cover. Rows an admin added in the editor and photos an owner sent both live here.
+const gallery = (Array.isArray(data.gallery) ? data.gallery : []).filter((row: { image?: unknown }) => row?.image) as Array<{ image: never }>;
 const expired = String(data.listing_status || "") === "expired";
 const claimed = Boolean(data.is_claimed);
 const services = (() => {
@@ -133,6 +135,41 @@ const schema = {
 					)
 				}
 			</div>
+
+			{
+				gallery.length > 0 ? (
+					<section class="listora-gallery" aria-label="Photos">
+						<ul class="listora-gallery__thumbs">
+							{gallery.map((row, index) => (
+								<li>
+									<button type="button" class="listora-gallery__thumb" data-photo={index} aria-label={`Open photo ${index + 1} of ${gallery.length}`}>
+										<Image image={row.image} alt="" />
+									</button>
+								</li>
+							))}
+						</ul>
+						<dialog class="listora-lightbox" id="listora-lightbox" aria-label={`Photos of ${String(data.title)}`}>
+							<div class="listora-lightbox__bar">
+								<span id="listora-lightbox-count" aria-live="polite"></span>
+								<button type="button" class="listora-btn listora-btn--secondary" data-lightbox-close>Close</button>
+							</div>
+							<div class="listora-lightbox__stage">
+								{gallery.map((row, index) => (
+									<figure data-slide={index} hidden>
+										<Image image={row.image} alt={`${String(data.title)}, photo ${index + 1} of ${gallery.length}`} />
+									</figure>
+								))}
+							</div>
+							{gallery.length > 1 ? (
+								<div class="listora-lightbox__nav">
+									<button type="button" class="listora-btn listora-btn--secondary" data-lightbox-step="-1">Previous</button>
+									<button type="button" class="listora-btn listora-btn--secondary" data-lightbox-step="1">Next</button>
+								</div>
+							) : null}
+						</dialog>
+					</section>
+				) : null
+			}
 
 			<div class="listora-detail__content">
 				<div class="listora-detail__main">
@@ -511,6 +548,46 @@ const schema = {
 		input?.setAttribute("aria-invalid", show ? "true" : "false");
 		if (error) error.hidden = !show;
 		if (show) input?.focus();
+	}
+
+	// Photos: a thumbnail opens the large view. Arrow keys and a sideways swipe move between
+	// photos, Esc closes (the dialog element does that itself), and focus goes back to the thumbnail.
+	const lightbox = document.getElementById("listora-lightbox") as HTMLDialogElement | null;
+	if (lightbox) {
+		const slides = [...lightbox.querySelectorAll<HTMLElement>("[data-slide]")];
+		const count = document.getElementById("listora-lightbox-count");
+		let current = 0;
+		let opener: HTMLElement | null = null;
+		const show = (index: number) => {
+			current = (index + slides.length) % slides.length;
+			slides.forEach((slide, at) => (slide.hidden = at !== current));
+			if (count) count.textContent = `Photo ${current + 1} of ${slides.length}`;
+		};
+		document.querySelectorAll<HTMLButtonElement>("[data-photo]").forEach((button) => {
+			button.addEventListener("click", () => {
+				opener = button;
+				show(Number(button.dataset.photo) || 0);
+				lightbox.showModal();
+			});
+		});
+		lightbox.addEventListener("click", (event) => {
+			const target = event.target as HTMLElement;
+			const step = target.closest<HTMLElement>("[data-lightbox-step]");
+			if (step) show(current + Number(step.dataset.lightboxStep));
+			// A click on the dark area around the photo closes it.
+			if (target.closest("[data-lightbox-close]") || target === lightbox) lightbox.close();
+		});
+		lightbox.addEventListener("keydown", (event) => {
+			if (event.key === "ArrowRight") show(current + 1);
+			if (event.key === "ArrowLeft") show(current - 1);
+		});
+		let startX = 0;
+		lightbox.addEventListener("touchstart", (event) => (startX = event.touches[0].clientX), { passive: true });
+		lightbox.addEventListener("touchend", (event) => {
+			const moved = event.changedTouches[0].clientX - startX;
+			if (Math.abs(moved) > 50) show(current + (moved < 0 ? 1 : -1));
+		});
+		lightbox.addEventListener("close", () => opener?.focus());
 	}
 
 	// A date a person reads, in the visitor's own language: "13 Oct 2026".

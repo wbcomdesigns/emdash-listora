@@ -10,7 +10,7 @@ import manifestText from "../emdash-plugin.jsonc?raw";
 import submitPage from "../site-kit/pages/listings/submit.astro?raw";
 import { LISTING_TYPES as KIT_TYPES } from "../site-kit/lib/listora";
 import { LISTING_TYPES } from "../src/lib/types";
-import { imageType, refOf } from "../src/plugin";
+import { imageType } from "../src/plugin";
 // @ts-expect-error plain module shared with the lab seed
 import { listingsCollection } from "../site-kit/seed/collection.mjs";
 import { imageUrl, jsonForScript, placeholderHtml, safeImageUrl } from "../site-kit/lib/listora";
@@ -663,7 +663,7 @@ describe("settings page and dashboard card", () => {
 			rt.transport.invokeRoute("admin", input) as Promise<{ blocks: Array<{ type: string }>; toast?: { type: string; message: string } }>;
 
 		const page = await rt.admin.loadPage("/settings");
-		expect(page.blocks.filter((block) => block.type === "form")).toHaveLength(3);
+		expect(page.blocks.filter((block) => block.type === "form")).toHaveLength(4);
 		// The queue page no longer carries a settings form.
 		expect((await rt.admin.loadPage("/queue")).blocks.map((block) => block.type)).not.toContain("form");
 
@@ -881,11 +881,16 @@ describe("owner reply to a review", () => {
 		const review = (await rt.inspect.storage.list<{ rev: string }>("reviews"))[0];
 
 		// Not public yet: nothing to reply to.
-		expect(await route("reply", { listingId, ref: await refOf(review.id), text: "Thanks" }, { method: "POST", user: ana })).toMatchObject({ ok: false, error: { code: "NOT_FOUND" } });
+		expect(await route("reply", { listingId, ref: "anything", text: "Thanks" }, { method: "POST", user: ana })).toMatchObject({ ok: false, error: { code: "NOT_FOUND" } });
 		await admin("review_mod", `approve|${review.data.rev}|${review.id}`);
 
 		// Only the owner of that listing. The reviewer, a guest and a made-up id all get the same refusal.
-		const ref = await refOf(review.id);
+		// The owner is handed a handle for the review in their account. It is not the stored id,
+		// and it does not contain the reviewer's account id.
+		const ref = ((await route("dashboard", {}, { user: ana })) as { received: Array<{ ref: string }> }).received[0].ref;
+		expect(ref).toMatch(/^[0-9a-f]{32}$/);
+		expect(review.id).toContain("ben");
+		expect(ref).not.toContain("ben");
 		expect(await route("reply", { listingId, ref, text: "Mine" }, { method: "POST", user: ben })).toMatchObject({ ok: false, error: { code: "NOT_FOUND" } });
 		expect(await route("reply", { listingId, ref: "nope", text: "x" }, { method: "POST", user: ana })).toMatchObject({ ok: false, error: { code: "NOT_FOUND" } });
 		// The stored id is no longer a way in, even for the owner.
@@ -930,5 +935,83 @@ describe("owner reply to a review", () => {
 		await route("privacy", { action: "erase" }, { method: "POST", user: ana });
 		expect((await publicReviews(listingId))[0]).toMatchObject({ owner_reply: "", body: "Nice place." });
 		expect(await rt.inspect.storage.get("reviews", review.id)).toMatchObject({ reply_by: "", reply_draft: "" });
+	});
+});
+
+describe("owner photos", () => {
+	// The smallest files that start like a real PNG and a real JPEG.
+	const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0]);
+	const notImage = new TextEncoder().encode("<svg onload=alert(1)>");
+
+	it("reads a file's type from its bytes, not its name", () => {
+		expect(imageType(png)).toEqual({ mime: "image/png", ext: "png" });
+		expect(imageType(new Uint8Array([0xff, 0xd8, 0xff, 0xe0]))).toEqual({ mime: "image/jpeg", ext: "jpg" });
+		expect(imageType(new TextEncoder().encode("RIFFxxxxWEBPVP8 "))).toEqual({ mime: "image/webp", ext: "webp" });
+		expect(imageType(notImage)).toBeNull();
+		expect(imageType(new Uint8Array())).toBeNull();
+	});
+
+	it("takes a photo only from the listing's owner, holds the limit, and shows nothing until approved", async () => {
+		const rt = await createPluginRuntimeTestHost();
+		// The listings collection with the Photos field the seed ships.
+		await rt.fixtures.collection(listingsCollection as never);
+		host = { dispose: () => rt.dispose() } as unknown as PluginTestHost;
+		const route = rt.transport.invokeRoute.bind(rt.transport);
+		const admin = (action_id: string, value: unknown, page = "/queue") =>
+			route("admin", { type: "block_action", action_id, value, page }) as Promise<{ toast?: { type: string; message: string } }>;
+		await route("admin", { type: "form_submit", action_id: "save_photos", page: "/settings", values: { photo_limit: 2 } });
+		await route("submit", { title: "Photo Cafe", listing_type: "restaurant", agree_terms: true }, { method: "POST", user: ana });
+		const id = (await rt.inspect.storage.list("submissions"))[0].id;
+		await admin("review", `approve:${id}`);
+		const send = (bytes: Uint8Array, user?: typeof ana, listingId = id) =>
+			route("photo", bytes, { method: "POST", user, query: { listingId }, url: `http://x.test/photo?listingId=${listingId}` } as never);
+
+		expect(await send(png)).not.toMatchObject({ ok: true });
+		expect(await send(png, ben)).toMatchObject({ ok: false, error: { code: "NOT_FOUND" } });
+		expect(await send(png, ana, "nope")).toMatchObject({ ok: false, error: { code: "NOT_FOUND" } });
+		expect(await send(notImage, ana)).toMatchObject({ ok: false, error: { code: "WRONG_TYPE" } });
+		expect(await send(new Uint8Array(), ana)).toMatchObject({ ok: false, error: { code: "VALIDATION_ERROR" } });
+
+		const first = (await send(png, ana)) as Record<string, unknown>;
+		expect(first).toMatchObject({ ok: true, status: "pending" });
+		expect(first).not.toHaveProperty("url");
+		expect(await send(png, ana)).toMatchObject({ ok: true, status: "pending" });
+		expect(await send(png, ana)).toMatchObject({ ok: false, error: { code: "LIMIT" } });
+		const photos = await rt.inspect.storage.list<{ rev: string; mediaId: string; status: string }>("photos");
+		expect(photos).toHaveLength(2);
+
+		// The owner sees both as waiting; the admin sees both, with the picture.
+		const dash = (await route("dashboard", {}, { user: ana })) as { listings: Array<{ photos: Array<{ status: string }>; photo_limit: number }> };
+		expect(dash.listings[0]).toMatchObject({ photo_limit: 2 });
+		expect(dash.listings[0].photos.map((photo) => photo.status)).toEqual(["pending", "pending"]);
+		// Where a waiting photo is stored is told to nobody but the admin.
+		expect(JSON.stringify(dash)).not.toContain(photos[0].data.mediaId);
+		expect((dash.listings[0].photos as Array<{ url?: string }>).every((photo) => !photo.url)).toBe(true);
+		const screen = JSON.stringify(await route("admin", { type: "page_load", page: "/queue" }));
+		expect(screen).toContain("Photos waiting");
+		expect(screen).toContain('"type":"image"');
+
+		// The owner takes one back. Someone else cannot.
+		expect(await route("photo_remove", { id: photos[1].id }, { method: "POST", user: ben })).toMatchObject({ ok: false });
+		expect(await route("photo_remove", { id: photos[1].id }, { method: "POST", user: ana })).toMatchObject({ ok: true });
+		expect(await rt.inspect.media(photos[1].data.mediaId)).toMatchObject({ success: false });
+
+		// Approving the other puts it on the listing, and it cannot then be removed by the owner.
+		expect((await admin("photo_mod", `approve|${photos[0].data.rev}|${photos[0].id}`)).toast?.type).toBe("success");
+		expect(await rt.inspect.storage.get("photos", photos[0].id)).toMatchObject({ status: "approved" });
+		expect(await route("photo_remove", { id: photos[0].id }, { method: "POST", user: ana })).toMatchObject({ ok: false });
+		// A second click on the same decision is refused.
+		expect((await admin("photo_mod", `approve|${photos[0].data.rev}|${photos[0].id}`)).toast?.type).toBe("error");
+
+		// Deleting her data unlinks the approved photo from her and removes anything still waiting.
+		await route("admin", { type: "form_submit", action_id: "save_photos", page: "/settings", values: { photo_limit: 5 } });
+		await send(png, ana);
+		await route("privacy", { action: "erase" }, { method: "POST", user: ana });
+		const left = await rt.inspect.storage.list<{ status: string; member_id: string }>("photos");
+		expect(left.map((row) => [row.data.status, row.data.member_id])).toEqual([["approved", ""]]);
+
+		// Turned off: no more uploads.
+		await route("admin", { type: "form_submit", action_id: "save_photos", page: "/settings", values: { photo_limit: 0 } });
+		expect(await send(png, ana)).toMatchObject({ ok: false, error: { code: "PHOTOS_OFF" } });
 	});
 });

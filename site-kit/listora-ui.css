@@ -511,6 +511,132 @@ ul.listora-chips {
 	display: block;
 }
 
+/* Photos under the cover: a row of thumbnails that open a large view. */
+.listora-gallery__thumbs {
+	display: flex;
+	gap: var(--listora-space-2);
+	margin: 0 0 var(--listora-space-6);
+	padding: 0;
+	list-style: none;
+	overflow-x: auto;
+}
+
+.listora-gallery__thumb {
+	display: block;
+	width: 6.5rem;
+	height: 4.75rem;
+	padding: 0;
+	border: 2px solid transparent;
+	border-radius: var(--listora-radius-md, 8px);
+	overflow: hidden;
+	background: var(--listora-bg-muted);
+	cursor: pointer;
+}
+
+.listora-gallery__thumb:hover,
+.listora-gallery__thumb:focus-visible {
+	border-color: var(--listora-primary);
+	outline: none;
+}
+
+.listora-gallery__thumb :is(img, picture) {
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+	display: block;
+}
+
+.listora-lightbox {
+	width: min(96vw, 70rem);
+	max-height: 94vh;
+	padding: var(--listora-space-4);
+	border: 1px solid var(--listora-border-default);
+	border-radius: var(--listora-radius-lg);
+	background: var(--listora-bg-base);
+	color: var(--listora-fg-default);
+}
+
+.listora-lightbox::backdrop {
+	background: rgb(0 0 0 / 0.72);
+}
+
+.listora-lightbox__bar,
+.listora-lightbox__nav {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--listora-space-3);
+}
+
+.listora-lightbox__stage {
+	margin-block: var(--listora-space-3);
+}
+
+.listora-lightbox__stage figure {
+	margin: 0;
+}
+
+.listora-lightbox__stage :is(img, picture) {
+	display: block;
+	width: 100%;
+	height: auto;
+	max-height: 72vh;
+	object-fit: contain;
+}
+
+/* An owner's photos in their account. */
+.listora-photos {
+	flex-basis: 100%;
+	display: grid;
+	gap: var(--listora-space-2);
+}
+
+.listora-photos__list {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--listora-space-3);
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.listora-photos__item {
+	display: grid;
+	gap: var(--listora-space-1, 0.25rem);
+	justify-items: start;
+	width: 7.5rem;
+	font-size: var(--listora-text-size-sm);
+}
+
+.listora-photos__item img {
+	width: 7.5rem;
+	height: 5.5rem;
+	object-fit: cover;
+	border-radius: var(--listora-radius-md, 8px);
+	background: var(--listora-bg-muted);
+}
+
+.listora-photos__waiting {
+	display: block;
+	width: 7.5rem;
+	height: 5.5rem;
+	border: 2px dashed var(--listora-border-default);
+	border-radius: var(--listora-radius-md, 8px);
+	background: var(--listora-bg-muted);
+}
+
+.listora-photos__add input {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	opacity: 0;
+}
+
+.listora-photos__add:focus-within {
+	outline: 2px solid var(--listora-primary);
+	outline-offset: 2px;
+}
+
 /* A second heading inside one account tab needs room above it. */
 #dash-main section > * + h2 {
 	margin-block-start: var(--listora-space-6);
