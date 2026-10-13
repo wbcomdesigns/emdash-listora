@@ -19,7 +19,7 @@ Lab pages (not yet first-class kit files):
 - `src/pages/listings/calendar.astro`
 - `src/pages/account/index.astro`
 
-Moving those pages into the kit is the first UX job. See [What to improve next](../ux/next-work.md).
+Moving those pages into the kit is the first screen job. See [Improve the screens](../how-to/improve-the-screens.md).
 
 Rules for new CSS:
 

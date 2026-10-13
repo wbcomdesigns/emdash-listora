@@ -1,4 +1,4 @@
-# Screen inventory
+# Directory screens
 
 **Included in Free**
 
@@ -23,7 +23,7 @@ Status is against WordPress Listora chrome, not "the URL loads". Engine column i
 
 ## Parked (Pro)
 
-Compare, Needs, quick view, SEO landings, coming soon. See [Parked Pro work](../features/parked-pro.md).
+Compare, Needs, quick view, SEO landings, coming soon. See [Parked Pro work](../pro-features/parked-work.md).
 
 ## Interaction contract (do not drop)
 

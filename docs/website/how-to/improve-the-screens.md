@@ -1,4 +1,4 @@
-# What to improve next
+# Improve the screens
 
 **Included in Free**
 
@@ -26,7 +26,7 @@ A change without a kit update is a lab-only patch. It will not survive the next 
 
 Archive, card, detail, submit. These are the ones customers judge. Side-by-side against WordPress at 1440 and 390. Empty, loading, error, populated. Light and dark.
 
-Stop calling those screens done until the gate in [The presentation bar](presentation-bar.md) passes.
+Stop calling those screens done until the gate in [Match Listora chrome](match-listora-chrome.md) passes.
 
 ### 3. Then the rest of Free chrome
 

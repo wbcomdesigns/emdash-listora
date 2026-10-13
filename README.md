@@ -4,7 +4,7 @@ Sandboxed first slice of WB Listora. It is a new TypeScript plugin, not the Word
 
 Publisher: `did:plc:2o6axbe264shvyedyhycyhya` (`@vapvarun.bsky.social`). Registry name: `@vapvarun.bsky.social/listora`.
 
-Source: [wbcomdesigns/emdash-listora](https://github.com/wbcomdesigns/emdash-listora). Team docs: [docs/website](docs/website/getting-started/intro.md). How to change and ship a version: [CONTRIBUTING.md](CONTRIBUTING.md).
+Source: [wbcomdesigns/emdash-listora](https://github.com/wbcomdesigns/emdash-listora). Docs: [docs/website](docs/website/README.md). How to change and ship a version: [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## What v0.1 does
 
@@ -23,9 +23,9 @@ The `listings` collection and taxonomies live in the local site seed (`~/code/em
 
 Read these on GitHub. They are the team handbook for this early release.
 
-1. [What we built](docs/website/getting-started/what-we-built.md)
-2. [UX and presentation next](docs/website/ux/next-work.md)
-3. [Plugin vs site kit](docs/website/architecture/split.md)
+1. [Docs landing](docs/website/README.md)
+2. [What we built](docs/website/getting-started/what-we-built.md)
+3. [Improve the screens](docs/website/how-to/improve-the-screens.md)
 
 Planning notes that fed the port stay in [`ops/`](ops/README.md).
 

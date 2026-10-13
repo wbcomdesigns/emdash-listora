@@ -24,7 +24,7 @@ No. `emdash-plugin publish` from a trusted machine is enough. Actions plus prove
 
 ## Is the lab UI the product?
 
-No. It is a working prototype with real jobs and thin chrome. UX work starts from [What to improve next](../ux/next-work.md).
+No. It is a working prototype with real jobs and thin chrome. Next work starts from [Improve the screens](../how-to/improve-the-screens.md).
 
 ## Where do I read the long plans?
 

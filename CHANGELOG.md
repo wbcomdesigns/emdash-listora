@@ -4,7 +4,7 @@ Versions match `package.json` and the EmDash registry release. Newest first.
 
 ## [Unreleased]
 
-- Team docs in `docs/website/`: what 0.1.0 shipped, architecture split, and the UX / presentation queue.
+- Team docs in `docs/website/` in the Wbcom `sections[]` shape: landing README, Getting Started, features, how-to, settings, Pro, developer, What's New, FAQ, troubleshooting.
 
 ## [0.1.0] - 2026-10-13
 

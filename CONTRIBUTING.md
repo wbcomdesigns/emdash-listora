@@ -53,7 +53,7 @@ After the bump, add a `CHANGELOG.md` entry under `[Unreleased]`, then move it un
 3. No Node built-ins in plugin runtime (`fs`, `path`, `child_process`). Use Web APIs.
 4. Stay under the registry cap: 256 KB uncompressed, 128 KB per file, 20 files.
 5. Run `npm run validate && npm run test && npm run build` before you open a PR.
-6. Update `docs/website/` in the same PR when a route, screen, or install step changes. Start from [docs/website/getting-started/intro.md](docs/website/getting-started/intro.md).
+6. Update `docs/website/` in the same PR when a route, screen, or install step changes. Start from [docs/website/README.md](docs/website/README.md). Follow the `sections[]` shape in `docs_config.json`.
 7. Commit subject + body only. No AI co-author trailers. No em-dashes.
 
 ## Release to the collection
