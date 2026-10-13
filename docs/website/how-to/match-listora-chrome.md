@@ -38,4 +38,6 @@ Public and owner UI: `ux-foundation` then `web-page-spec`. Admin: Block Kit, mat
 
 Visual source: WordPress Listora blocks and CSS, not the EmDash blog theme.
 
+Forms (submit, review, contact, claim, search) follow [Form presentation](form-presentation.md). That page is `ux-foundation`. `taste-skill` does not style those forms.
+
 Longer plan: [ops/ux-plan.md](https://github.com/wbcomdesigns/emdash-listora/blob/main/ops/ux-plan.md).

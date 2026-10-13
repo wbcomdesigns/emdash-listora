@@ -17,4 +17,4 @@ Public form: `/listings/submit/`. POST: `/_emdash/api/plugins/listora/submit`.
 
 ## What is still thin
 
-WordPress has autosave, a live step list that feels like the block, a preview that looks like a real card, and inline duplicate warnings as the title is typed. The lab wizard proves the path. It is not yet that product.
+WordPress has autosave, a live step list that feels like the block, a preview that looks like a real card, and inline duplicate warnings as the title is typed. The lab wizard proves the path. Present it with [Form presentation](../how-to/form-presentation.md): named steps, labels above fields, field errors, a card-shaped preview.
