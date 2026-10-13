@@ -16,13 +16,16 @@ This product is Free only. No Pro plan in this pass. Check code completion and s
 | `site-kit/` | CSS tokens and seed a site copies after install |
 | `tests/` | Worker-backed route tests |
 | `ops/` | Planning notes. Not shippable UI |
+| `scripts/setup-lab.sh` | New machine: create sibling EmDash site, wire plugin, copy kit |
 
-A sandboxed plugin cannot ship Astro pages. Public screens live on the site (`~/code/emdash-local` in the lab). When you change presentation, update `site-kit/` and the lab pages together.
+A sandboxed plugin cannot ship Astro pages. Public screens live on the site (default sibling `emdash-local`). When you change presentation, update `site-kit/` and run `./scripts/apply-kit.sh`.
 
 ## Local loop
 
+First clone on a machine: [Set up a new machine](docs/website/getting-started/new-machine.md) (`./scripts/setup-lab.sh`). Then:
+
 ```bash
-cd ~/code/emdash-listora
+cd /path/to/emdash-listora
 npm install --legacy-peer-deps
 npm run validate
 npm run test

@@ -2,6 +2,10 @@
 
 **Included in Free**
 
+## How do I set this up on a new laptop?
+
+Clone this repo. Run `./scripts/setup-lab.sh`. That creates a sibling EmDash site if you do not have one, wires the plugin, and copies the kit. Then `./scripts/reset-lab.sh` and `./scripts/prove-lab.sh --all`. Full page: [Set up a new machine](../getting-started/new-machine.md).
+
 ## Can we install the WordPress plugin on EmDash?
 
 No. EmDash does not load PHP. This TypeScript plugin is the port. WordPress Listora stays its own product.

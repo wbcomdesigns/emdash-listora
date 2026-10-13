@@ -6,7 +6,7 @@ Install `@vapvarun.bsky.social/listora` first (or the local package). Then apply
 
 ## Apply on a site
 
-From the site root (`src/` is the Astro app):
+On the lab, prefer `./scripts/apply-kit.sh` (or `./scripts/setup-lab.sh` the first time). Manual copy from the site root (`src/` is the Astro app):
 
 ```bash
 # CSS
