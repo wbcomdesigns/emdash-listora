@@ -1,5 +1,6 @@
 import type { PluginContext } from "emdash/plugin";
 
+import { syncRating } from "./listings-query";
 import { DEMO_MEMBER } from "./types";
 import { nowIso } from "./util";
 
@@ -254,6 +255,7 @@ export async function seedRelatedStorage(
 		createdAt,
 	});
 
+	for (const id of Object.values(ids ?? {})) await syncRating(ctx, id);
 	await ctx.kv.set("demo_seeded_v2", "1");
 	ctx.log.info("Listora demo storage seeded", { reviews: REVIEWS.length });
 }

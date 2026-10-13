@@ -4,14 +4,12 @@ import { Image } from "emdash/ui";
 import Base from "../../layouts/Base.astro";
 import {
 	LISTING_TYPES,
-	asNumber,
 	coverUrl,
 	isOpenNow,
 	matchesPlace,
 	parseHours,
 	placeOf,
 	sortListings,
-	stars,
 	typeName,
 } from "../../lib/listora";
 import "../../styles/listora-ui.css";
@@ -24,7 +22,7 @@ const sort = Astro.url.searchParams.get("sort") || "featured";
 
 const { entries, cacheHint } = await getEmDashCollection("listings", {
 	orderBy: { published_at: "desc" },
-	limit: 80,
+	limit: 500,
 });
 if (Astro.cache?.enabled) Astro.cache.set(cacheHint);
 
@@ -40,6 +38,10 @@ const filtered = sortListings(
 	sort,
 );
 const featured = published.filter((entry) => entry.data.is_featured);
+const PER_PAGE = 24;
+const pages = Math.max(1, Math.ceil(filtered.length / PER_PAGE));
+const page = Math.min(Math.max(Number(Astro.url.searchParams.get("page")) || 1, 1), pages);
+const shown = filtered.slice((page - 1) * PER_PAGE, page * PER_PAGE);
 const querySuffix = [
 	type ? `type=${encodeURIComponent(type)}` : "",
 	q ? `q=${encodeURIComponent(q)}` : "",
@@ -211,10 +213,9 @@ function amenityList(value: unknown): string[] {
 						<a class="listora-btn" href="/listings/submit/">Add a listing</a>
 					</div>
 				) : (
-					filtered.map((listing) => {
+					shown.map((listing) => {
 						const hours = parseHours(listing.data.hours);
 						const open = hours.length ? isOpenNow(hours, String(listing.data.timezone || "America/New_York")) : null;
-						const rating = asNumber(listing.data.rating_avg);
 						const amenities = amenityList(listing.data.amenities);
 						const owner = String(listing.data.owner_name || "");
 						return (
@@ -227,7 +228,7 @@ function amenityList(value: unknown): string[] {
 									)}
 									<span class="listora-badge">{typeName(listing.data.listing_type)}</span>
 									{listing.data.is_featured ? <span class="listora-badge listora-badge--featured">Featured</span> : null}
-									{rating ? <span class="listora-card__rating">{stars(rating)} {rating.toFixed(1)}</span> : null}
+									<span class="listora-card__rating" data-rating={listing.data.id} hidden></span>
 									<button class="listora-card__favorite" type="button" data-favorite={listing.data.id} aria-label={`Save ${listing.data.title}`}>
 										<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
 											<path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"></path>
@@ -258,6 +259,17 @@ function amenityList(value: unknown): string[] {
 			}
 		</div>
 
+		{
+			pages > 1 ? (
+				<nav class="listora-pager" id="listora-pager" aria-label="Pages of listings">
+					{page > 1 ? <a class="listora-btn listora-btn--secondary" rel="prev" href={withQuery(`page=${page - 1}`)}>Previous</a> : <span></span>}
+					<span class="listora-pager__status">Page {page} of {pages}</span>
+					{page < pages ? <a class="listora-btn listora-btn--secondary" rel="next" href={withQuery(`page=${page + 1}`)}>Next</a> : <span></span>}
+				</nav>
+			) : null
+		}
+		<p class="listora-pager" id="listora-more" hidden><a class="listora-btn listora-btn--secondary" href="/listings/">See all results</a></p>
+
 		<div class="listora-skeletons" aria-hidden="true">
 			<div class="listora-skeleton"></div>
 			<div class="listora-skeleton"></div>
@@ -268,7 +280,7 @@ function amenityList(value: unknown): string[] {
 	</div>
 </Base>
 
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<link rel="stylesheet" href="/vendor/leaflet/leaflet.css" />
 <script>
 	import { api, signInUrl } from "../../lib/listora";
 
@@ -380,11 +392,26 @@ function amenityList(value: unknown): string[] {
 			credentials: "same-origin",
 			headers: { "X-EmDash-Request": "1" },
 		});
-		const json = (await response.json()) as { data?: { items?: Array<Parameters<typeof cardHtml>[0]> } };
+		const json = (await response.json()) as { data?: { items?: Array<Parameters<typeof cardHtml>[0]>; total?: number } };
 		const items = json.data?.items ?? [];
+		const total = json.data?.total ?? items.length;
 		results.innerHTML = items.length === 0 ? emptyHtml() : items.map((item) => cardHtml(item)).join("");
-		if (count) count.textContent = items.length === 1 ? "1 listing" : `${items.length} listings`;
-		if (toolbar) toolbar.textContent = items.length === 1 ? "1 result" : `${items.length} results`;
+		if (count) count.textContent = total === 1 ? "1 listing" : `${total} listings`;
+		if (toolbar) toolbar.textContent = total === 1 ? "1 result" : `${total} results`;
+		// Live search shows the first page. The full list is the same query as a normal paged page.
+		document.getElementById("listora-pager")?.setAttribute("hidden", "");
+		const more = document.getElementById("listora-more");
+		const link = more?.querySelector("a");
+		if (more && link) {
+			more.hidden = total <= items.length;
+			const full = new URLSearchParams();
+			if (params.get("q")) full.set("q", params.get("q")!);
+			if (params.get("listing_type")) full.set("type", params.get("listing_type")!);
+			if (params.get("location")) full.set("location", params.get("location")!);
+			if (params.get("sort") && params.get("sort") !== "featured") full.set("sort", params.get("sort")!);
+			link.href = `/listings/?${full}`;
+			link.textContent = `See all ${total} results`;
+		}
 		if (featuredEl instanceof HTMLElement) {
 			featuredEl.hidden = Boolean(activeType || q?.value || locationInput?.value || near);
 		}
@@ -392,6 +419,25 @@ function amenityList(value: unknown): string[] {
 		form.removeAttribute("aria-busy");
 		if (clearBtn) clearBtn.hidden = !(q?.value || "");
 	}
+
+	// Ratings are not in the page HTML: they come from plugin storage in one request.
+	async function fillRatings() {
+		const slots = [...document.querySelectorAll<HTMLElement>("[data-rating]")];
+		const ids = [...new Set(slots.map((node) => node.dataset.rating ?? ""))].filter(Boolean).slice(0, 80);
+		if (!ids.length) return;
+		const data = await api(`ratings?ids=${encodeURIComponent(ids.join(","))}`);
+		const ratings = (data.ratings ?? {}) as Record<string, { average: number; count: number }>;
+		slots.forEach((node) => {
+			const rating = ratings[node.dataset.rating ?? ""];
+			if (!rating) return;
+			node.hidden = false;
+			node.textContent = `${"★".repeat(Math.max(1, Math.round(rating.average)))} ${rating.average.toFixed(1)}`;
+			node.setAttribute("aria-label", `Rated ${rating.average.toFixed(1)} out of 5 from ${rating.count} reviews`);
+		});
+	}
+	// Sorting by rating needs the stored ratings, so that order comes from the search route.
+	if (new URLSearchParams(location.search).get("sort") === "rating") runSearch();
+	else fillRatings();
 
 	q?.addEventListener("input", () => {
 		if (clearBtn) clearBtn.hidden = !q.value;
@@ -467,7 +513,7 @@ function amenityList(value: unknown): string[] {
 		if (points.length) {
 			mapEl.hidden = false;
 			const leaflet = document.createElement("script");
-			leaflet.src = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
+			leaflet.src = "/vendor/leaflet/leaflet.js";
 			leaflet.onload = () => {
 				const L = (window as unknown as { L: { map: Function; tileLayer: Function; marker: Function } }).L;
 				const map = L.map(mapEl).setView([points[0].lat, points[0].lng], 12);

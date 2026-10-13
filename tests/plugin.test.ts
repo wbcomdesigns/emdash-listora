@@ -6,6 +6,10 @@ import {
 	type PluginTestHost,
 } from "@emdash-cms/plugin-test";
 
+import manifestText from "../emdash-plugin.jsonc?raw";
+import submitPage from "../site-kit/pages/listings/submit.astro?raw";
+import { LISTING_TYPES as KIT_TYPES } from "../site-kit/lib/listora";
+import { LISTING_TYPES } from "../src/lib/types";
 // @ts-expect-error plain module shared with the lab seed
 import { listingsCollection } from "../site-kit/seed/collection.mjs";
 
@@ -251,38 +255,110 @@ describe("moderation uses the version the admin saw", () => {
 	});
 });
 
-describe("rating after a member changes a live review", () => {
-	it("marks the listing on erase and clears the mark on the next admin page load", async () => {
-		const { a } = await directory();
-		await host!.invokeRoute("review", { listingId: a, body: "Great." }, { method: "POST", user: ana });
-		const rev = (await host!.storage<{ rev: string }>("reviews").get(`rev-${a}-ana`))!.rev;
-		await host!.invokeRoute("admin", {
+describe("ratings live in plugin storage", () => {
+	const approve = async (a: string, who: string) => {
+		const rev = (await host!.storage<{ rev: string }>("reviews").get(`rev-${a}-${who}`))!.rev;
+		return host!.invokeRoute("admin", {
 			type: "block_action",
 			action_id: "review_mod",
-			value: `approve|${rev}|rev-${a}-ana`,
+			value: `approve|${rev}|rev-${a}-${who}`,
 			page: "/reviews",
 		});
+	};
+	const rating = async (a: string) => {
+		const got = (await host!.invokeRoute("ratings", { ids: a }, { method: "GET" })) as {
+			ratings: Record<string, { average: number; count: number }>;
+		};
+		return got.ratings[a] ?? null;
+	};
+
+	it("follows approval, a member rewrite and a member erase, without touching the listing", async () => {
+		const { a, rt } = await directory();
+		const before = await rt.inspect.content.get("listings", a);
+		await host!.invokeRoute("review", { listingId: a, stars: 5, body: "Great." }, { method: "POST", user: ana });
+		await host!.invokeRoute("review", { listingId: a, stars: 2, body: "Meh." }, { method: "POST", user: ben });
+		expect(await rating(a)).toBeNull();
+		await approve(a, "ana");
+		expect(await rating(a)).toEqual({ average: 5, count: 1 });
+		await approve(a, "ben");
+		expect(await rating(a)).toEqual({ average: 3.5, count: 2 });
+
+		// A rewrite goes back to pending and leaves the rating at once.
+		await host!.invokeRoute("review", { listingId: a, stars: 1, body: "Changed." }, { method: "POST", user: ben });
+		expect(await rating(a)).toEqual({ average: 5, count: 1 });
+
 		await host!.invokeRoute("privacy", { action: "erase" }, { method: "POST", user: ana });
-		expect(await host!.storage("events").get(`rating_dirty:${a}`)).toMatchObject({ contentId: a });
-		await host!.invokeRoute("admin", { type: "page_load", page: "/reviews" });
-		expect(await host!.storage("events").get(`rating_dirty:${a}`)).toBeNull();
+		expect(await rating(a)).toBeNull();
+
+		// None of this wrote to the listing.
+		const after = await rt.inspect.content.get("listings", a);
+		expect(after!.updatedAt).toBe(before!.updatedAt);
+		expect(after!.status).toBe("published");
 	});
 
-	it("marks the listing when a live review is rewritten, not when a pending one is", async () => {
+	it("shows the stored rating on cards and in search order", async () => {
 		const { a } = await directory();
-		const post = { method: "POST", user: ana };
-		await host!.invokeRoute("review", { listingId: a, body: "First." }, post);
-		await host!.invokeRoute("review", { listingId: a, body: "Second, still pending." }, post);
-		expect(await host!.storage("events").get(`rating_dirty:${a}`)).toBeNull();
-		const rev = (await host!.storage<{ rev: string }>("reviews").get(`rev-${a}-ana`))!.rev;
-		await host!.invokeRoute("admin", {
-			type: "block_action",
-			action_id: "review_mod",
-			value: `approve|${rev}|rev-${a}-ana`,
-			page: "/reviews",
+		await host!.invokeRoute("review", { listingId: a, stars: 4, body: "Good." }, { method: "POST", user: ana });
+		await approve(a, "ana");
+		const found = (await host!.invokeRoute("search", { q: "probe", sort: "rating" })) as {
+			items: Array<{ rating_avg: number; rating_count: number }>;
+		};
+		expect(found.items[0]).toMatchObject({ rating_avg: 4, rating_count: 1 });
+	});
+
+	it("adds the rating to a listing page's structured data only when there is one", async () => {
+		const { a, rt } = await directory();
+		const page = {
+			page: { url: "https://x.test/listings/probe-cafe", path: "/listings/probe-cafe", locale: null, kind: "content", pageType: "listing", title: "Probe Cafe", description: null, canonical: null, image: null, content: { collection: "listings", id: a, slug: "probe-cafe" } },
+		};
+		expect(await rt.transport.invokeHook("page:metadata", page)).toBeNull();
+		await host!.invokeRoute("review", { listingId: a, stars: 4, body: "Good." }, { method: "POST", user: ana });
+		await approve(a, "ana");
+		expect(await rt.transport.invokeHook("page:metadata", page)).toMatchObject({
+			kind: "jsonld",
+			graph: { aggregateRating: { ratingValue: 4, reviewCount: 1 } },
 		});
-		await host!.invokeRoute("review", { listingId: a, body: "Rewritten after approval." }, post);
-		expect(await host!.storage("events").get(`rating_dirty:${a}`)).toMatchObject({ contentId: a });
+	});
+});
+
+describe("contact messages", () => {
+	it("stores a capped message for a public listing and shows it to the admin", async () => {
+		const { a, rt } = await directory();
+		const sent = await host!.invokeRoute(
+			"contact",
+			{ listingId: a, name: "Vee", email: "vee@example.com", message: "x".repeat(3000) },
+			{ method: "POST", meta: { ip: "203.0.113.9", userAgent: null, referer: null, geo: null } },
+		);
+		expect(sent).toMatchObject({ ok: true });
+		const rows = await host!.storage<{ message: string; status: string }>("contacts").list();
+		expect(rows).toHaveLength(1);
+		expect(rows[0].data.message).toHaveLength(1000);
+		const page = await rt.admin.loadPage("/messages");
+		expect(page.blocks.map((block) => block.type)).toContain("table");
+		await host!.invokeRoute("admin", { type: "block_action", action_id: "message_mod", value: `done|${rows[0].id}`, page: "/messages" });
+		expect(await host!.storage("contacts").get(rows[0].id)).toMatchObject({ status: "handled" });
+	});
+
+	it("refuses a message for a listing that is not public", async () => {
+		await directory();
+		const sent = await host!.invokeRoute("contact", { listingId: "no-such-listing", message: "Hi" }, { method: "POST" });
+		expect(sent).toMatchObject({ ok: false, error: { code: "NOT_FOUND" } });
+	});
+});
+
+describe("paging", () => {
+	it("returns one page with totals, and clamps a page past the end", async () => {
+		const { rt } = await directory();
+		for (let n = 0; n < 5; n += 1) {
+			await rt.fixtures.content("listings", { data: { title: `Paged Place ${n}` }, slug: `paged-${n}`, status: "published" } as never);
+		}
+		const first = await host!.invokeRoute("listings", { per_page: 4 }, { method: "GET" });
+		expect(first).toMatchObject({ total: 6, page: 1, pages: 2, per_page: 4 });
+		expect((first as { items: unknown[] }).items).toHaveLength(4);
+		const last = await host!.invokeRoute("listings", { per_page: 4, page: 99 }, { method: "GET" });
+		expect(last).toMatchObject({ page: 2 });
+		expect((last as { items: unknown[] }).items).toHaveLength(2);
+		expect(await host!.invokeRoute("search", { q: "paged", per_page: 2 })).toMatchObject({ total: 5, pages: 3 });
 	});
 });
 
@@ -309,30 +385,46 @@ describe("listing guards", () => {
 		}
 	});
 
-	it("updates the live rating on approval and leaves a listing with unpublished edits alone", async () => {
+	it("refuses to approve a claim on a listing that has unpublished edits", async () => {
 		const { a, rt } = await directory();
-		const approve = async () => {
-			const rev = (await host!.storage<{ rev: string }>("reviews").get(`rev-${a}-ana`))!.rev;
-			return host!.invokeRoute("admin", {
-				type: "block_action",
-				action_id: "review_mod",
-				value: `approve|${rev}|rev-${a}-ana`,
-				page: "/reviews",
-			});
-		};
-		await host!.invokeRoute("review", { listingId: a, stars: 4, body: "Good." }, { method: "POST", user: ana });
-		await approve();
-		expect((await rt.inspect.content.get("listings", a))!.data).toMatchObject({ rating_avg: 4, rating_count: 1 });
-
-		// An editor leaves unpublished edits on the listing.
+		await host!.invokeRoute("claims", { listingId: a, name: "Ana" }, { method: "POST", user: ana });
 		const draft = await rt.inspect.content.get("listings", a);
 		await rt.actions.content.update("listings", a, { data: { ...draft!.data, title: "Half finished rename" } } as never);
-		await host!.invokeRoute("review", { listingId: a, stars: 1, body: "Changed my mind." }, { method: "POST", user: ana });
-		await approve();
-		const after = await rt.inspect.content.get("listings", a);
-		expect(after!.status).toBe("published");
-		// The rename was not pushed live, and the rating waits behind a marker.
+		const rev = (await host!.storage<{ rev: string }>("claims").get(`claim-${a}-ana`))!.rev;
+		const result = await host!.invokeRoute("admin", {
+			type: "block_action",
+			action_id: "claim_mod",
+			value: `approve|${rev}|claim-${a}-ana`,
+			page: "/claims",
+		});
+		expect(result).toMatchObject({ toast: { type: "error" } });
+		// The rename was not pushed live and the claim is still waiting.
 		expect(await host!.invokeRoute("search", { q: "Half finished" })).toMatchObject({ total: 0 });
-		expect(await host!.storage("events").get(`rating_dirty:${a}`)).toMatchObject({ contentId: a });
+		expect(await host!.storage("claims").get(`claim-${a}-ana`)).toMatchObject({ status: "pending" });
+	});
+});
+
+// The plugin and the kit are separate packages, so each keeps a list of listing types.
+// These tests are what stops the copies drifting apart.
+describe("listing types stay in step", () => {
+	it("matches between the plugin and the kit: slug, name, colour and schema type", () => {
+		expect(KIT_TYPES.map((t) => [t.slug, t.name, t.color, t.schema])).toEqual(
+			LISTING_TYPES.map((t) => [t.slug, t.name, t.color, t.schemaType]),
+		);
+	});
+
+	it("matches the default-type choices in the manifest", () => {
+		const options = [...manifestText.matchAll(/\{ "value": "([^"]+)", "label": "([^"]+)" \}/g)].map((m) => [m[1], m[2]]);
+		expect(options).toEqual(LISTING_TYPES.map((t) => [t.slug, t.name]));
+	});
+
+	it("matches the extra fields on the submit page", () => {
+		for (const type of LISTING_TYPES) {
+			for (const field of type.fields) {
+				// Event dates are fixed inputs on the form, not per-type extras.
+				if (type.slug === "event") continue;
+				expect(submitPage, `${type.slug}.${field.key}`).toContain(`key: "${field.key}"`);
+			}
+		}
 	});
 });

@@ -624,6 +624,23 @@
 	font-size: var(--listora-text-size-sm);
 }
 
+.listora-pager {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--listora-space-4);
+	margin: var(--listora-space-8) 0 0;
+}
+
+.listora-pager[hidden] {
+	display: none;
+}
+
+.listora-pager__status {
+	color: var(--listora-fg-muted);
+	font-size: var(--listora-text-size-sm);
+}
+
 .listora-dash-list {
 	display: grid;
 	gap: var(--listora-space-2);

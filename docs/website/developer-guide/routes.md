@@ -8,8 +8,9 @@ Base: `/_emdash/api/plugins/listora/<name>`. Public routes are internet-facing. 
 | --- | --- | --- |
 | `health` | public | Version, collection present, pending count. Demo storage seeds only if Golden Fork already exists |
 | `types` | public | 10 listing types |
-| `listings` | public | Published listings, filters |
-| `search` | public | Query, type, geo, suggest |
+| `listings` | public | Published listings, filters. Takes `page` and `per_page` (24 default, 60 max), returns `total`, `page`, `pages` |
+| `search` | public | Query, type, geo, suggest. Paged like `listings` |
+| `ratings` | public | `ids` (comma list, 80 max). Rating and review count per listing, from plugin storage |
 | `duplicate` | public | Title clash |
 | `reviews` | public | Published reviews for one listing. Read only |
 | `contact` | public | Store a message for a listing. Honeypot and an hourly limit per IP |
@@ -25,7 +26,9 @@ Base: `/_emdash/api/plugins/listora/<name>`. Public routes are internet-facing. 
 
 "Member" is a private route with `permission: "content:read"`, the lowest signed-in role. The host verifies the session and passes `routeCtx.user`. Never read a member id from the request. "Admin" is a private route with no permission set, which the host treats as `plugins:manage`. A public route gets no user at all.
 
-A member route must not write to or publish a listing. Listing changes that follow a member action (rating, claimed flag) happen when an admin approves it.
+A member route must not write to or publish a listing. Ratings live in plugin storage (`ratings`), so they update without touching the listing. The claimed flag changes only when an admin approves a claim.
+
+Public reads (`types`, `listings`, `search`, `duplicate`, `ratings`, `reviews`) are cached at the edge for 30 seconds. Allow that long before a change shows.
 
 Hook: `content:afterSave` indexes a listing save into `storage.events`.
 

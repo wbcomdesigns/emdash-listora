@@ -6,8 +6,10 @@ import {
 	filterListings,
 	isPublicListing,
 	listPublished,
+	paginate,
 	listingRefs,
-	markRatingDirty,
+	ratingsMap,
+	syncRating,
 	publishNow,
 } from "./lib/listings-query";
 import { LISTING_TYPES, LISTINGS, listingTypeBySlug } from "./lib/types";
@@ -107,6 +109,10 @@ const REVIEW_BODY_MAX = 1000;
 
 type Member = { id: string; name: string | null; role: number };
 
+// Public reads are the same for every visitor, so the edge can answer repeats.
+// Short enough that an approved review or a new listing shows within a minute.
+const CACHE = "public, max-age=30, stale-while-revalidate=120";
+
 const NO_LISTING = { ok: false, error: { code: "NOT_FOUND", message: "That listing is not available." } };
 
 const SIGN_IN = { ok: false, error: { code: "SIGN_IN_REQUIRED", message: "Sign in to continue." } };
@@ -135,6 +141,33 @@ const RATE_LIMITED = { ok: false, error: { code: "RATE_LIMITED", message: "Too m
 
 const plugin: SandboxedPlugin = {
 	hooks: {
+		// Adds the rating to a listing page's structured data. Nothing for unrated listings.
+		"page:metadata": {
+			handler: async (event, ctx) => {
+				const content = event.page.content;
+				if (!content || content.collection !== LISTINGS) return null;
+				const rating = asRecord(await ctx.storage.ratings.get(content.id));
+				const count = asNumber(rating.count) ?? 0;
+				if (!count) return null;
+				return {
+					kind: "jsonld",
+					id: "listora-rating",
+					graph: {
+						"@context": "https://schema.org",
+						"@type": "LocalBusiness",
+						name: event.page.pageTitle || event.page.title || undefined,
+						url: event.page.canonical || event.page.url,
+						aggregateRating: {
+							"@type": "AggregateRating",
+							ratingValue: rating.average,
+							reviewCount: count,
+							bestRating: 5,
+							worstRating: 1,
+						},
+					},
+				};
+			},
+		},
 		"content:afterSave": {
 			handler: async (event, ctx) => {
 				if (event.collection !== LISTINGS) return;
@@ -170,25 +203,20 @@ const plugin: SandboxedPlugin = {
 		},
 		types: {
 			public: true,
+			cacheControl: CACHE,
 			handler: async () => ({ ok: true, items: LISTING_TYPES }),
 		},
 		listings: {
 			public: true,
+			cacheControl: CACHE,
 			handler: async (routeCtx, ctx) => {
 				const filtered = await filterListings(ctx, routeCtx.input);
-				const raw = asRecord(routeCtx.input);
-				const limit = Math.min(Math.max(asNumber(raw.limit) ?? 40, 1), 100);
-				return {
-					ok: true,
-					items: filtered.items.slice(0, limit),
-					total: filtered.total,
-					cursor: null,
-					hasMore: filtered.total > limit,
-				};
+				return { ok: true, ...paginate(filtered.items, routeCtx.input) };
 			},
 		},
 		search: {
 			public: true,
+			cacheControl: CACHE,
 			handler: async (routeCtx, ctx) => {
 				const raw = asRecord(routeCtx.input);
 				const action = asString(raw.action);
@@ -220,7 +248,7 @@ const plugin: SandboxedPlugin = {
 							})),
 					};
 				}
-				return { ok: true, items: filtered.items, total: filtered.total };
+				return { ok: true, ...paginate(filtered.items, raw) };
 			},
 		},
 		submit: {
@@ -309,6 +337,7 @@ const plugin: SandboxedPlugin = {
 		},
 		duplicate: {
 			public: true,
+			cacheControl: CACHE,
 			handler: async (routeCtx, ctx) => {
 				const title = asString(asRecord(routeCtx.input).title).toLowerCase();
 				if (!title) return { ok: true, matches: [] };
@@ -319,8 +348,25 @@ const plugin: SandboxedPlugin = {
 				};
 			},
 		},
+		// Ratings for a page of server-rendered cards: ?ids=a,b,c (80 max).
+		ratings: {
+			public: true,
+			cacheControl: CACHE,
+			methods: ["GET"],
+			handler: async (routeCtx, ctx) => {
+				const ids = asString(asRecord(routeCtx.input).ids).split(",").map((id) => id.trim()).filter(Boolean).slice(0, 80);
+				const all = await ratingsMap(ctx);
+				const ratings: Record<string, { average: number; count: number }> = {};
+				for (const id of ids) {
+					const rating = all.get(id);
+					if (rating) ratings[id] = rating;
+				}
+				return { ok: true, ratings };
+			},
+		},
 		reviews: {
 			public: true,
+			cacheControl: CACHE,
 			methods: ["GET"],
 			handler: async (routeCtx, ctx) => {
 				const raw = asRecord(routeCtx.input);
@@ -360,12 +406,9 @@ const plugin: SandboxedPlugin = {
 				}
 				if (await rateLimited(ctx, `review:${user.id}`)) return RATE_LIMITED;
 				// One review per member per listing. Writing again replaces it and sends it back to moderation.
-				// A member route must not write to or publish a listing. Replacing a live review
-				// marks the rating dirty; the next admin page load recalculates it.
+				// A member route must not write to or publish a listing. Ratings live in plugin
+				// storage, so keeping one right is safe from here.
 				const id = `rev-${listingId}-${user.id}`;
-				if (asRecord(await ctx.storage.reviews.get(id)).status === "published") {
-					await markRatingDirty(ctx, listingId);
-				}
 				await ctx.storage.reviews.put(id, {
 					listingId,
 					member_id: user.id,
@@ -379,6 +422,8 @@ const plugin: SandboxedPlugin = {
 					owner_reply: "",
 					createdAt: nowIso(),
 				});
+				// A rewrite sends a live review back to pending, so the rating drops it straight away.
+				await syncRating(ctx, listingId);
 				return { ok: true, review: { id, status: "pending" } };
 			},
 		},
@@ -485,15 +530,18 @@ const plugin: SandboxedPlugin = {
 				if (asString(raw.company_website)) {
 					return { ok: false, error: { code: "SPAM", message: "Message rejected." } };
 				}
+				if (!(await isPublicListing(ctx, listingId))) return NO_LISTING;
 				// Per visitor IP. With no IP from the host every guest shares one bucket: fail closed.
 				const ip = (routeCtx.requestMeta as { ip?: string | null } | undefined)?.ip || "unknown";
 				if (await rateLimited(ctx, `contact:${ip}`)) return RATE_LIMITED;
 				const id = `contact-${listingId}-${Date.now()}`;
 				await ctx.storage.contacts.put(id, {
 					listingId,
-					name: asString(raw.name),
-					email,
-					message,
+					name: asString(raw.name).slice(0, 80),
+					email: email.slice(0, 160),
+					// Capped so the admin table can show every character.
+					message: message.slice(0, 1000),
+					status: "new",
 					createdAt: nowIso(),
 				});
 				return { ok: true, id };
@@ -584,13 +632,11 @@ const plugin: SandboxedPlugin = {
 				]);
 				if (asString(asRecord(routeCtx.input).action) === "erase") {
 					await Promise.all([
-						...rows(reviews)
-							.filter((row) => row.status === "published")
-							.map((row) => markRatingDirty(ctx, asString(row.listingId))),
 						...reviews.items.map((row) => ctx.storage.reviews.delete(row.id)),
 						...claims.items.map((row) => ctx.storage.claims.delete(row.id)),
 						...favorites.items.map((row) => ctx.storage.favorites.delete(row.id)),
 					]);
+					for (const id of new Set(rows(reviews).map((row) => asString(row.listingId)))) await syncRating(ctx, id);
 					return { ok: true, erased: true };
 				}
 				return { ok: true, reviews: rows(reviews), claims: rows(claims), favorites: rows(favorites) };

@@ -16,7 +16,6 @@ import {
 	mapsDirectionsUrl,
 	parseHours,
 	schemaType,
-	stars,
 	typeName,
 	websiteHref,
 	weekdayIndex,
@@ -50,8 +49,6 @@ const zone = String(data.timezone || "America/New_York");
 const open = hours.length ? isOpenNow(hours, zone) : null;
 const weekHours = hoursForWeek(hours);
 const today = weekdayIndex(zone);
-const rating = asNumber(data.rating_avg);
-const reviewCount = asNumber(data.rating_count);
 const lat = asNumber(data.lat);
 const lng = asNumber(data.lng);
 const hasMap = Number.isFinite(lat) && Number.isFinite(lng) && lat !== 0 && lng !== 0;
@@ -84,10 +81,6 @@ const schema = {
 		addressCountry: data.country,
 	},
 	geo: hasMap ? { "@type": "GeoCoordinates", latitude: lat, longitude: lng } : undefined,
-	aggregateRating:
-		rating && reviewCount
-			? { "@type": "AggregateRating", ratingValue: rating, reviewCount }
-			: undefined,
 };
 ---
 
@@ -150,14 +143,7 @@ const schema = {
 									<span class="listora-badge listora-badge--closed" role="status">Closed</span>
 								) : null
 							}
-							{
-								rating ? (
-									<span class="listora-stars">
-										<span aria-hidden="true">{stars(rating)}</span>{" "}
-										<span class="listora-stars__value">{rating.toFixed(1)} ({reviewCount} {reviewCount === 1 ? "review" : "reviews"})</span>
-									</span>
-								) : null
-							}
+							<span class="listora-stars" id="listora-rating" hidden></span>
 						</div>
 						<h1 class="listora-detail__title">{data.title}</h1>
 						{
@@ -473,7 +459,7 @@ const schema = {
 	</div>
 </Base>
 
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<link rel="stylesheet" href="/vendor/leaflet/leaflet.css" />
 <script>
 	import { api, esc, notify } from "../../lib/listora";
 
@@ -509,6 +495,13 @@ const schema = {
 		if (!box) return;
 		const data = await api(`reviews?listingId=${encodeURIComponent(listingId)}`);
 		const items = (data.items ?? []) as Array<Record<string, unknown>>;
+		const summary = document.getElementById("listora-rating");
+		const count = Number(data.count) || 0;
+		if (summary && count) {
+			const average = Number(data.average) || 0;
+			summary.hidden = false;
+			summary.innerHTML = `<span aria-hidden="true">${"★".repeat(Math.max(1, Math.round(average)))}</span> <span class="listora-stars__value">${esc(average.toFixed(1))} (${count} ${count === 1 ? "review" : "reviews"})</span>`;
+		}
 		box.innerHTML =
 			items.length === 0
 				? `<div class="listora-empty"><h2>No reviews yet</h2><p>Be the first to review this listing.</p></div>`
@@ -625,7 +618,7 @@ const schema = {
 	const mapEl = document.getElementById("detail-map");
 	if (mapEl) {
 		const leaflet = document.createElement("script");
-		leaflet.src = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
+		leaflet.src = "/vendor/leaflet/leaflet.js";
 		leaflet.onload = () => {
 			const L = (window as unknown as { L: { map: Function; tileLayer: Function; marker: Function } }).L;
 			const mapLat = Number(mapEl.dataset.lat);

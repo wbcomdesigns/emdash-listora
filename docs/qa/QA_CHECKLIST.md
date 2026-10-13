@@ -4,9 +4,9 @@
 
 One living list of flow-level cases for Listora on EmDash. Walk all of it before every release. When you add or fix behaviour, add or change its case in the same pull request. There are no per-release QA files.
 
-Last walk: 2026-10-13, version 0.3.0, on the lab, as guest, subscriber and admin.
+Last walk: 2026-10-13, version 0.4.0, on the lab, as guest, subscriber and admin.
 
-Walked in the browser: G-1, G-2, G-4, G-8 to G-10, M-1 to M-4, M-6 to M-8, M-13, A-1, A-5, A-6, P-1 to P-4 and P-7. Checked at route level only: G-5 to G-7, G-11, G-12, M-5, M-9 to M-12, A-2 to A-4, A-8 to A-11. Not walked yet: G-3, A-7, A-12 in the browser, P-5, P-6 and P-8 by hand.
+Walked in the browser for 0.4.0: G-1, G-2, G-4, G-13 to G-17, M-2 to M-4, A-5, A-6, A-15, A-16, and no sideways scroll at 390. Checked at route level only: G-5 to G-7, G-11, G-12, M-5, M-9 to M-12, M-14, A-2 to A-4, A-8 to A-11, A-13, A-14. Carried over from the 0.3.0 walk, not repeated: G-8 to G-10, M-1, M-6 to M-8, M-13, A-1, the dark-mode and contrast checks. Not walked yet: G-3, A-7, A-12 in the browser, P-5, P-6 and P-8 by hand.
 
 ## Setup
 
@@ -38,6 +38,11 @@ Three roles, always in this order: **guest**, **member** (subscriber role), **ad
 | G-9 | Open `/listings/submit/` | Sign-in prompt. No form in the page | refuses guests |
 | G-10 | Open `/account/` | Sign-in prompt. No dashboard data in the page | prove: guests refused |
 | G-11 | Send a contact message from a listing | "Message sent." A ninth message inside an hour is refused | |
+| G-13 | Open `/listings/` on a directory with more than 24 listings | 24 cards, "Page 1 of N", Next works, the filters stay applied on page 2 |
+| G-14 | Type a search that matches more than 24 listings | First 24 show with a "See all N results" link that opens the full paged list |
+| G-15 | Watch the network panel on the archive and a listing page | The map script and style load from `/vendor/leaflet/` on the site. Nothing from unpkg |
+| G-16 | Check response headers of `/account/` and `/listings/submit/` | `Cache-Control: private, no-store` |
+| G-17 | Open the archive | Rated listings show stars and a number on the card after load. Unrated ones show nothing |
 | G-12 | Request `import`, `dashboard`, `favorites`, `privacy` routes directly | 401 each | prove: guests refused |
 
 ## Member (subscriber role)
@@ -76,6 +81,8 @@ Three roles, always in this order: **guest**, **member** (subscriber role), **ad
 | A-11 | A member erases their data after a review of theirs was approved, then you open any Listora admin page | The listing rating no longer counts that review | marks the listing on erase |
 | A-13 | Edit a published listing in admin and save without publishing. Then approve a review on it | The unfinished edit stays unpublished. The rating changes after you publish the listing and open a Listora admin page | updates the live rating on approval and leaves a listing with unpublished edits alone |
 | A-14 | Same listing: approve a claim on it | Refused with "has unpublished edits". The claim stays pending | |
+| A-15 | Open Messages after a visitor sent one | Listing name, sender, the full message, date. Mark as handled removes it from the list |
+| A-16 | Open Messages with none waiting | Empty state |
 | A-12 | Get started on a site with no listings collection | Clear "create the collection first" message, no crash | tells the owner to create the listings collection first |
 
 ## Presentation, every screen
@@ -95,8 +102,8 @@ Screens: archive, detail, submit, calendar, account, and the three admin pages. 
 
 ## Known gaps (do not fail a release on these, do not hide them)
 
-- Contact messages are stored but not delivered and have no admin screen
-- Archive shows at most 80 listings, no paging
+- Contact messages are shown in admin but not emailed to anyone
+- The directory reads at most 500 listings. Public reads are cached for 30 seconds, so a change can take that long to show
 - The featured row's listings repeat at the top of the grid
 - Primary button text in dark mode follows the site theme's own colours
 - Not yet walked: right-to-left layout, a screen reader pass, a clean second-site install

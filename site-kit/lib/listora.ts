@@ -99,9 +99,6 @@ export function matchesPlace(data: { city?: unknown; state?: unknown; country?: 
 
 export function sortListings<T extends { data: Record<string, unknown> }>(items: T[], sort: string): T[] {
 	const copy = [...items];
-	if (sort === "rating") {
-		return copy.sort((a, b) => asNumber(b.data.rating_avg) - asNumber(a.data.rating_avg));
-	}
 	if (sort === "title") {
 		return copy.sort((a, b) => String(a.data.title ?? "").localeCompare(String(b.data.title ?? "")));
 	}

@@ -1,4 +1,4 @@
-# Handoff (2026-10-13, after 0.3.1)
+# Handoff (2026-10-13, after 0.4.0 work)
 
 Read this first in a new session. Then `AGENTS.md`, `CONTRIBUTING.md`, and `docs/website/getting-started/new-machine.md`.
 
@@ -25,6 +25,8 @@ GitHub tag, `package.json`, and the registry version must stay the same number. 
 - Updating a published listing only saves a draft. `patchListing` in `src/lib/listings-query.ts` updates and republishes, and refuses (`busy`) when the listing already has unpublished edits so it never publishes someone's draft
 - Anything a member can write that an admin page later reads must not be able to break that page. `drainRatingDirty` is the pattern: small batch, each item isolated
 - Kit colours use `light-dark()` and follow the site theme. There is no `.dark` class block
+- Ratings are rows in plugin storage (`ratings`), written by `syncRating`. Nothing writes to a listing for a rating. Cards get them from the `ratings` route, listing pages from the `reviews` answer, structured data from the `page:metadata` hook
+- Public read routes carry `cacheControl` (30 seconds). Tests run inside workerd with no file system: read repo files in a test with a `?raw` import
 - Kit pages share `api`, `esc`, `notify` from `site-kit/lib/listora.ts`. Anything from the API goes through `esc` before `innerHTML`
 - Registry media: `icon.png`, `images/`, `docs/registry/*.md`, wired in `emdash-plugin.jsonc`
 
@@ -46,8 +48,9 @@ Override lab folder with `LISTORA_LAB`. After a kit change: edit `site-kit/`, th
 ## Next, in order
 
 1. Confirm the registry page shows the icon, banner and screenshots once the listing checks pass.
-2. Milestone `0.4.0`: contacts admin screen and mail, paging, kit free of starter-only imports plus the second-site prove, categories and locations as filters, gallery, listing expiry, admin pages for import and settings.
-3. Milestone `Later`: type editor, reminders, health check.
+2. Milestone `0.4.0` shipped paging, the Messages page, stored ratings and the kit changes for existing sites. Still open there: #23 (prove the kit on a clean second site and a preview of a live one), #20 (email the listing owner).
+3. Milestone `0.5.0`: categories and locations as filters, gallery, listing expiry, admin pages for import and settings.
+4. Milestone `Later`: type editor, reminders, health check.
 
 ## Do not do
 
@@ -63,8 +66,8 @@ Override lab folder with `LISTORA_LAB`. After a kit change: edit `site-kit/`, th
 | Item | Note |
 | --- | --- |
 | Second-site apply | Kit pages still import the starter's `layouts/Base.astro` and `utils/site-identity`. Not proven on a clean site |
-| Paging | Archive shows 80 listings, search 100. `cursor` is null |
-| Contact | Stored, never delivered, no admin screen |
+| Directory size | Reads at most 500 listings and filters in memory |
+| Contact | Shown in the Messages admin page. Not emailed to anyone |
 | Dashboard rows | Read only. No edit or renew action |
 | Featured row | The same listings repeat at the top of the grid below it |
 | Banner | `images/banner.png` is the dark-text lockup on a transparent ground. Check it on the registry page |

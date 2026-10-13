@@ -1,3 +1,13 @@
+## 0.4.0
+
+- New: paging on the directory, 24 listings per page.
+- New: Messages admin page for what visitors send from a listing.
+- New: the map library ships inside the kit. No outside scripts.
+- Improve: ratings live in the plugin's own storage and update at once.
+- Fix: Bathrooms field restored on the submit form.
+
+Copy `site-kit/` again after updating, including `site-kit/public/vendor/`.
+
 ## 0.3.1
 
 - Fix: approving a review or claim no longer publishes unfinished edits on the listing.
@@ -15,4 +25,4 @@
 - Fix: dark mode follows the site theme. Search icons no longer overlap the placeholder.
 - Security: import, export and the claims list need an admin.
 
-Copy `site-kit/` again after updating. Full history: https://github.com/wbcomdesigns/emdash-listora/blob/main/CHANGELOG.md
+Full history: https://github.com/wbcomdesigns/emdash-listora/blob/main/CHANGELOG.md

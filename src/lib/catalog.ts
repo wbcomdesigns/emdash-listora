@@ -55,7 +55,10 @@ export type ListingCard = {
 	place: string;
 };
 
-export function listingFromContent(item: ContentLike): ListingCard {
+export function listingFromContent(
+	item: ContentLike,
+	rating?: { average: number; count: number },
+): ListingCard {
 	const data = asRecord(item.data);
 	const type = listingTypeBySlug(asString(data.listing_type) || "business");
 	const hours = parseHours(data.hours);
@@ -89,8 +92,9 @@ export function listingFromContent(item: ContentLike): ListingCard {
 		is_featured: asBoolean(data.is_featured),
 		owner_name: asString(data.owner_name),
 		timezone,
-		rating_avg: asNumber(data.rating_avg) ?? 0,
-		rating_count: asNumber(data.rating_count) ?? 0,
+		// Ratings live in plugin storage since 0.4.0, never on the listing.
+		rating_avg: rating?.average ?? 0,
+		rating_count: rating?.count ?? 0,
 		hours,
 		open_label: hoursLabel(hours, timezone),
 		services: parseJson<ServiceRow[]>(data.services, []),

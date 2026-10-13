@@ -50,10 +50,13 @@
 			"indexes": ["member_id", "listingId", "createdAt"]
 		},
 		"contacts": {
-			"indexes": ["listingId", "createdAt"]
+			"indexes": ["listingId", "createdAt", "status"]
 		},
 		"email_log": {
 			"indexes": ["template", "status", "createdAt"]
+		},
+		"ratings": {
+			"indexes": ["count"]
 		},
 		"blocked": {
 			"indexes": ["member_id", "createdAt"]
@@ -83,6 +86,12 @@
 				"path": "/claims",
 				"label": "Claims",
 				"icon": "badge-check",
+				"group": "Listings"
+			},
+			{
+				"path": "/messages",
+				"label": "Messages",
+				"icon": "envelope",
 				"group": "Listings"
 			}
 		],

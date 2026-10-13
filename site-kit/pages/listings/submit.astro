@@ -3,6 +3,8 @@ import Base from "../../layouts/Base.astro";
 import { LISTING_TYPES } from "../../lib/listora";
 import "../../styles/listora-ui.css";
 
+// This page differs per visitor. Sites cache pages without regard to cookies, so say so.
+Astro.response.headers.set("Cache-Control", "private, no-store");
 const user = Astro.locals.user;
 const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.pathname)}`;
 ---
@@ -207,6 +209,7 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 		hotel: [{ key: "star_rating", label: "Stars", help: "1 to 5." }],
 		"real-estate": [
 			{ key: "beds", label: "Bedrooms", help: "Whole number." },
+			{ key: "baths", label: "Bathrooms", help: "Whole number." },
 			{ key: "price", label: "Price", help: "Asking or nightly rate." },
 		],
 		event: [
@@ -353,6 +356,7 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 						year_founded: String(data.get("year_founded") ?? ""),
 						star_rating: String(data.get("star_rating") ?? ""),
 						beds: String(data.get("beds") ?? ""),
+						baths: String(data.get("baths") ?? ""),
 						price: String(data.get("price") ?? ""),
 						salary: String(data.get("salary") ?? ""),
 						job_type: String(data.get("job_type") ?? ""),
