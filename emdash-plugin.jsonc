@@ -41,6 +41,12 @@
 	"admin": {
 		"pages": [
 			{
+				"path": "/setup",
+				"label": "Get started",
+				"icon": "sparkle",
+				"group": "Listings"
+			},
+			{
 				"path": "/queue",
 				"label": "Listora",
 				"icon": "buildings",

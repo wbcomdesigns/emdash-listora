@@ -2,7 +2,7 @@ import type { SandboxedPlugin } from "emdash/plugin";
 
 import { handleAdmin } from "./admin";
 import { listingFromContent } from "./lib/catalog";
-import { ensureDemoSeed } from "./lib/demo-seed";
+import { maybeSeedDemo } from "./lib/onboard";
 import { filterListings, listPublished } from "./lib/listings-query";
 import { DEMO_MEMBER, LISTING_TYPES, LISTINGS, listingTypeBySlug } from "./lib/types";
 import {
@@ -122,7 +122,7 @@ const plugin: SandboxedPlugin = {
 		health: {
 			public: true,
 			handler: async (_routeCtx, ctx) => {
-				const seed = await ensureDemoSeed(ctx);
+				const seed = await maybeSeedDemo(ctx);
 				const collections = (await ctx.schema?.listCollections()) ?? [];
 				const hasListings = collections.some((item) => item.slug === LISTINGS);
 				const pending = await ctx.storage.submissions.count({ status: "pending" });
@@ -144,7 +144,7 @@ const plugin: SandboxedPlugin = {
 		listings: {
 			public: true,
 			handler: async (routeCtx, ctx) => {
-				await ensureDemoSeed(ctx);
+				await maybeSeedDemo(ctx);
 				const filtered = await filterListings(ctx, routeCtx.input);
 				const raw = asRecord(routeCtx.input);
 				const limit = Math.min(Math.max(asNumber(raw.limit) ?? 40, 1), 100);
@@ -160,7 +160,7 @@ const plugin: SandboxedPlugin = {
 		search: {
 			public: true,
 			handler: async (routeCtx, ctx) => {
-				await ensureDemoSeed(ctx);
+				await maybeSeedDemo(ctx);
 				const raw = asRecord(routeCtx.input);
 				const action = asString(raw.action);
 				const filtered = await filterListings(ctx, raw);
@@ -301,7 +301,7 @@ const plugin: SandboxedPlugin = {
 			public: true,
 			methods: ["GET", "POST"],
 			handler: async (routeCtx, ctx) => {
-				await ensureDemoSeed(ctx);
+				await maybeSeedDemo(ctx);
 				const raw = asRecord(routeCtx.input);
 				const listingId = asString(raw.listingId || raw.listing_id || raw.slug);
 				const wantsWrite = routeCtx.request.method === "POST" && (asString(raw.body) || asNumber(raw.stars));
@@ -366,7 +366,7 @@ const plugin: SandboxedPlugin = {
 			public: true,
 			methods: ["GET", "POST"],
 			handler: async (routeCtx, ctx) => {
-				await ensureDemoSeed(ctx);
+				await maybeSeedDemo(ctx);
 				const raw = asRecord(routeCtx.input);
 				if (routeCtx.request.method !== "POST") {
 					const listingId = asString(raw.listingId);
@@ -404,7 +404,7 @@ const plugin: SandboxedPlugin = {
 			public: true,
 			methods: ["GET", "POST", "DELETE"],
 			handler: async (routeCtx, ctx) => {
-				await ensureDemoSeed(ctx);
+				await maybeSeedDemo(ctx);
 				const raw = asRecord(routeCtx.input);
 				const memberId = routeCtx.user?.id || memberIdFrom(raw);
 				const listingId = asString(raw.listingId || raw.listing_id);
@@ -427,7 +427,7 @@ const plugin: SandboxedPlugin = {
 		dashboard: {
 			public: true,
 			handler: async (routeCtx, ctx) => {
-				await ensureDemoSeed(ctx);
+				await maybeSeedDemo(ctx);
 				const memberId = routeCtx.user?.id || memberIdFrom(routeCtx.input);
 				const [reviews, claims, favorites, submissions] = await Promise.all([
 					ctx.storage.reviews.query({ limit: 100 }),

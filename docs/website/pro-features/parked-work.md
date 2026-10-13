@@ -1,18 +1,24 @@
-# Parked Pro work
+# Not now
 
-> **PRO** - Credits, Google Maps, Needs, Compare, and related jobs wait for Listora Pro on EmDash. Do not start them until Free screens pass the chrome bar.
+> **PRO** - These jobs are not in the current Free pass. Do not start them. Do not tease them on Free screens. Do not write a Pro plan until Free is stable.
 
-`0.1.0` is Free only.
+`0.1.0` is Free only. Work stays on Free chrome, code completion, and site-owner readiness. See [QA catalog](../../qa/README.md).
 
-| Job | Why it waits |
+| Job | Status |
 | --- | --- |
-| Google Maps | Needs `network:request` and keys. OSM is Free |
-| Credits, plans, coupons | Compose with a payments plugin, not this isolate |
-| Needs marketplace | Pro catalog |
-| Compare 2-4 listings | Pro catalog |
-| Quick view modal | Pro catalog |
-| Programmatic SEO landings | Site kit plus host routes |
-| Coming soon / private mode | Host plus kit |
-| BuddyPress | No BuddyPress on EmDash |
+| Google Maps | Skip |
+| Credits, plans, coupons | Skip |
+| Needs marketplace | Skip |
+| Compare 2-4 listings | Skip |
+| Quick view modal | Skip |
+| Programmatic SEO landings | Skip |
+| Coming soon / private mode | Skip |
+| BuddyPress | Skip |
+| Photo or multi-criteria reviews | Skip |
+| Verification badges | Skip |
+| Lead forms | Skip. Free uses the listing contact form |
+| Saved searches | Skip |
+| Infinite scroll | Skip |
+| Places import | Skip |
 
-When a Pro job returns, bump **major** if it adds capabilities or public hosts. Document it on its own page with a Pro banner. Do not hide it inside a Free guide.
+Do not add a Credits tab, a Compare control, a Needs CTA, a verification badge, or a Pro upsell on submit, search, review, contact, claim, or account.

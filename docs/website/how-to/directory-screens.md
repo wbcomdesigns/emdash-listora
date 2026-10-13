@@ -6,7 +6,7 @@ Status is against WordPress Listora chrome, not "the URL loads". Engine column i
 
 | Screen | Engine | Lab chrome | Bar |
 | --- | --- | --- | --- |
-| Directory search | `search`, `types` | First pass: q, Near Me, type chips | Command search, facets, skeletons |
+| Directory search | `search`, `types` | Command bar: q, location, Near me, type chips | Map drag re-query |
 | Directory grid | `listings` | Grid/list, count, featured row | Sort, paging, skeletons |
 | Listing card | listing fields | Photo, type, city, rating when present | Features, owner, featured treatment |
 | Listing detail | listings + extras | Tabs, hours, services, JSON-LD, map, actions | Gallery/lightbox, full sidebar |
@@ -21,9 +21,9 @@ Status is against WordPress Listora chrome, not "the URL loads". Engine column i
 | Admin types | types in code | Missing | Block Kit type editor |
 | Admin import | `import` | CSV fixture only | Block Kit import page |
 
-## Parked (Pro)
+## Out of scope
 
-Compare, Needs, quick view, SEO landings, coming soon. See [Parked Pro work](../pro-features/parked-work.md).
+Compare, Needs, quick view, SEO landings, coming soon, credits, Google Maps, lead forms, verification. Skip. See [Not now](../pro-features/parked-work.md).
 
 ## Interaction contract (do not drop)
 

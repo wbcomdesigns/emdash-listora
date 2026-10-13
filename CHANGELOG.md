@@ -1,13 +1,17 @@
 # Changelog
 
-Versions match `package.json` and the EmDash registry release. Newest first.
+Versions match `package.json`, the git tag, and the EmDash registry release. Newest first. Never publish a version that is not on `origin/main`.
 
-## [Unreleased]
+## [0.2.0] - 2026-10-13
 
-- Team docs in `docs/website/` in the Wbcom `sections[]` shape: landing README, Getting Started, features, how-to, settings, Pro, developer, What's New, FAQ, troubleshooting.
-- Form presentation guideline (`ux-foundation` for directory forms, `taste-skill` only for marketing) plus kit field, helper, error, checkbox, and wizard-step primitives.
-- Detail chrome: full-width cover, breadcrumb, action bar, hours table, sticky sidebar. The map no longer sits in the hero.
-- Uniform frontend forms: type cards, form sections, two-column field rows, labeled search, and field errors on review, contact, and claim.
+First-run Get started plus drop-in site-kit pages so testers see a finished directory.
+
+- New - Get started admin page with Load sample directory (12 NYC listings, reviews, a claim).
+- New - Drop-in archive, detail, submit, calendar, and account pages in `site-kit/pages/`.
+- New - QA catalog at `docs/qa/` for owner readiness and the screen walk.
+- Improve - Directory command bar, location, Near me, sort, card rating, owner, and amenity chips.
+- Improve - Health no longer writes demo rows on an empty site.
+- Improve - Count copy uses singular for one listing or result.
 
 ## [0.1.0] - 2026-10-13
 

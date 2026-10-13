@@ -48,4 +48,11 @@ Until the labeler approves `0.1.0`, the public page stays empty:
 
 https://plugins.emdashcms.com/plugins/@vapvarun.bsky.social/listora
 
-After install, copy `site-kit/` into the site. The plugin alone does not create `/listings/` pages. See [Site kit](../developer-guide/site-kit.md).
+After install:
+
+1. Open Admin → Get started.
+2. Create a `listings` collection on the site if the page says it is missing.
+3. Click **Load sample directory**. That writes 12 NYC listings, reviews, favorites, and a pending claim. It does not run on health. Empty production stays empty until you click.
+4. Apply `site-kit/` (CSS, `lib/listora.ts`, pages, four menu links). The plugin alone does not create `/listings/` pages.
+
+Exact copy commands: [site-kit/README.md](https://github.com/wbcomdesigns/emdash-listora/blob/main/site-kit/README.md). The lab can still use `site-kit/seed/listings.mjs` for the larger 33-listing pack.

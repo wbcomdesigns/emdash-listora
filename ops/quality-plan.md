@@ -61,7 +61,7 @@ First kit drop rebuilds the three lab pages to Listora chrome. That is the UX st
 
 ## Sequence
 
-Free first. See `ops/free-first-plan.md`. Park Pro.
+Free only. See `ops/free-first-plan.md`. Pro stays out of this product.
 
 Execution loop, seed, and local prove: `ops/autonomous-local-plan.md`. Seed rows: `ops/seed-inventory.tsv`.
 
@@ -71,7 +71,7 @@ Execution loop, seed, and local prove: `ops/autonomous-local-plan.md`. Seed rows
 4. **Reviews + claims (D+E, Free only).**
 5. **Dashboard + favorites (C).**
 6. **Contact + email + import (G+I, Free only).**
-7. **Registry publish** after Drops 1-2 look like Listora Free. Pro and credits stay later.
+7. **Registry publish** after Drops 1-2 look like Listora Free. Do not start Pro or credits.
 
 ## Local testing
 

@@ -24,18 +24,21 @@ export async function filterListings(
 	const raw = asRecord(input);
 	const query = asString(raw.q || raw.query);
 	const listingType = asString(raw.listing_type || raw.type);
-	const city = asString(raw.city);
+	const location = asString(raw.city || raw.location);
 	const feature = asString(raw.feature);
 	const amenity = asString(raw.amenity) || feature;
 	const lat = asNumber(raw.lat);
 	const lng = asNumber(raw.lng);
-	const radius = asNumber(raw.radius) ?? 5;
+	const radius = asNumber(raw.radius) ?? 8;
 	const sort = asString(raw.sort) || "featured";
 	const all = (await listPublished(ctx)).filter((item) => item.listing_status !== "expired");
 
 	let items = all.filter((item) => {
 		if (listingType && item.listing_type !== listingType) return false;
-		if (city && item.city.toLowerCase() !== city.toLowerCase()) return false;
+		if (location) {
+			const hay = [item.city, item.state, item.country, item.place].join(" ").toLowerCase();
+			if (!hay.includes(location.toLowerCase())) return false;
+		}
 		if (amenity && !item.amenities.map((value) => value.toLowerCase()).includes(amenity.toLowerCase())) {
 			return false;
 		}

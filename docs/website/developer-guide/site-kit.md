@@ -7,19 +7,13 @@ Copy these into an EmDash site after the plugin is installed.
 | Path | Role |
 | --- | --- |
 | `site-kit/listora-ui.css` | Tokens and directory chrome |
+| `site-kit/lib/listora.ts` | Helpers the pages import |
+| `site-kit/pages/` | Archive, detail, submit, calendar, account |
 | `site-kit/seed/listings.mjs` | Collection fields, taxonomies, 33 NYC listings |
 | `site-kit/seed/import/sample.csv` | Import fixture |
-| `site-kit/README.md` | Which lab pages exist today |
+| `site-kit/README.md` | Owner apply commands |
 
-Lab pages (not yet first-class kit files):
-
-- `src/pages/listings/index.astro`
-- `src/pages/listings/[slug].astro`
-- `src/pages/listings/submit.astro`
-- `src/pages/listings/calendar.astro`
-- `src/pages/account/index.astro`
-
-Moving those pages into the kit is the first screen job. See [Improve the screens](../how-to/improve-the-screens.md).
+Copy pages to `src/pages/` on the site. They expect `../../layouts/Base.astro`. See [Improve the screens](../how-to/improve-the-screens.md) for chrome still thin after apply.
 
 Rules for new CSS:
 

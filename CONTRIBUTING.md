@@ -4,12 +4,14 @@ This repo is the source of truth for the sandboxed plugin. WordPress Listora sta
 
 Registry identity is `@vapvarun.bsky.social/listora` (publisher DID `did:plc:2o6axbe264shvyedyhycyhya`). GitHub is where we review and version the code.
 
+This product is Free only. No Pro plan in this pass. Check code completion and site-owner readiness with `docs/qa/`. Do not add Compare, Needs, credits, Google Maps, lead forms, verification, or photo reviews to screens or routes. Next work stays on Free chrome. See [Not now](docs/website/pro-features/parked-work.md).
+
 ## Layout
 
 | Path | Role |
 | --- | --- |
 | `src/plugin.ts` | Sandboxed routes and hooks |
-| `src/admin.ts` | Block Kit admin (queue, reviews, claims) |
+| `src/admin.ts` | Block Kit admin (Get started, queue, reviews, claims) |
 | `emdash-plugin.jsonc` | Identity, capabilities, storage, admin pages |
 | `site-kit/` | CSS tokens and seed a site copies after install |
 | `tests/` | Worker-backed route tests |
@@ -58,17 +60,19 @@ After the bump, add a `CHANGELOG.md` entry under `[Unreleased]`, then move it un
 
 ## Release to the collection
 
+`package.json` version, the `CHANGELOG.md` heading, the git tag `vX.Y.Z`, and the registry package must be the same number. Do not leave GitHub ahead of the registry, or the other way around.
+
 Do this from `main` after the PR is merged.
 
 1. Confirm `package.json` version is new.
 2. Confirm `CHANGELOG.md` has that version.
 3. `npm run validate && npm run test && npm run build`
-4. Tag: `git tag v0.1.1 && git push origin main --tags`
+4. Tag: `git tag v0.2.0 && git push origin main --tags`
 5. Session: `npx emdash-plugin whoami`  
    If needed: `npx emdash-plugin login vapvarun.bsky.social`
 6. Publish: `npx emdash-plugin publish`
 7. Watch approval:  
-   `npx emdash-plugin info vapvarun.bsky.social listora --version 0.1.1 --watch`
+   `npx emdash-plugin info vapvarun.bsky.social listora --version 0.2.0 --watch`
 
 Public page after approval:  
 https://plugins.emdashcms.com/plugins/@vapvarun.bsky.social/listora

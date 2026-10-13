@@ -1,7 +1,7 @@
 screen	wp_block_or_page	engine_0_1_0	lab_chrome	next
-directory_search	listing-search	search+types	q, Near Me, type chips	command search, facets, skeletons
-directory_grid	listing-grid	listings	grid/list, count, featured row	sort, paging, skeletons
-listing_card	listing-card	listing fields	photo, type, city, rating	features, owner, featured treatment
+directory_search	listing-search	search+types	command bar, location, Near me, type chips	map drag re-query
+directory_grid	listing-grid	listings	grid/list, count, sort, featured row	paging, skeletons
+listing_card	listing-card	listing fields	photo, type, place, rating, owner, amenities, Save	featured treatment
 listing_detail	listing-detail	listings+extras	tabs, hours, services, JSON-LD, map, actions	gallery/lightbox, full sidebar
 reviews	listing-reviews	reviews route	list+form on detail	distribution, helpful, reply
 map	listing-map	lat/lng	OSM archive+detail	cluster, overflow, search on drag
