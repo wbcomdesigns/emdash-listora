@@ -4,7 +4,7 @@ import { Image } from "emdash/ui";
 import Layout from "../../layouts/ListoraLayout.astro";
 import {
 	LISTING_TYPES,
-	coverUrl,
+	placeholderHtml,
 	isOpenNow,
 	siteZone,
 	matchesPlace,
@@ -241,7 +241,7 @@ function amenityList(value: unknown): string[] {
 									{listing.data.featured_image ? (
 										<Image image={listing.data.featured_image} alt="" />
 									) : (
-										<img src={coverUrl(String(listing.id), listing.data.featured_image, String(listing.data.listing_type || ""))} alt="" width="800" height="500" />
+										<Fragment set:html={placeholderHtml(String(listing.data.listing_type || ""))} />
 									)}
 									<span class="listora-badge">{typeName(listing.data.listing_type)}</span>
 									<span class="listora-badge listora-badge--featured">Featured</span>
@@ -302,7 +302,7 @@ function amenityList(value: unknown): string[] {
 									{listing.data.featured_image ? (
 										<Image image={listing.data.featured_image} alt="" />
 									) : (
-										<img src={coverUrl(String(listing.id), listing.data.featured_image, String(listing.data.listing_type || ""))} alt="" width="800" height="500" />
+										<Fragment set:html={placeholderHtml(String(listing.data.listing_type || ""))} />
 									)}
 									<span class="listora-badge">{typeName(listing.data.listing_type)}</span>
 									{listing.data.is_featured ? <span class="listora-badge listora-badge--featured">Featured</span> : null}
@@ -360,7 +360,7 @@ function amenityList(value: unknown): string[] {
 
 <link rel="stylesheet" href="/vendor/leaflet/leaflet.css" />
 <script>
-	import { api, isOpenNow, signInUrl } from "../../lib/listora";
+	import { api, isOpenNow, placeholderHtml, signInUrl } from "../../lib/listora";
 
 	const form = document.getElementById("listora-search-form") as HTMLFormElement | null;
 	const q = document.getElementById("listora-q") as HTMLInputElement | null;
@@ -377,24 +377,6 @@ function amenityList(value: unknown): string[] {
 	let activeType = new URLSearchParams(location.search).get("type") || "";
 	const activeCategory = new URLSearchParams(location.search).get("category") || "";
 	let near: { lat: string; lng: string } | null = null;
-
-	const TYPE_COVERS: Record<string, string> = {
-		business: "photo-1441986300917-64674bd600d8",
-		restaurant: "photo-1414235077428-338989a2e8c0",
-		"real-estate": "photo-1568605114967-8130f3a36994",
-		hotel: "photo-1566073771259-6a8506099945",
-		event: "photo-1540575467063-178a50c2df87",
-		job: "photo-1521737711867-e3b97375f902",
-		healthcare: "photo-1519494026892-80bbd2d6fd0d",
-		education: "photo-1503676260728-1c00da094a0b",
-		place: "photo-1449824913935-59a10b8d2000",
-		classified: "photo-1556742049-0cfed4f6a45d",
-	};
-
-	function cover(slug: string, type: string) {
-		const id = TYPE_COVERS[type] || TYPE_COVERS.business;
-		return `https://images.unsplash.com/${id}?auto=format&fit=crop&w=800&h=500&q=80&sig=${encodeURIComponent(slug)}`;
-	}
 
 	function escapeHtml(value: string) {
 		return value.replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char] || char);
@@ -423,7 +405,7 @@ function amenityList(value: unknown): string[] {
 		);
 		return `<article class="listora-card" data-slug="${escapeHtml(item.slug)}" data-lat="${item.lat ?? ""}" data-lng="${item.lng ?? ""}">
 			<div class="listora-card-media">
-				<img src="${cover(item.slug, item.listing_type)}" alt="" width="800" height="500" />
+				${placeholderHtml(item.listing_type)}
 				<span class="listora-badge">${escapeHtml(item.type_name)}</span>
 				${item.is_featured ? '<span class="listora-badge listora-badge--featured">Featured</span>' : ""}
 				${item.rating_avg ? `<span class="listora-card__rating">${"★".repeat(Math.max(1, Math.round(item.rating_avg)))} ${item.rating_avg.toFixed(1)}</span>` : ""}

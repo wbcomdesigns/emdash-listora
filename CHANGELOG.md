@@ -8,6 +8,8 @@ Copy `site-kit/` again after you update, including the new `site-kit/layouts/Lis
 
 - New      - Settings has its own page, in three groups, with a line saying what each option does. The Listings queue page shows only what is waiting.
 - New      - A card on the EmDash dashboard shows how many listings, reviews, claims and messages are waiting, with a link to each.
+- Improve  - A listing with no photo shows a panel in your site's colours with an icon for its type. Stock photos are gone, and no image is loaded from another website.
+- Fix      - A listing's own photo is now the image used when its page is shared and in its search engine data. Before, a stock photo was used.
 - Improve  - Opening hours, "Open now" and event times use your site's own time zone from EmDash's settings. Before, every site was treated as New York.
 - Improve  - The event start and end fields are proper date-and-time pickers.
 - Fix      - An event time entered without a zone is shown as entered, not shifted.

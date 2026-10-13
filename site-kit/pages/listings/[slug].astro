@@ -10,7 +10,8 @@ import { Image } from "emdash/ui";
 import Layout from "../../layouts/ListoraLayout.astro";
 import {
 	asNumber,
-	coverUrl,
+	imageUrl,
+	placeholderHtml,
 	hoursForWeek,
 	isOpenNow,
 	siteZone,
@@ -65,7 +66,10 @@ const services = (() => {
 	}
 })();
 const hasContact = Boolean(data.phone || website || data.email);
-const photo = coverUrl(slug, data.featured_image, String(data.listing_type || ""));
+// The share image is the listing's own photo, or none. Never a stock picture.
+const photoPath = imageUrl(data.featured_image, Astro.locals.emdash?.getPublicMediaUrl);
+// Share cards and search engines need a full address.
+const photo = photoPath ? new URL(photoPath, Astro.url.origin).href : undefined;
 const directions = hasMap ? mapsDirectionsUrl(lat, lng) : "";
 const schema = {
 	"@context": "https://schema.org",
@@ -85,6 +89,7 @@ const schema = {
 		addressCountry: data.country,
 	},
 	geo: hasMap ? { "@type": "GeoCoordinates", latitude: lat, longitude: lng } : undefined,
+	image: photo,
 };
 ---
 
@@ -123,7 +128,7 @@ const schema = {
 					data.featured_image ? (
 						<Image image={data.featured_image} alt={String(data.title)} />
 					) : (
-						<img src={photo} alt={String(data.title)} width="1600" height="900" />
+						<Fragment set:html={placeholderHtml(String(data.listing_type || ""))} />
 					)
 				}
 			</div>

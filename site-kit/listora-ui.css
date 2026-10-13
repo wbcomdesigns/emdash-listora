@@ -514,6 +514,24 @@ ul.listora-chips {
 	display: block;
 }
 
+/* A listing with no photo: the site's own colour, an icon for its type, and no outside image. */
+.listora-placeholder {
+	display: grid;
+	place-items: center;
+	width: 100%;
+	height: 100%;
+	min-height: inherit;
+	background: color-mix(in srgb, var(--listora-primary) 10%, var(--listora-bg-muted));
+	color: color-mix(in srgb, var(--listora-primary) 70%, var(--listora-fg-default));
+}
+
+.listora-placeholder svg {
+	width: clamp(2.5rem, 22%, 5.5rem);
+	height: auto;
+	aspect-ratio: 1;
+	opacity: 0.85;
+}
+
 .listora-card__rating {
 	position: absolute;
 	inset-block-end: var(--listora-space-2);

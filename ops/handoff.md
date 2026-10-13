@@ -75,6 +75,8 @@ Every case in `docs/qa/QA_CHECKLIST.md` is run in a browser as guest, subscriber
 | Dashboard rows | Renew only. No edit |
 | Featured row | The same listings repeat at the top of the grid below it |
 | Banner | `images/banner.png` is the dark-text lockup on a transparent ground. Check it on the registry page |
+| No-photo listings | `placeholderHtml(type)` in the kit lib: a panel with a type icon. No stock photos. The owner-chosen default image is not built: EmDash's media picker cannot be used in a plugin admin form. It moves to the photos task (#25) |
+| Live search cards | Still a second copy of the card in the browser, so a live result never shows the listing's real photo. Task #51 |
 | Time zone | The site's own, from EmDash settings (`siteZone` in the kit lib). The plugin never computes open or closed: the page does, because a plugin cannot read the site zone. Listings no longer store a zone |
 
 QA cases by role: `docs/qa/QA_CHECKLIST.md` (walk all of it before a release; `./scripts/lab-role.sh subscriber` for member cases). QA source: `docs/qa/`. Screen ticks: `docs/qa/screen-checklist.md`. Parked Pro: `docs/website/pro-features/parked-work.md`.

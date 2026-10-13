@@ -53,6 +53,8 @@ Three roles, always in this order: **guest**, **member** (subscriber role), **ad
 | G-21 | Click a city chip | The city fills the location box and the list narrows to it |
 | G-22 | Change the site time zone in EmDash Settings, General, then open the directory, a listing and the calendar | Open and Closed badges, the "today" row in the hours table and event times all follow the new zone. Live search cards show the same badges as the page |
 | G-23 | A site with no time zone set | Pages work and use UTC |
+| G-24 | A listing with no photo, on a card, on its page and in live search | A coloured panel with an icon for its type. No photograph. Readable in light and dark. The network panel shows no image from another website |
+| G-25 | A listing with a photo: view the page source | `og:image` and the structured data image are the listing's own photo, as a full address. A listing with no photo has no share image |
 | G-12 | Request `import`, `dashboard`, `favorites`, `privacy` routes directly | 401 each | prove: guests refused |
 
 ## Member (subscriber role)

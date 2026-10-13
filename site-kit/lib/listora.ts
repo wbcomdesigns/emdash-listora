@@ -141,24 +141,43 @@ export function hoursForWeek(hours: HourRow[]) {
 	});
 }
 
-const TYPE_COVERS: Record<string, string> = {
-	business: "photo-1441986300917-64674bd600d8",
-	restaurant: "photo-1414235077428-338989a2e8c0",
-	"real-estate": "photo-1568605114967-8130f3a36994",
-	hotel: "photo-1566073771259-6a8506099945",
-	event: "photo-1540575467063-178a50c2df87",
-	job: "photo-1521737711867-e3b97375f902",
-	healthcare: "photo-1519494026892-80bbd2d6fd0d",
-	education: "photo-1503676260728-1c00da094a0b",
-	place: "photo-1449824913935-59a10b8d2000",
-	classified: "photo-1556742049-0cfed4f6a45d",
+/**
+ * The public address of a stored image, for a share image or structured data.
+ * (To draw an image on the page, use EmDash's own Image component.)
+ */
+export function imageUrl(image: unknown, publicUrl?: (key: string) => string): string {
+	const ref = (image ?? {}) as { src?: string; url?: string; meta?: { storageKey?: string } };
+	if (ref.src) return ref.src;
+	if (ref.url) return ref.url;
+	const key = ref.meta?.storageKey;
+	if (!key || !/^[A-Za-z0-9._-]+$/.test(key)) return "";
+	return publicUrl ? publicUrl(key) : `/_emdash/api/media/file/${key}`;
+}
+
+// One simple line icon per listing type, drawn inside a 24 by 24 box.
+const TYPE_ICONS: Record<string, string> = {
+	business: '<path d="M3 9h18l-1.5-5h-15L3 9Z"/><path d="M4 9v11h16V9M9 20v-6h6v6"/>',
+	restaurant:
+		'<path d="M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2M7 2v20M21 15V2a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3Zm0 0v7"/>',
+	"real-estate": '<path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M9 22V12h6v10"/>',
+	hotel: '<path d="M2 4v16M2 8h18a2 2 0 0 1 2 2v10M2 17h20M6 8v9"/>',
+	event: '<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>',
+	job: '<rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/>',
+	healthcare: '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M12 8v8M8 12h8"/>',
+	education: '<path d="M22 10 12 5 2 10l10 5 10-5Z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/>',
+	place: '<path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/>',
+	classified:
+		'<path d="M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z"/><circle cx="7.5" cy="7.5" r="1"/>',
 };
 
-export function coverUrl(slug: string, featured?: { src?: string } | null, type?: string): string {
-	const src = featured && typeof featured === "object" ? featured.src : "";
-	if (src) return src;
-	const id = TYPE_COVERS[type || ""] || TYPE_COVERS.business;
-	return `https://images.unsplash.com/${id}?auto=format&fit=crop&w=1600&h=900&q=80&sig=${encodeURIComponent(slug)}`;
+/**
+ * What a listing with no photo shows: a panel in the site's own colours with an icon for
+ * its type. It is clearly not a photograph, and nothing is loaded from another website.
+ * The icon set is fixed here, so the markup is safe to place with set:html or innerHTML.
+ */
+export function placeholderHtml(type?: string): string {
+	const icon = TYPE_ICONS[type || ""] || TYPE_ICONS.business;
+	return `<div class="listora-placeholder" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">${icon}</svg></div>`;
 }
 
 export function formatEventWhen(value: unknown, timeZone = "UTC"): string {
