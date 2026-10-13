@@ -10,7 +10,8 @@ Copy these into an EmDash site after the plugin is installed.
 | `site-kit/lib/listora.ts` | Helpers the pages import |
 | `site-kit/pages/` | Archive, detail, submit, calendar, account |
 | `site-kit/seed/listings.mjs` | Collection fields, taxonomies, 33 NYC listings |
-| `site-kit/seed/import/sample.csv` | Import fixture |
+| `site-kit/pages/listings/import.astro` | Import and export, admins only |
+| `site-kit/public/vendor/listora-sample.csv` | Sample spreadsheet for import |
 | `site-kit/README.md` | Owner apply commands |
 
 Copy pages to `src/pages/` on the site. They expect `../../layouts/Base.astro`. See [Improve the screens](../how-to/improve-the-screens.md) for chrome still thin after apply.

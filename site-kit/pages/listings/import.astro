@@ -1,0 +1,139 @@
+---
+import Layout from "../../layouts/ListoraLayout.astro";
+import "../../styles/listora-ui.css";
+
+// This page differs per visitor. Sites cache pages without regard to cookies, so say so.
+Astro.response.headers.set("Cache-Control", "private, no-store");
+const user = Astro.locals.user as { role?: number } | undefined;
+// The plugin refuses everyone but site admins on these routes; the page only mirrors that.
+const isAdmin = Number(user?.role) >= 50;
+const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.pathname)}`;
+---
+
+<Layout title="Import and export listings" description="Move listings in and out of the directory as a spreadsheet.">
+	<div class="listora-block">
+		<header class="listora-page-head">
+			<div>
+				<h1>Import and export</h1>
+				<p>Move listings in and out of the directory as a spreadsheet (CSV file).</p>
+			</div>
+		</header>
+		{
+			isAdmin ? (
+				<div class="listora-transfer">
+					<section class="listora-panel" aria-labelledby="export-title">
+						<h2 id="export-title">Export</h2>
+						<p>Download every published listing as one spreadsheet. Open it in Excel, Numbers or Google Sheets.</p>
+						<button class="listora-btn" type="button" id="export-btn">Download listings</button>
+					</section>
+					<section class="listora-panel" aria-labelledby="import-title">
+						<h2 id="import-title">Import</h2>
+						<p>
+							Add up to 500 listings from a spreadsheet saved as CSV. Nothing goes live: each row becomes a draft
+							waiting for your approval. <a href="/vendor/listora-sample.csv" download>Download a sample file</a>
+						</p>
+						<form id="import-form" class="listora-form">
+							<label class="listora-field">
+								<span>Spreadsheet (CSV)</span>
+								<input type="file" id="import-file" accept=".csv,text/csv" required />
+							</label>
+							<button class="listora-btn" type="submit" id="check-btn">Check file</button>
+						</form>
+						<div id="import-result" aria-live="polite"></div>
+					</section>
+				</div>
+			) : (
+				<div class="listora-empty">
+					<h2>For site admins</h2>
+					<p>Only a site admin can import or export listings.</p>
+					{user ? null : <a class="listora-btn" href={loginUrl}>Sign in</a>}
+				</div>
+			)
+		}
+	</div>
+</Layout>
+
+<script>
+	import { api, esc, notify } from "../../lib/listora";
+
+	type Bad = { line: number; title: string; reason: string };
+	type Dup = { line: number; title: string; city: string };
+
+	const exportBtn = document.getElementById("export-btn") as HTMLButtonElement | null;
+	exportBtn?.addEventListener("click", async () => {
+		exportBtn.disabled = true;
+		exportBtn.textContent = "Preparing...";
+		try {
+			// A plain link cannot be used: the site only answers signed-in requests that carry this header.
+			const response = await fetch("/_emdash/api/plugins/listora/export", { credentials: "same-origin", headers: { "X-EmDash-Request": "1" } });
+			if (!response.ok) throw new Error();
+			const link = document.createElement("a");
+			link.href = URL.createObjectURL(await response.blob());
+			link.download = /filename="([^"]+)"/.exec(response.headers.get("Content-Disposition") || "")?.[1] || "listings.csv";
+			link.click();
+			URL.revokeObjectURL(link.href);
+			notify(exportBtn, { ok: true }, "Your download has started.");
+		} catch {
+			notify(exportBtn, { ok: false, error: { message: "The download could not be prepared. Try again." } }, "");
+		}
+		exportBtn.disabled = false;
+		exportBtn.textContent = "Download listings";
+	});
+
+	const form = document.getElementById("import-form") as HTMLFormElement | null;
+	const fileInput = document.getElementById("import-file") as HTMLInputElement | null;
+	const checkBtn = document.getElementById("check-btn") as HTMLButtonElement | null;
+	const out = document.getElementById("import-result");
+	let csv = "";
+
+	const rowsList = (title: string, items: string[]) =>
+		items.length ? `<h3>${esc(title)}</h3><ul class="listora-transfer__rows">${items.map((item) => `<li>${item}</li>`).join("")}</ul>` : "";
+	const skipped = (bad: Bad[], duplicates: Dup[]) =>
+		rowsList(`${bad.length} ${bad.length === 1 ? "row" : "rows"} cannot be imported`, bad.map((row) => `Row ${row.line}${row.title ? ` (${esc(row.title)})` : ""}: ${esc(row.reason)}`)) +
+		rowsList(`${duplicates.length} already in the directory, skipped`, duplicates.map((row) => `Row ${row.line}: ${esc(row.title)}${row.city ? `, ${esc(row.city)}` : ""}`));
+	const show = (tone: string, html: string) => {
+		if (out) out.innerHTML = `<div class="listora-status" data-tone="${tone}">${html}</div>`;
+	};
+	const failed = (message?: string) => show("error", esc(message || "Something went wrong. Try again."));
+
+	fileInput?.addEventListener("change", () => {
+		if (out) out.innerHTML = "";
+	});
+
+	form?.addEventListener("submit", async (event) => {
+		event.preventDefault();
+		const file = fileInput?.files?.[0];
+		if (!file || !checkBtn) return;
+		checkBtn.disabled = true;
+		checkBtn.textContent = "Checking...";
+		csv = await file.text();
+		const result = await api("import", { csv, mode: "check" });
+		checkBtn.disabled = false;
+		checkBtn.textContent = "Check file";
+		if (!result.ok) return failed(result.error?.message);
+		const valid = Number(result.valid);
+		const bad = (result.bad as Bad[]) || [];
+		const duplicates = (result.duplicates as Dup[]) || [];
+		show(
+			valid ? "info" : "error",
+			`<p><strong>${valid} of ${Number(result.total)} ${Number(result.total) === 1 ? "row is" : "rows are"} ready to import.</strong></p>` +
+				skipped(bad, duplicates) +
+				(valid ? `<button class="listora-btn" type="button" id="import-btn">Import ${valid} ${valid === 1 ? "listing" : "listings"} as drafts</button>` : ""),
+		);
+		document.getElementById("import-btn")?.addEventListener("click", async (click) => {
+			const button = click.currentTarget as HTMLButtonElement;
+			button.disabled = true;
+			button.textContent = "Importing...";
+			const done = await api("import", { csv, mode: "import" });
+			if (!done.ok) return failed(done.error?.message);
+			const count = Number(done.imported);
+			form.reset();
+			show(
+				count ? "success" : "error",
+				`<p><strong>${count} ${count === 1 ? "listing" : "listings"} added as drafts.</strong> Nothing is live until you approve it.</p>` +
+					skipped((done.bad as Bad[]) || [], (done.duplicates as Dup[]) || []) +
+					`<a class="listora-btn" href="/_emdash/admin/plugins/listora/queue">Review them in the queue</a>`,
+			);
+		});
+	});
+</script>

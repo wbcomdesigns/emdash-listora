@@ -1,3 +1,4 @@
+import { pluginResponse } from "emdash/plugin";
 import type { SandboxedPlugin } from "emdash/plugin";
 
 import { handleAdmin } from "./admin";
@@ -16,6 +17,7 @@ import {
 	syncRating,
 	publishNow,
 } from "./lib/listings-query";
+import { CSV_COLUMNS, parseCsv, toCsv, unguard } from "./lib/csv";
 import { clean, EDITABLE, editPatch, filled } from "./lib/edits";
 import { galleryReady, imageType, PHOTO_MAX_BYTES, photoLimit } from "./lib/photos";
 export { imageType } from "./lib/photos";
@@ -107,12 +109,17 @@ function spamBlocked(title: string, description: string, keywords: string[]): bo
 
 // Lowest signed-in role (subscriber). Private routes get a host-verified routeCtx.user.
 const MEMBER = "content:read";
+// Stated on every admin route, not left to the default: only someone who may manage plugins.
+const ADMIN = "plugins:manage";
 const ADMIN_ROLE = 50;
 const RATE_WINDOW_MS = 60 * 60 * 1000;
 const RATE_MAX = 8;
 // Short enough that the moderation table can show every character an admin approves.
 const REVIEW_TITLE_MAX = 120;
 const REVIEW_BODY_MAX = 1000;
+// One import: a file of up to 500 listings and about 900 thousand characters (the request limit is 1 MB).
+const IMPORT_MAX_ROWS = 500;
+const IMPORT_MAX_CHARS = 900_000;
 
 type Member = { id: string; name: string | null; email?: string | null; role: number };
 
@@ -242,7 +249,8 @@ async function eraseMember(ctx: Ctx, memberId: string): Promise<void> {
 	await drain("photos", async (row) => {
 		if (row.status === "approved") {
 			// The picture stays with the listing. The link from the row to the member does not.
-			await ctx.storage.photos.updateIf(row.id, { where: {}, set: { member_id: "" } });
+			// (Their own file name for it is theirs too.)
+			await ctx.storage.photos.updateIf(row.id, { where: {}, set: { member_id: "", label: "" } });
 			return true;
 		}
 		await ctx.media?.delete?.(asString(row.mediaId)).catch(() => false);
@@ -1090,75 +1098,102 @@ const plugin: SandboxedPlugin = {
 			},
 		},
 		// Admin only: no `public`, no `permission`, so the host requires plugins:manage.
+		// Admin only: a real spreadsheet file of every live listing. A browser opens this address
+		// directly, so it answers a plain GET and sends the file as a download.
+		export: {
+			permission: ADMIN,
+			methods: ["GET"],
+			response: "raw",
+			handler: async (_routeCtx, ctx) => {
+				const rows = (await listPublished(ctx)).map((item) => ({ ...item, lat: item.lat ?? "", lng: item.lng ?? "" }));
+				return pluginResponse({
+					headers: {
+						"Content-Type": "text/csv; charset=utf-8",
+						"Content-Disposition": `attachment; filename="listings-${nowIso().slice(0, 10)}.csv"`,
+					},
+					// Bytes, so the byte order mark at the start of the file survives exactly.
+					body: { kind: "bytes", value: new TextEncoder().encode(toCsv(rows)) },
+				});
+			},
+		},
+		// Admin only: check a spreadsheet, then import it. Nothing is ever published by an
+		// import: every row becomes a draft waiting in the Listings queue.
 		import: {
-			methods: ["GET", "POST"],
+			permission: ADMIN,
+			methods: ["POST"],
 			handler: async (routeCtx, ctx) => {
 				const raw = asRecord(routeCtx.input);
-				const format = asString(raw.format) || "json";
-				if (routeCtx.request.method !== "POST") {
-					const published = await listPublished(ctx);
-					if (format === "csv") {
-						const header = "title,listing_type,city,excerpt,address,lat,lng";
-						const lines = published.map((item) =>
-							[item.title, item.listing_type, item.city, item.excerpt, item.address, item.lat, item.lng]
-								.map((value) => `"${String(value ?? "").replaceAll('"', '""')}"`)
-								.join(","),
-						);
-						return { ok: true, format: "csv", csv: [header, ...lines].join("\n"), count: published.length };
+				const text = asString(raw.csv);
+				if (!text.trim()) return { ok: false, error: { code: "VALIDATION_ERROR", message: "Choose a file first." } };
+				if (text.length > IMPORT_MAX_CHARS) return { ok: false, error: { code: "TOO_BIG", message: "That file is too large. Split it into files of up to 500 listings." } };
+				const parsed = parseCsv(text);
+				if (parsed.length === 0) {
+					return { ok: false, error: { code: "VALIDATION_ERROR", message: 'No listings found. The first row must be column names, and one of them must be "title".' } };
+				}
+				if (parsed.length > IMPORT_MAX_ROWS) {
+					return { ok: false, error: { code: "TOO_BIG", message: `That file has ${parsed.length} rows. Import up to ${IMPORT_MAX_ROWS} at a time.` } };
+				}
+				// What is already in the directory, live or waiting: same name and same city is a duplicate.
+				const key = (title: string, city: string) => `${title.trim().toLowerCase()}|${city.trim().toLowerCase()}`;
+				const known = new Set((await listPublished(ctx)).map((item) => key(item.title, item.city)));
+				for (const row of rows(await ctx.storage.submissions.query({ where: { status: "pending" }, limit: 500 }))) {
+					known.add(key(asString(row.title), asString(row.city)));
+				}
+				const good: Array<{ line: number; data: Record<string, string>; type: string }> = [];
+				const bad: Array<{ line: number; title: string; reason: string }> = [];
+				const duplicates: Array<{ line: number; title: string; city: string }> = [];
+				parsed.forEach((source, index) => {
+					const line = index + 2;
+					const data: Record<string, string> = {};
+					for (const column of CSV_COLUMNS) data[column] = clean(unguard(source[column] ?? ""), column === "description" ? 5000 : column === "excerpt" ? 280 : 200);
+					if (!data.title) return bad.push({ line, title: "", reason: "It has no title." });
+					const number = (value: string, max: number) => value === "" || (Number.isFinite(Number(value)) && Math.abs(Number(value)) <= max);
+					if (!number(data.lat, 90) || !number(data.lng, 180)) return bad.push({ line, title: data.title, reason: "Latitude or longitude is not a valid number." });
+					const type = LISTING_TYPES.find((item) => item.slug === data.listing_type.toLowerCase() || item.name.toLowerCase() === data.listing_type.toLowerCase());
+					if (data.listing_type && !type) return bad.push({ line, title: data.title, reason: `"${data.listing_type}" is not a listing type.` });
+					if (known.has(key(data.title, data.city))) return duplicates.push({ line, title: data.title, city: data.city });
+					known.add(key(data.title, data.city));
+					good.push({ line, data, type: type?.slug ?? "business" });
+				});
+				const summary = { total: parsed.length, valid: good.length, bad, duplicates };
+				if (asString(raw.mode) !== "import") return { ok: true, checked: true, ...summary };
+				if (!ctx.content?.create) return { ok: false, error: { code: "CONTENT_UNAVAILABLE", message: "The listings collection is not set up on this site." } };
+				let imported = 0;
+				for (const item of good) {
+					// Each row on its own, so one refused row does not stop the rest.
+					try {
+						const created = await ctx.content.create(LISTINGS, {
+							title: item.data.title,
+							excerpt: item.data.excerpt,
+							description: item.data.description,
+							listing_type: item.type,
+							city: item.data.city,
+							state: item.data.state,
+							country: item.data.country,
+							address: item.data.address,
+							postal_code: item.data.postal_code,
+							phone: item.data.phone,
+							email: item.data.email,
+							website: /^https?:\/\//i.test(item.data.website) ? item.data.website : undefined,
+							lat: item.data.lat === "" ? null : Number(item.data.lat),
+							lng: item.data.lng === "" ? null : Number(item.data.lng),
+							is_claimed: false,
+							listing_status: "live",
+						});
+						await ctx.storage.submissions.put(created.id, {
+							listingId: created.id,
+							title: item.data.title,
+							listing_type: item.type,
+							city: item.data.city,
+							status: "pending",
+							createdAt: nowIso(),
+						});
+						imported += 1;
+					} catch {
+						bad.push({ line: item.line, title: item.data.title, reason: "The site refused this row." });
 					}
-					if (format === "geojson") {
-						return {
-							ok: true,
-							format: "geojson",
-							geojson: {
-								type: "FeatureCollection",
-								features: published
-									.filter((item) => item.lat !== null && item.lng !== null)
-									.map((item) => ({
-										type: "Feature",
-										geometry: { type: "Point", coordinates: [item.lng, item.lat] },
-										properties: { title: item.title, slug: item.slug, listing_type: item.listing_type },
-									})),
-							},
-							count: published.length,
-						};
-					}
-					return { ok: true, format: "json", items: published, count: published.length };
 				}
-
-				if (!ctx.content?.create) {
-					return { ok: false, error: { code: "CONTENT_UNAVAILABLE" } };
-				}
-				const input = Array.isArray(raw.rows) ? raw.rows : parseCsv(asString(raw.csv));
-				const created: Array<{ id: string; title: string }> = [];
-				for (const row of input) {
-					const data = asRecord(row);
-					const title = asString(data.title);
-					if (!title) continue;
-					const listingType = listingTypeBySlug(asString(data.listing_type)).slug;
-					const item = await ctx.content.create(LISTINGS, {
-						title,
-						excerpt: asString(data.excerpt),
-						description: asString(data.description),
-						listing_type: listingType,
-						city: asString(data.city),
-						address: asString(data.address),
-						lat: asNumber(data.lat),
-						lng: asNumber(data.lng),
-						is_claimed: false,
-						listing_status: "live",
-					});
-					await ctx.storage.submissions.put(item.id, {
-						listingId: item.id,
-						title,
-						listing_type: listingType,
-						city: asString(data.city),
-						status: "pending",
-						createdAt: nowIso(),
-					});
-					created.push({ id: item.id, title });
-				}
-				return { ok: true, imported: created.length, items: created };
+				return { ok: true, imported, ...summary, valid: imported };
 			},
 		},
 		privacy: {
@@ -1220,43 +1255,10 @@ const plugin: SandboxedPlugin = {
 			},
 		},
 		admin: {
+			permission: ADMIN,
 			handler: async (routeCtx, ctx) => handleAdmin(routeCtx.input, ctx),
 		},
 	},
 };
-
-function parseCsv(csv: string): Record<string, string>[] {
-	const lines = csv.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
-	if (lines.length < 2) return [];
-	const headers = splitCsvLine(lines[0]);
-	return lines.slice(1).map((line) => {
-		const cells = splitCsvLine(line);
-		const row: Record<string, string> = {};
-		headers.forEach((header, index) => {
-			row[header] = cells[index] ?? "";
-		});
-		return row;
-	});
-}
-
-function splitCsvLine(line: string): string[] {
-	const out: string[] = [];
-	let current = "";
-	let quoted = false;
-	for (const char of line) {
-		if (char === '"') {
-			quoted = !quoted;
-			continue;
-		}
-		if (char === "," && !quoted) {
-			out.push(current.trim());
-			current = "";
-			continue;
-		}
-		current += char;
-	}
-	out.push(current.trim());
-	return out;
-}
 
 export default plugin;

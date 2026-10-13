@@ -1716,6 +1716,40 @@ textarea.listora-input {
 	margin-bottom: var(--listora-space-4);
 }
 
+.listora-transfer {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: var(--listora-space-4);
+	align-items: start;
+}
+
+.listora-transfer .listora-form {
+	display: grid;
+	gap: var(--listora-space-3);
+	justify-items: start;
+	margin-bottom: var(--listora-space-4);
+}
+
+.listora-transfer .listora-panel > .listora-btn,
+.listora-transfer .listora-form,
+.listora-transfer .listora-status {
+	margin-top: var(--listora-space-3);
+}
+
+.listora-transfer__rows {
+	margin: 0 0 var(--listora-space-3);
+	padding-inline-start: var(--listora-space-5);
+}
+
+.listora-status h3 {
+	margin: var(--listora-space-3) 0 var(--listora-space-1);
+	font-size: var(--listora-text-size-base);
+}
+
+.listora-status > :last-child {
+	margin-bottom: 0;
+}
+
 .listora-status[data-tone="error"] {
 	background: var(--listora-danger-bg);
 	color: var(--listora-danger-fg);
@@ -1727,6 +1761,10 @@ textarea.listora-input {
 }
 
 @media (max-width: 1024px) {
+	.listora-transfer {
+		grid-template-columns: 1fr;
+	}
+
 	.listora-grid {
 		grid-template-columns: repeat(2, minmax(0, 1fr));
 	}

@@ -6,6 +6,7 @@ Versions match `package.json`, the git tag, and the EmDash registry release. New
 
 Copy `site-kit/` again after you update, including the new `site-kit/layouts/ListoraLayout.astro`.
 
+- New      - Import and export at `/listings/import/` for site admins: download every listing as a spreadsheet, or add up to 500 from a CSV. The file is checked first, bad rows and duplicates are listed, and imported listings wait in the queue as drafts.
 - New      - Settings has its own page, in three groups, with a line saying what each option does. The Listings queue page shows only what is waiting.
 - New      - A card on the EmDash dashboard shows how many listings, reviews, claims and messages are waiting, with a link to each.
 - Improve  - Admin lists show plain dates and type names, and the setup note leaves the Listings queue once the directory is ready.

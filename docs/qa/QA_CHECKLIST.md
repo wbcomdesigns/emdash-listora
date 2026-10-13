@@ -107,6 +107,7 @@ Three roles, always in this order: **guest**, **member** (subscriber role), **ad
 | M-36 | Reach the limit | Add a photo goes away. The route refuses a further upload | same test |
 | M-37 | Remove a waiting photo | It goes and the count drops. An approved photo has no Remove | same test |
 | M-38 | Call `photo` for someone else's listing or a made-up id | Refused | same test |
+| M-39 | Open `/listings/import/` as a member, and call `import`, `export` and `admin` | The page says it is for site admins. All three routes answer 403 | `prove-lab.sh` |
 | M-13 | Dashboard at 390 | Tabs are one sideways-scrolling row. Content starts above the fold | |
 
 ## Admin
@@ -154,6 +155,12 @@ Three roles, always in this order: **guest**, **member** (subscriber role), **ad
 | A-40 | Reject a photo | "Photo rejected and deleted." The file is gone from the media library |
 | A-41 | Settings, Photos: set the number to 0, then back | 0 turns Add a photo off everywhere. A site with no Photos field shows a notice saying how to add it |
 | A-42 | Edit a listing in EmDash and add rows to its Photos field | They show in the listing's gallery like owner photos |
+| A-43 | Settings, Import and export: follow the link | `/listings/import/` opens with Export and Import panels |
+| A-44 | Download listings | A file `listings-<date>.csv` downloads with the column names first and one row per published listing |
+| A-45 | Choose a CSV with good rows, a row with no title, an unknown type and a bad latitude, then Check file | "N of M rows are ready", each bad row listed with its row number and reason. Nothing is created yet |
+| A-46 | Import N listings as drafts | "N listings added as drafts". They are in the Listings queue, not on the site |
+| A-47 | Check the same file again | The imported rows are listed as already in the directory and skipped |
+| A-48 | A file over 500 rows, an empty file, a file with no title column | A plain message, nothing imported |
 | A-12 | Get started on a site with no listings collection | Clear "create the collection first" message, no crash | tells the owner to create the listings collection first |
 
 ## Presentation, every screen

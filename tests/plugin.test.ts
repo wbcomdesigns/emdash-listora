@@ -11,6 +11,7 @@ import submitPage from "../site-kit/pages/listings/submit.astro?raw";
 import { LISTING_TYPES as KIT_TYPES } from "../site-kit/lib/listora";
 import { LISTING_TYPES } from "../src/lib/types";
 import { imageType } from "../src/plugin";
+import { parseCsv, toCsv, unguard } from "../src/lib/csv";
 // @ts-expect-error plain module shared with the lab seed
 import { listingsCollection } from "../site-kit/seed/collection.mjs";
 import { imageUrl, jsonForScript, placeholderHtml, safeImageUrl } from "../site-kit/lib/listora";
@@ -1007,8 +1008,8 @@ describe("owner photos", () => {
 		await route("admin", { type: "form_submit", action_id: "save_photos", page: "/settings", values: { photo_limit: 5 } });
 		await send(png, ana);
 		await route("privacy", { action: "erase" }, { method: "POST", user: ana });
-		const left = await rt.inspect.storage.list<{ status: string; member_id: string }>("photos");
-		expect(left.map((row) => [row.data.status, row.data.member_id])).toEqual([["approved", ""]]);
+		const left = await rt.inspect.storage.list<{ status: string; member_id: string; label: string }>("photos");
+		expect(left.map((row) => [row.data.status, row.data.member_id, row.data.label])).toEqual([["approved", "", ""]]);
 
 		// Five uploads sent at the same moment with room for three: the limit holds.
 		await route("admin", { type: "form_submit", action_id: "save_photos", page: "/settings", values: { photo_limit: 4 } });
@@ -1024,5 +1025,63 @@ describe("owner photos", () => {
 		// Turned off: no more uploads.
 		await route("admin", { type: "form_submit", action_id: "save_photos", page: "/settings", values: { photo_limit: 0 } });
 		expect(await send(png, ana)).toMatchObject({ ok: false, error: { code: "PHOTOS_OFF" } });
+	});
+});
+
+describe("spreadsheet import and export", () => {
+	it("reads quoted cells, commas and line breaks, and writes cells that cannot run as formulas", () => {
+		const rows = parseCsv('\uFEFFTitle, Listing Type ,city\r\n"Cafe, The","restaurant","New ""York"""\n"Two\nLines",hotel,Paris\n\n');
+		expect(rows).toEqual([
+			{ title: "Cafe, The", listing_type: "restaurant", city: 'New "York"' },
+			{ title: "Two\nLines", listing_type: "hotel", city: "Paris" },
+		]);
+		const out = toCsv([{ title: "=HYPERLINK(\"http://evil\")", city: "+1", excerpt: "@x", phone: "-5", address: "safe" }]);
+		expect(out).toContain(`"'=HYPERLINK(""http://evil"")"`);
+		expect(out).toContain(`"'+1"`);
+		expect(out).toContain(`"'@x"`);
+		expect(out).toContain(`"'-5"`);
+		expect(out).toContain('"safe"');
+		expect(unguard("'=1+1")).toBe("=1+1");
+		expect(unguard("'quoted'")).toBe("'quoted'");
+	});
+
+	it("checks a file before importing, skips duplicates and bad rows, never publishes, and exports a file that reads back", async () => {
+		const rt = await createPluginRuntimeTestHost();
+		await rt.fixtures.collection(listingsCollection as never);
+		await rt.fixtures.content("listings", { data: { title: "Old Cafe", listing_type: "restaurant", city: "Paris", listing_status: "live" }, slug: "old-cafe", status: "published" } as never);
+		host = { dispose: () => rt.dispose() } as unknown as PluginTestHost;
+		const route = rt.transport.invokeRoute.bind(rt.transport);
+		const csv = [
+			"title,listing_type,city,lat,lng,website",
+			"New Bakery,Restaurant,Lyon,45.76,4.83,https://bakery.test",
+			"old cafe,restaurant,PARIS,,,",
+			",hotel,Nice,,,",
+			"Odd Type,spaceship,Nice,,,",
+			"Bad Place,hotel,Nice,abc,4,",
+			"New Bakery,restaurant,Lyon,,,",
+			"Plain Shop,,Lille,,,javascript:alert(1)",
+		].join("\n");
+		type Check = { ok: boolean; valid: number; total: number; bad: Array<{ line: number; reason: string }>; duplicates: Array<{ line: number }>; imported?: number };
+		const checked = (await route("import", { csv, mode: "check" }, { method: "POST" })) as Check;
+		expect(checked).toMatchObject({ ok: true, total: 7, valid: 2 });
+		expect(checked.duplicates.map((row) => row.line)).toEqual([3, 7]);
+		expect(checked.bad.map((row) => row.line)).toEqual([4, 5, 6]);
+		// Checking writes nothing.
+		expect(await rt.inspect.storage.list("submissions")).toHaveLength(0);
+
+		const done = (await route("import", { csv, mode: "import" }, { method: "POST" })) as Check;
+		expect(done).toMatchObject({ ok: true, imported: 2 });
+		const waiting = await rt.inspect.storage.list<{ title: string; status: string }>("submissions");
+		expect(waiting.map((row) => [row.data.title, row.data.status]).sort()).toEqual([["New Bakery", "pending"], ["Plain Shop", "pending"]]);
+		// Nothing went live: the directory still has only the one that was there.
+		const live = (await route("search", { q: "" }, { method: "GET" })) as { items: Array<{ title: string }> };
+		expect(live.items.map((item) => item.title)).toEqual(["Old Cafe"]);
+		// The same file again adds nothing.
+		expect(await route("import", { csv, mode: "import" }, { method: "POST" })).toMatchObject({ imported: 0 });
+
+		// Who may call this is enforced by EmDash over HTTP (the route asks for plugins:manage),
+		// which this in-process test does not exercise. scripts/prove-lab.sh checks it on a real
+		// site as a guest and as a subscriber.
+		expect(await route("import", {}, { method: "POST" })).toMatchObject({ ok: false, error: { code: "VALIDATION_ERROR" } });
 	});
 });

@@ -6,6 +6,8 @@ Scoped with the owner on 2026-10-13. Every task is a GitHub issue under the `0.5
 
 ## Corrections after reading EmDash's own guides (2026-10-13)
 
+- **#46 import and export (2026-10-14):** built on the kit page `/listings/import/` (admins only), not inside the admin. EmDash cannot do it there: an admin screen cannot take a file or start a download, the media library refuses CSV, and admin-only routes refuse a plain browser link (they require the `X-EmDash-Request` header, which only page script can send). Settings links to the page.
+
 **This section wins over any older line in this file or on an issue.**
 
 - **Time zone (#39):** no plugin setting. Use the time zone and date format in EmDash's own site settings.

@@ -34,9 +34,11 @@ Proven on two sites: the EmDash `starter` template and a clean `portfolio` templ
 
 Collection: create a `listings` collection with the same fields the lab seed uses, or run `site-kit/seed/listings.mjs` the way the lab reset does.
 
-Demo rows: Admin → Get started → **Load sample directory** (12 NYC listings, reviews, a claim). The lab seed still loads the larger 33-listing pack. Import fixture: `site-kit/seed/import/sample.csv`.
+Demo rows: Admin → Get started → **Load sample directory** (12 NYC listings, reviews, a claim). The lab seed still loads the larger 33-listing pack.
 
 Add four menu links: `/listings/`, `/listings/submit/`, `/listings/calendar/`, `/account/`.
+
+Import and export: `/listings/import/` is for site admins only (everyone else sees a short notice), so it needs no menu link. Settings in the admin links to it. A sample spreadsheet is at `/vendor/listora-sample.csv`.
 
 `astro.config.mjs` must load the sandbox runner and the plugin. See [Install](../docs/website/getting-started/install.md).
 

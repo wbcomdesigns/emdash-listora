@@ -71,8 +71,11 @@ ok "reviews"
 JAR="$(mktemp)"
 trap 'rm -f "$JAR"' EXIT
 status() { curl -s -o /dev/null -w "%{http_code}" -H "X-EmDash-Request: 1" -H "Origin: $BASE" "$@"; }
-for route in dashboard favorites privacy "import?format=json"; do
+for route in dashboard favorites privacy export; do
 	[[ "$(status "$BASE/_emdash/api/plugins/listora/$route")" == "401" ]] || fail "guest refused on $route"
+done
+for route in import admin; do
+	[[ "$(status -X POST -H "Content-Type: application/json" -d '{}' "$BASE/_emdash/api/plugins/listora/$route")" == "401" ]] || fail "guest refused on $route"
 done
 ok "guests refused on member and admin routes"
 
@@ -81,13 +84,22 @@ dash="$(json -b "$JAR" "$BASE/_emdash/api/plugins/listora/dashboard")"
 echo "$dash" | grep -q '"favorites"' || fail "dashboard"
 ok "dashboard (signed in)"
 
-export_json="$(json -b "$JAR" "$BASE/_emdash/api/plugins/listora/import?format=json")"
-echo "$export_json" | grep -q '"count"' || fail "export json"
-ok "export json (admin)"
+# Export is a real file: a spreadsheet sent as a download, with the column names first.
+export_head="$(curl -s -D - -o /tmp/listora-export.csv -H "X-EmDash-Request: 1" -b "$JAR" "$BASE/_emdash/api/plugins/listora/export")"
+echo "$export_head" | grep -qi "content-disposition: attachment; filename=\"listings-" || fail "export is a download"
+echo "$export_head" | grep -qi "content-type: text/csv" || fail "export is a spreadsheet"
+head -c 200 /tmp/listora-export.csv | grep -q "title,listing_type,city" || fail "export has the column names"
+ok "export downloads a spreadsheet (admin)"
 
-geo="$(json -b "$JAR" "$BASE/_emdash/api/plugins/listora/import?format=geojson")"
-echo "$geo" | grep -q "FeatureCollection" || fail "geojson"
-ok "geojson (admin)"
+# A signed-in member who is not an admin is refused on every admin route.
+SCRIPTS="$(cd "$(dirname "$0")" && pwd)"
+"$SCRIPTS/lab-role.sh" subscriber >/dev/null
+member_export="$(status -H "X-EmDash-Request: 1" -b "$JAR" "$BASE/_emdash/api/plugins/listora/export")"
+member_import="$(status -H "X-EmDash-Request: 1" -b "$JAR" -X POST -H "Content-Type: application/json" -d '{"csv":"title\nX","mode":"import"}' "$BASE/_emdash/api/plugins/listora/import")"
+member_admin="$(status -H "X-EmDash-Request: 1" -b "$JAR" -X POST -H "Content-Type: application/json" -d '{"type":"page_load","page":"/queue"}' "$BASE/_emdash/api/plugins/listora/admin")"
+"$SCRIPTS/lab-role.sh" admin >/dev/null
+[[ "$member_export" == "403" && "$member_import" == "403" && "$member_admin" == "403" ]] || fail "member refused on admin routes (export $member_export, import $member_import, admin $member_admin)"
+ok "members refused on admin routes"
 
 dup="$(json "$BASE/_emdash/api/plugins/listora/duplicate?title=The%20Golden%20Fork")"
 echo "$dup" | grep -q "the-golden-fork" || fail "duplicate"

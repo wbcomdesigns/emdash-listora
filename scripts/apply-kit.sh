@@ -19,6 +19,7 @@ cp "$PLUGIN/site-kit/pages/listings/index.astro" "$LAB/src/pages/listings/index.
 cp "$PLUGIN/site-kit/pages/listings/[slug].astro" "$LAB/src/pages/listings/[slug].astro"
 cp "$PLUGIN/site-kit/pages/listings/submit.astro" "$LAB/src/pages/listings/submit.astro"
 cp "$PLUGIN/site-kit/pages/listings/calendar.astro" "$LAB/src/pages/listings/calendar.astro"
+cp "$PLUGIN/site-kit/pages/listings/import.astro" "$LAB/src/pages/listings/import.astro"
 cp "$PLUGIN/site-kit/pages/account/index.astro" "$LAB/src/pages/account/index.astro"
 
 mkdir -p "$LAB/public/vendor"

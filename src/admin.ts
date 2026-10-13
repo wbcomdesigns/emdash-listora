@@ -691,6 +691,16 @@ export async function renderSettings(
 				],
 				submit: { label: "Save messages", action_id: "save_messages" },
 			},
+			{ type: "divider" },
+			{ type: "header", text: "Import and export" },
+			{
+				type: "section",
+				text: "Download every listing as a spreadsheet, or add listings from one. Imported listings arrive in the Listings queue as drafts. This runs on the site kit's page at /listings/import/.",
+			},
+			// A link out of the admin needs a full address, which only a configured site has.
+			...(/^https?:\/\//.test(asString(ctx.site?.url))
+				? [{ type: "actions", elements: [{ type: "link", label: "Open import and export", target: { kind: "external", url: new URL("/listings/import/", asString(ctx.site.url)).href } }] }]
+				: []),
 		],
 		toast: extra?.toast,
 	};

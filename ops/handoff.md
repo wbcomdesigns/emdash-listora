@@ -47,7 +47,7 @@ Override lab folder with `LISTORA_LAB`. After a kit change: edit `site-kit/`, th
 
 ## Next, in order
 
-The 0.5.0 plan is locked. Read `PLAN.md`: it holds every owner decision, the order of work, and how to take a task. Work happens on the `0.5.0` branch (PR #49), never on `main`. Built so far on that branch: #23, #20, #26, #24, #27 (Settings page, queue page, dashboard card). A dashboard card asks the admin route with `{ type: "page_load", page: "widget:<id>" }`. Open tasks: #38, #44, #45, #43, #42, #40, #41, #25, #46, #47, then #48 (full QA, preview on knowxtheme.com, release).
+The 0.5.0 plan is locked. Read `PLAN.md`: it holds every owner decision, the order of work, and how to take a task. Work happens on the `0.5.0` branch (PR #49), never on `main`. Built so far on that branch: #23, #20, #26, #24, #27 (Settings page, queue page, dashboard card). A dashboard card asks the admin route with `{ type: "page_load", page: "widget:<id>" }`. Also built: #38, #44, #45, #43, #42, #40, #41, #25, #46 (import and export on the kit page `/listings/import/`, see PLAN.md corrections). Open tasks: #47, #50, then #48 (full QA, preview on knowxtheme.com, release).
 
 ## How a release is verified
 
