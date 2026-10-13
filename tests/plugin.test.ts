@@ -343,37 +343,42 @@ describe("contact messages", () => {
 		expect(await host!.storage("contacts").get(rows[0].id)).toMatchObject({ status: "handled" });
 	});
 
-	it("emails the listing's own address, with the visitor as reply-to, and marks the row", async () => {
+	it("notifies the owner's account address once an hour, with nothing a visitor wrote", async () => {
 		const rt = await createPluginRuntimeTestHost();
 		await rt.fixtures.collection(listingsCollection as never);
-		const made = await rt.fixtures.content("listings", {
-			data: { title: "Mail Cafe", listing_type: "restaurant", email: "owner@cafe.test" },
-			slug: "mail-cafe",
-			status: "published",
-		} as never);
 		host = { dispose: () => rt.dispose() } as unknown as PluginTestHost;
+		// Ana adds a listing and types someone else's address into it. That address must never get mail.
+		const added = (await rt.transport.invokeRoute(
+			"submit",
+			{ title: "Mail Cafe", listing_type: "restaurant", email: "victim@elsewhere.test", agree_terms: true },
+			{ method: "POST", user: ana },
+		)) as { ok: boolean; id?: string; listingId?: string; listing?: { id: string } };
+		expect(added.ok).toBe(true);
+		const id = (await rt.inspect.storage.list("submissions"))[0].id;
+		await rt.transport.invokeRoute("admin", { type: "block_action", action_id: "review", value: `approve:${id}`, page: "/queue" });
 		const send = (body: Record<string, unknown>, ip: string) =>
-			rt.transport.invokeRoute("contact", { listingId: made.id, ...body }, {
+			rt.transport.invokeRoute("contact", { listingId: id, ...body }, {
 				method: "POST",
 				meta: { ip, userAgent: null, referer: null, geo: null },
 			});
-		expect(await send({ name: "Vee", email: "vee@example.com", message: "Are you open Sunday?" }, "203.0.113.1")).toMatchObject({ ok: true });
-		// A reply-to that is not a plain address is dropped, never passed to the mailer.
-		expect(await send({ email: "x@y.test\nBcc: z@z.test", message: "Hi" }, "203.0.113.2")).toMatchObject({ ok: true });
+		expect(await send({ name: "Vee", email: "vee@example.com", message: "Visit http://lure.test now" }, "203.0.113.1")).toMatchObject({ ok: true });
+		expect(await send({ name: "Vee", email: "vee@example.com", message: "Second one" }, "203.0.113.2")).toMatchObject({ ok: true });
+		const rows = await rt.inspect.storage.list<{ notice: string }>("contacts");
+		expect(rows).toHaveLength(2);
 		const mail = await rt.inspect.email();
-		const rows = await rt.inspect.storage.list<{ emailed: boolean }>("contacts");
-		if (mail.length === 0) {
-			// Host without a mail provider: stored, flagged as not sent.
-			expect(rows.every((row) => row.data.emailed === false)).toBe(true);
-			return;
-		}
-		expect(mail).toHaveLength(2);
+		// One notice for the two messages, to the account address, with no visitor text in it.
+		expect(mail).toHaveLength(1);
+		expect(mail[0].to).toBe("ana@example.com");
 		const text = JSON.stringify(mail);
-		expect(text).toContain("owner@cafe.test");
-		expect(text).toContain("vee@example.com");
-		expect(mail.map((item) => item.replyTo ?? null)).toEqual(expect.arrayContaining(["vee@example.com", null]));
-		expect(mail.every((item) => item.to === "owner@cafe.test")).toBe(true);
-		expect(rows.every((row) => row.data.emailed === true)).toBe(true);
+		for (const leak of ["victim@elsewhere.test", "lure.test", "Vee", "vee@example.com", "http"]) {
+			expect(text).not.toContain(leak);
+		}
+		expect(rows.map((row) => row.data.notice).sort()).toEqual(["recent", "sent"]);
+		// The owner reads both in their account. Another member sees none.
+		const mine = (await rt.transport.invokeRoute("dashboard", {}, { user: ana })) as { messages: Array<{ message: string }> };
+		expect(mine.messages.map((item) => item.message).sort()).toEqual(["Second one", "Visit http://lure.test now"]);
+		const other = (await rt.transport.invokeRoute("dashboard", {}, { user: ben })) as { messages: unknown[] };
+		expect(other.messages).toHaveLength(0);
 	});
 
 	it("refuses a message for a listing that is not public", async () => {
@@ -463,5 +468,66 @@ describe("listing types stay in step", () => {
 				expect(submitPage, `${type.slug}.${field.key}`).toContain(`key: "${field.key}"`);
 			}
 		}
+	});
+});
+
+describe("listing expiry", () => {
+	it("dates a listing on approval, expires it when due, and lets only its owner renew", async () => {
+		const rt = await createPluginRuntimeTestHost();
+		await rt.fixtures.collection(listingsCollection as never);
+		host = { dispose: () => rt.dispose() } as unknown as PluginTestHost;
+		const admin = (input: Record<string, unknown>) => rt.transport.invokeRoute("admin", { page: "/queue", ...input });
+		await admin({ type: "form_submit", action_id: "save_settings", values: { expiry_days: "10", require_moderation: true } });
+		await rt.transport.invokeRoute("submit", { title: "Dated Cafe", listing_type: "restaurant", agree_terms: true }, { method: "POST", user: ana });
+		const id = (await rt.inspect.storage.list("submissions"))[0].id;
+		await admin({ type: "block_action", action_id: "review", value: `approve:${id}` });
+
+		type Dash = { listings: Array<{ expires_at?: string; expired?: boolean; can_renew?: boolean }> };
+		const dash = async () => ((await rt.transport.invokeRoute("dashboard", {}, { user: ana })) as Dash).listings[0];
+		const first = await dash();
+		const days = (Date.parse(String(first.expires_at)) - Date.now()) / 86_400_000;
+		expect(days).toBeGreaterThan(9.9);
+		expect(days).toBeLessThan(10.1);
+		expect(first).toMatchObject({ expired: false, can_renew: true });
+
+		// Not due yet: the daily task leaves it alone.
+		await rt.transport.invokeHook("cron", { name: "expire", scheduledAt: new Date().toISOString() });
+		expect((await dash()).expired).toBe(false);
+
+		expect(await rt.transport.invokeRoute("renew", { listingId: id }, { method: "POST", user: ben })).toMatchObject({
+			ok: false,
+			error: { code: "FORBIDDEN" },
+		});
+		expect(await rt.transport.invokeRoute("renew", { listingId: id }, { method: "POST" })).not.toMatchObject({ ok: true });
+		expect(await rt.transport.invokeRoute("renew", { listingId: id }, { method: "POST", user: ana })).toMatchObject({ ok: true });
+
+		// Expiry off: nothing is renewable and the dashboard carries no dates.
+		await admin({ type: "form_submit", action_id: "save_settings", values: { expiry_days: "0", require_moderation: true } });
+		expect(await rt.transport.invokeRoute("renew", { listingId: id }, { method: "POST", user: ana })).toMatchObject({
+			ok: false,
+			error: { code: "NOT_RENEWABLE" },
+		});
+		expect((await dash()).can_renew).toBeUndefined();
+	});
+
+	it("marks a listing past its date as expired and hides it from search", async () => {
+		const rt = await createPluginRuntimeTestHost();
+		await rt.fixtures.collection(listingsCollection as never);
+		host = { dispose: () => rt.dispose() } as unknown as PluginTestHost;
+		await rt.fixtures.content("listings", {
+			data: { title: "Old Cafe", listing_type: "restaurant", listing_status: "live", expires_at: "2020-01-01T00:00:00.000Z" },
+			slug: "old-cafe",
+			status: "published",
+		} as never);
+		await rt.fixtures.content("listings", {
+			data: { title: "New Cafe", listing_type: "restaurant", listing_status: "live", expires_at: "2099-01-01T00:00:00.000Z" },
+			slug: "new-cafe",
+			status: "published",
+		} as never);
+		const titles = async () =>
+			((await rt.transport.invokeRoute("search", { q: "cafe" })) as { items: Array<{ title: string }> }).items.map((item) => item.title);
+		expect((await titles()).sort()).toEqual(["New Cafe", "Old Cafe"]);
+		await rt.transport.invokeHook("cron", { name: "expire", scheduledAt: new Date().toISOString() });
+		expect(await titles()).toEqual(["New Cafe"]);
 	});
 });

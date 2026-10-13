@@ -71,8 +71,9 @@ Every case in `docs/qa/QA_CHECKLIST.md` is run in a browser as guest, subscriber
 | --- | --- |
 | Live-site preview | Kit is proven on a clean second site (`portfolio` template). Not yet proven on a preview deploy of a live fleet site (Cloudflare, EmDash 1.1) |
 | Directory size | Reads at most 500 listings and filters in memory |
-| Contact | Stored, shown in Messages, and emailed to the listing address when the site has a mail provider. The send itself is covered by an automated test only: the lab has no mail provider. Needs the new `email:send` permission, so the next release widens what the plugin may do |
-| Dashboard rows | Read only. No edit or renew action |
+| Contact | Stored, shown in admin Messages and in the owner's account. Owner notice by email goes only to the account address, with no visitor text, once per listing per hour (`notifyOwner`). Listings with no owner account (imported, admin-made, unclaimed) notify nobody. Needs the new `email:send` permission, so the next release widens what the plugin may do |
+| Expiry | Off by default (0 days). The daily task is scheduled when the owner saves a number above 0. 50 listings per run |
+| Dashboard rows | Renew only. No edit |
 | Featured row | The same listings repeat at the top of the grid below it |
 | Banner | `images/banner.png` is the dark-text lockup on a transparent ground. Check it on the registry page |
 | Timezone | Hardcoded to America/New_York on submit and in the calendar |

@@ -33,6 +33,7 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 				<a class:list={{ "listora-chip": true, "is-active": tab === "overview" }} href="/account/">Overview</a>
 				<a class:list={{ "listora-chip": true, "is-active": tab === "listings" }} href="/account/?tab=listings">My listings</a>
 				<a class:list={{ "listora-chip": true, "is-active": tab === "reviews" }} href="/account/?tab=reviews">Reviews</a>
+				<a class:list={{ "listora-chip": true, "is-active": tab === "messages" }} href="/account/?tab=messages">Messages</a>
 				<a class:list={{ "listora-chip": true, "is-active": tab === "claims" }} href="/account/?tab=claims">Claims</a>
 				<a class:list={{ "listora-chip": true, "is-active": tab === "favorites" }} href="/account/?tab=favorites">Favorites</a>
 				<a class:list={{ "listora-chip": true, "is-active": tab === "profile" }} href="/account/?tab=profile">Profile</a>
@@ -48,6 +49,11 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 				<section id="reviews-panel" hidden>
 					<h2>Reviews</h2>
 					<div id="dash-reviews"></div>
+				</section>
+				<section id="messages-panel" hidden>
+					<h2>Messages</h2>
+					<p class="listora-helper">Sent by visitors from your listing pages. Reply to them by email.</p>
+					<div id="dash-messages"></div>
 				</section>
 				<section id="claims-panel" hidden>
 					<h2>Claims</h2>
@@ -90,6 +96,7 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 		listings: "list-panel",
 		reviews: "reviews-panel",
 		claims: "claims-panel",
+		messages: "messages-panel",
 		favorites: "fav-panel",
 		profile: "profile-panel",
 	};
@@ -98,7 +105,7 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 		if (node) node.hidden = key !== tab;
 	});
 
-	const LABELS: Record<string, string> = { listings: "Listings", reviews: "Reviews", claims: "Claims", favorites: "Favorites" };
+	const LABELS: Record<string, string> = { listings: "Listings", reviews: "Reviews", claims: "Claims", favorites: "Favorites", messages: "Messages" };
 
 	const STATUS: Record<string, string> = {
 		pending: "Awaiting approval",
@@ -118,7 +125,17 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 							.map((key) => (key === "status" ? STATUS[String(item.status)] ?? item.status : item[key]))
 							.filter(Boolean)
 							.map(esc);
-						return `<li class="listora-review"><strong>${title}</strong>${rest.length ? ` · ${rest.join(" · ")}` : ""}</li>`;
+						// Only set on the member's own live listings, and only when the site uses expiry.
+						const when = item.expired
+							? "Expired"
+							: item.expires_at
+								? `Expires ${new Date(String(item.expires_at)).toLocaleDateString()}`
+								: "";
+						if (when) rest.push(esc(when));
+						const renew = item.can_renew
+							? ` <button type="button" class="listora-btn listora-btn--secondary" data-renew="${esc(item.listingId || item.id)}">Renew</button>`
+							: "";
+						return `<li class="listora-review"><strong>${title}</strong>${rest.length ? ` · ${rest.join(" · ")}` : ""}${renew}</li>`;
 					})
 					.join("")}</ul>`
 			: `<div class="listora-empty"><h2>Nothing here yet</h2><p>This tab fills as you use the directory.</p></div>`;
@@ -128,6 +145,26 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 		const node = document.getElementById(id);
 		if (node) node.innerHTML = html;
 	}
+
+	document.addEventListener("click", async (event) => {
+		const button = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-renew]");
+		if (!button) return;
+		button.disabled = true;
+		const data = await api("renew", { listingId: button.dataset.renew });
+		if (data.ok) {
+			await load();
+			const until = new Date(String(data.expires_at)).toLocaleDateString();
+			document
+				.getElementById("dash-listings")
+				?.insertAdjacentHTML("afterbegin", `<p class="listora-status" data-tone="success" role="status">Renewed until ${esc(until)}.</p>`);
+			return;
+		}
+		button.disabled = false;
+		button.insertAdjacentHTML(
+			"afterend",
+			` <span class="listora-status" data-tone="error" role="alert">${esc(data.error?.message || "Could not renew.")}</span>`,
+		);
+	});
 
 	async function load() {
 		if (!document.getElementById("dash-main")) return;
@@ -146,6 +183,21 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 		fill("dash-listings", list(data.listings as Rows, ["city", "status"]));
 		fill("dash-reviews", list(data.reviews as Rows, ["body", "status"]));
 		fill("dash-claims", list(data.claims as Rows, ["status"]));
+		// Visitors wrote these: every value goes through esc, and the address is only ever a mailto.
+		const messages = (data.messages ?? []) as Rows;
+		fill(
+			"dash-messages",
+			messages.length
+				? `<ul class="listora-dash-list">${messages
+						.map((item) => {
+							const from = esc(item.name || "No name given");
+							const mail = item.email ? ` · <a href="mailto:${esc(item.email)}">${esc(item.email)}</a>` : "";
+							const day = esc(String(item.createdAt || "").slice(0, 10));
+							return `<li class="listora-review"><strong>${esc(item.listing_title || "Listing")}</strong> · ${from}${mail} · ${day}<p>${esc(item.message)}</p></li>`;
+						})
+						.join("")}</ul>`
+				: `<div class="listora-empty"><h2>No messages yet</h2><p>Messages from your listing pages show here.</p></div>`,
+		);
 		fill("dash-favs", list(data.favorites as Rows, []));
 	}
 

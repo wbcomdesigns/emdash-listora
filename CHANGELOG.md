@@ -6,8 +6,10 @@ Versions match `package.json`, the git tag, and the EmDash registry release. New
 
 Copy `site-kit/` again after you update, including the new `site-kit/layouts/ListoraLayout.astro`.
 
-- New      - A contact message is emailed to the address on the listing, with the visitor as the reply address. Needs a mail provider on the site and asks for one new permission: sending email.
-- New      - Setting to turn that email off. The Messages page shows which messages were sent and which were not.
+- New      - Messages tab in the owner's account: the member who added or claimed a listing reads the messages visitors send about it.
+- New      - The owner gets a short email notice when a message arrives, at most one per listing per hour. It goes to their account email and carries no visitor text. Needs a mail provider on the site and one new permission: sending email. A setting turns it off.
+- New      - Listing expiry. Set how many days a listing stays live (0 means never). A daily check takes expired listings out of the directory, and the owner can renew from their account.
+- Fix      - Renew now works and has a button. Before, it saved a change that never went live.
 - Improve  - The kit works on any EmDash site: one file, `ListoraLayout.astro`, connects the pages to your own layout. Proven on a second site that is not the starter.
 
 ## [0.4.1] - 2026-10-13

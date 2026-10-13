@@ -67,6 +67,9 @@ Three roles, always in this order: **guest**, **member** (subscriber role), **ad
 | M-12 | Send another member's id in a request body | Ignored. You only ever see and change your own rows | ignores a member id sent in the request |
 | M-14 | Call review, claims or favorites with the id of a draft or missing listing | "That listing is not available." Nothing is stored | refuses member actions on a listing that is not public |
 | M-15 | Profile tab, Delete my data: click once, then again | First click asks you to click again and deletes nothing. Second click deletes your reviews, claims and saved listings, and the counts drop to zero |
+| M-16 | Open `/account/?tab=messages` as the member who added a listing, after a visitor messaged it | The message, the sender's name and a mail link, the date. Markup in a message shows as text. Another member sees none | notifies the owner's account address once an hour |
+| M-17 | With expiry on, open My listings | Each live listing shows "Expires <date>". Renew shows when expired or inside 30 days. Renew confirms "Renewed until <date>". A failed request says so and the button works again | dates a listing on approval |
+| M-18 | Call `renew` for someone else's listing | Refused | same test |
 | M-13 | Dashboard at 390 | Tabs are one sideways-scrolling row. Content starts above the fold | |
 
 ## Admin
@@ -88,8 +91,10 @@ Three roles, always in this order: **guest**, **member** (subscriber role), **ad
 | A-14 | Same listing: approve a claim on it | Refused with "has unpublished edits". The claim stays pending | |
 | A-15 | Open Messages after a visitor sent one | Listing name, sender, the full message, date. Mark as handled removes it from the list |
 | A-16 | Open Messages with none waiting | Empty state |
-| A-17 | Messages, Email column | "Sent to the listing" when the site has a mail provider and the listing has an email. "Not sent" otherwise. The mail goes only to the listing address, reply address is the visitor | emails the listing's own address |
-| A-18 | Turn off "Email contact messages to the listing" and save | Stays off after reload. New messages are stored and marked Not sent |
+| A-17 | Messages, Owner column | "Owner notified" when the listing has an owner account and the site can send mail, "Owner notified earlier this hour" for the next ones, "Owner not notified" when there is no owner account. The mail goes to the owner's account address and holds nothing the visitor typed | notifies the owner's account address once an hour |
+| A-18 | Turn off "Email the listing owner when a message arrives" and save | Stays off after reload. New messages are stored and marked Owner not notified |
+| A-19 | Set "Listings expire after this many days" to 10, save, reload | Shows 10. A listing approved after that carries a date 10 days ahead | dates a listing on approval |
+| A-20 | A listing past its date, after the daily check | Gone from the directory and search. Its page says it has expired | marks a listing past its date as expired |
 | A-12 | Get started on a site with no listings collection | Clear "create the collection first" message, no crash | tells the owner to create the listings collection first |
 
 ## Presentation, every screen

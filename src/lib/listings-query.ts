@@ -127,6 +127,36 @@ export async function patchListing(
 	return { state: "done", data };
 }
 
+/** How long a listing stays live, in days. 0 means listings never expire. */
+export async function expiryDays(ctx: PluginContext): Promise<number> {
+	const days = Math.floor(Number(await ctx.settings.get("expiry_days")) || 0);
+	return days > 0 ? Math.min(days, 3650) : 0;
+}
+
+export function expiryFrom(days: number, from = Date.now()): string {
+	return new Date(from + days * 86_400_000).toISOString();
+}
+
+/**
+ * Mark live listings past their date as expired. Run by the daily task.
+ * A listing with unpublished edits is skipped and picked up on a later run.
+ * ponytail: 50 per run, each isolated, so one bad listing cannot stop the rest.
+ */
+export async function expireDue(ctx: PluginContext, now = Date.now()): Promise<number> {
+	const due = (await listPublished(ctx))
+		.filter((item) => item.listing_status !== "expired" && item.expires_at && Date.parse(item.expires_at) < now)
+		.slice(0, 50);
+	let done = 0;
+	for (const item of due) {
+		try {
+			if ((await patchListing(ctx, item.id, { listing_status: "expired" })).state === "done") done += 1;
+		} catch {
+			// Tried again on the next run.
+		}
+	}
+	return done;
+}
+
 /**
  * Recalculate a listing's rating from its published reviews and keep it in plugin storage.
  * It never touches the listing itself, so it is safe to call from a member route and can
@@ -165,7 +195,14 @@ export async function backfillRatings(ctx: PluginContext): Promise<void> {
 	}
 }
 
-export type ListingRef = { title: string; slug: string; published: boolean; email: string };
+export type ListingRef = {
+	title: string;
+	slug: string;
+	published: boolean;
+	email: string;
+	expires_at: string;
+	expired: boolean;
+};
 
 /** Title and slug for a set of listing ids, so screens show names instead of ids. */
 export async function listingRefs(ctx: PluginContext, ids: string[]): Promise<Map<string, ListingRef>> {
@@ -181,6 +218,8 @@ export async function listingRefs(ctx: PluginContext, ids: string[]): Promise<Ma
 			slug: item.slug || id,
 			published: item.status === "published",
 			email: asString(asRecord(item.data).email),
+			expires_at: asString(asRecord(item.data).expires_at),
+			expired: asRecord(item.data).listing_status === "expired",
 		});
 	});
 	return refs;

@@ -1,6 +1,14 @@
 import type { PluginContext } from "emdash/plugin";
 
-import { backfillRatings, listingRefs, patchListing, publishNow, syncRating } from "./lib/listings-query";
+import {
+	backfillRatings,
+	expiryDays,
+	expiryFrom,
+	listingRefs,
+	patchListing,
+	publishNow,
+	syncRating,
+} from "./lib/listings-query";
 import { getOnboardState, loadSampleDirectory } from "./lib/onboard";
 import { LISTING_TYPES, LISTINGS } from "./lib/types";
 import { asBoolean, asRecord, asString } from "./lib/util";
@@ -29,12 +37,14 @@ async function loadSettings(ctx: PluginContext): Promise<{
 	requireModeration: boolean;
 	defaultListingType: string;
 	emailMessages: boolean;
+	expiryDays: number;
 	spamKeywords: string;
 }> {
 	return {
 		spamKeywords: (await ctx.settings.get<string>("spam_keywords")) ?? "viagra, crypto pump",
 		requireModeration: (await ctx.settings.get<boolean>("require_moderation")) !== false,
 		emailMessages: (await ctx.settings.get<boolean>("email_messages")) !== false,
+		expiryDays: await expiryDays(ctx),
 		defaultListingType: (await ctx.settings.get<string>("default_listing_type")) || "business",
 	};
 }
@@ -146,7 +156,7 @@ export async function renderQueue(
 					{
 						type: "toggle",
 						action_id: "email_messages",
-						label: "Email contact messages to the listing",
+						label: "Email the listing owner when a message arrives",
 						initial_value: settings.emailMessages,
 					},
 					{
@@ -155,6 +165,13 @@ export async function renderQueue(
 						label: "Default listing type",
 						initial_value: settings.defaultListingType,
 						options: LISTING_TYPES.map((type) => ({ label: type.name, value: type.slug })),
+					},
+					{
+						type: "text_input",
+						action_id: "expiry_days",
+						label: "Listings expire after this many days (0 = never)",
+						help_text: "0 means listings never expire. An expired listing leaves the directory and its page says it has expired. The owner can renew it from their account.",
+						initial_value: String(settings.expiryDays),
 					},
 					{
 						type: "text_input",
@@ -198,6 +215,13 @@ async function reviewListing(
 
 	if (action !== "approve") {
 		return renderQueue(ctx, { toast: { message: "Unknown review action.", type: "error" } });
+	}
+
+	// A new listing gets its date at the moment it is approved.
+	const days = await expiryDays(ctx);
+	const draft = days ? await ctx.content?.get?.("listings", listingId).catch(() => null) : null;
+	if (draft && ctx.content?.update && !asString(asRecord(draft.data).expires_at)) {
+		await ctx.content.update("listings", listingId, { ...draft.data, expires_at: expiryFrom(days) });
 	}
 
 	if (!(await publishNow(ctx, listingId))) {
@@ -446,7 +470,12 @@ async function renderMessages(ctx: PluginContext, extra?: Pick<BlockResponse, "t
 			// Shown in full. Visitors write these, so they are plain text here, never markup.
 			message: asString(data.message),
 			received: asString(data.createdAt).slice(0, 10),
-			emailed: data.emailed === true ? "Sent to the listing" : "Not sent",
+			emailed:
+				data.notice === "sent"
+					? "Owner notified"
+					: data.notice === "recent"
+						? "Owner notified earlier this hour"
+						: "Owner not notified",
 			action: {
 				type: "menu",
 				action_id: "message_mod",
@@ -463,7 +492,7 @@ async function renderMessages(ctx: PluginContext, extra?: Pick<BlockResponse, "t
 			{ type: "header", text: "Messages" },
 			{
 				type: "section",
-				text: "Messages visitors sent from a listing page. Each one is also emailed to the address on the listing when the site has a mail provider and the listing has an email. Anything marked Not sent needs you to pass it on.",
+				text: "Messages visitors sent from a listing page. The member who added or claimed the listing reads them in their account, and gets an email notice (one per listing per hour) when the site has a mail provider. Anything marked Owner not notified has no owner account, so pass it on yourself.",
 			},
 			table.length === 0
 				? { type: "empty", title: "No new messages", description: "Messages from the contact form on a listing wait here." }
@@ -475,7 +504,7 @@ async function renderMessages(ctx: PluginContext, extra?: Pick<BlockResponse, "t
 							{ key: "from", label: "From" },
 							{ key: "message", label: "Message" },
 							{ key: "received", label: "Received" },
-							{ key: "emailed", label: "Email" },
+							{ key: "emailed", label: "Owner" },
 							{ key: "action", label: "Decision", format: "element" },
 						],
 						rows: table,
@@ -516,6 +545,10 @@ export async function handleAdmin(
 		await ctx.settings.set("require_moderation", asBoolean(values.require_moderation));
 		await ctx.settings.set("email_messages", asBoolean(values.email_messages));
 		await ctx.settings.set("spam_keywords", asString(values.spam_keywords));
+		await ctx.settings.set("expiry_days", Math.max(0, Math.floor(Number(values.expiry_days) || 0)));
+		// The daily check only exists while expiry is on.
+		if (await expiryDays(ctx)) await ctx.cron?.schedule("expire", { schedule: "0 3 * * *" });
+		else await ctx.cron?.cancel("expire").catch(() => undefined);
 		return renderQueue(ctx, { toast: { message: "Settings saved.", type: "success" } });
 	}
 

@@ -4,10 +4,14 @@ import { handleAdmin } from "./admin";
 import { maybeSeedDemo } from "./lib/onboard";
 import {
 	filterListings,
+	expireDue,
+	expiryDays,
+	expiryFrom,
 	isPublicListing,
 	listPublished,
 	paginate,
 	listingRefs,
+	patchListing,
 	ratingsMap,
 	syncRating,
 	publishNow,
@@ -107,7 +111,7 @@ const RATE_MAX = 8;
 const REVIEW_TITLE_MAX = 120;
 const REVIEW_BODY_MAX = 1000;
 
-type Member = { id: string; name: string | null; role: number };
+type Member = { id: string; name: string | null; email?: string | null; role: number };
 
 // Public reads are the same for every visitor, so the edge can answer repeats.
 // Short enough that an approved review or a new listing shows within a minute.
@@ -115,6 +119,50 @@ const CACHE = "public, max-age=30, stale-while-revalidate=120";
 
 // Strict on purpose: this value becomes a mail header.
 const EMAIL_RE = /^[^\s@<>,;]+@[^\s@<>,;]+\.[^\s@<>,;]+$/;
+/** Expired, or inside the last 30 days before its date. */
+function renewable(ref: { expires_at: string; expired: boolean }): boolean {
+	if (ref.expired) return true;
+	return Boolean(ref.expires_at) && Date.parse(ref.expires_at) - Date.now() < 30 * 86_400_000;
+}
+
+type Ctx = Parameters<typeof expireDue>[0];
+
+/** The member who answers for a listing: whoever added it, else whoever's claim was approved. */
+async function listingOwner(ctx: Ctx, listingId: string): Promise<{ id: string; email: string } | null> {
+	const added = asRecord(await ctx.storage.submissions.get(listingId));
+	if (added.member_id) return { id: asString(added.member_id), email: asString(added.member_email) };
+	const claims = rows(await ctx.storage.claims.query({ where: { listingId }, limit: 20 }));
+	const won = claims.find((row) => row.status === "approved");
+	return won ? { id: asString(won.member_id), email: asString(won.member_email) } : null;
+}
+
+/**
+ * Tell a listing's owner that a message is waiting. Called from a public route, so:
+ * - it goes only to the owner's own account address, never to an address typed into a form
+ * - it carries nothing a visitor wrote and no link, so it cannot be used to send someone a lure
+ * - one notice per listing per hour, however many messages arrive
+ */
+async function notifyOwner(ctx: Ctx, listingId: string): Promise<"sent" | "recent" | "none"> {
+	if (!ctx.email || (await ctx.settings.get<boolean>("email_messages")) === false) return "none";
+	const owner = await listingOwner(ctx, listingId);
+	if (!owner || !EMAIL_RE.test(owner.email)) return "none";
+	const key = `notified:${listingId}`;
+	if (Date.now() - (Number(await ctx.kv.get<string>(key)) || 0) < RATE_WINDOW_MS) return "recent";
+	const site = asString(ctx.site?.name).replace(/\s+/g, " ").trim().slice(0, 80);
+	// Stamped before sending, so a burst of messages cannot each send one.
+	await ctx.kv.set(key, String(Date.now()));
+	try {
+		await ctx.email.send({
+			to: owner.email,
+			subject: "You have a new message about your listing",
+			text: `A visitor sent a message about one of your listings${site ? ` on ${site}` : ""}.\n\nSign in to your account on the site and open Messages to read it.`,
+		});
+		return "sent";
+	} catch {
+		return "none";
+	}
+}
+
 const NO_LISTING = { ok: false, error: { code: "NOT_FOUND", message: "That listing is not available." } };
 
 const SIGN_IN = { ok: false, error: { code: "SIGN_IN_REQUIRED", message: "Sign in to continue." } };
@@ -143,6 +191,12 @@ const RATE_LIMITED = { ok: false, error: { code: "RATE_LIMITED", message: "Too m
 
 const plugin: SandboxedPlugin = {
 	hooks: {
+		// The daily task set up when the owner saves an expiry period.
+		cron: {
+			handler: async (event, ctx) => {
+				if (event.name === "expire") await expireDue(ctx);
+			},
+		},
 		// Adds the rating to a listing page's structured data. Nothing for unrated listings.
 		"page:metadata": {
 			handler: async (event, ctx) => {
@@ -322,6 +376,7 @@ const plugin: SandboxedPlugin = {
 				await ctx.storage.submissions.put(created.id, {
 					listingId: created.id,
 					member_id: user.id,
+					member_email: asString(user.email),
 					title: parsed.data.title,
 					listing_type: listingType,
 					city: parsed.data.city,
@@ -446,6 +501,8 @@ const plugin: SandboxedPlugin = {
 				await ctx.storage.claims.put(id, {
 					listingId,
 					member_id: user.id,
+					// The signed-in account's own address. The one typed below is never mailed.
+					member_email: asString(user.email),
 					name: (asString(raw.name) || user.name || "").slice(0, REVIEW_TITLE_MAX),
 					email: asString(raw.email).slice(0, REVIEW_TITLE_MAX),
 					message: asString(raw.message).slice(0, REVIEW_BODY_MAX),
@@ -489,9 +546,27 @@ const plugin: SandboxedPlugin = {
 					ctx.storage.favorites.query(mine),
 					ctx.storage.submissions.query(mine),
 				]);
+				// Messages for listings this member added or won a claim on.
+				// ponytail: 25 listings, 10 messages each. Page it if an owner outgrows that.
+				const owned = [
+					...new Set([
+						...rows(listings).map((row) => asString(row.listingId) || row.id),
+						...rows(claims).filter((row) => row.status === "approved").map((row) => asString(row.listingId)),
+					]),
+				].slice(0, 25);
+				const inbox = {
+					items: (
+						await Promise.all(
+							owned.map((listingId) =>
+								ctx.storage.contacts.query({ where: { listingId }, orderBy: { createdAt: "desc" }, limit: 10 }),
+							),
+						)
+					).flatMap((found) => found.items),
+				};
 				// Names and links for every row, so the member never sees a bare id.
-				const all = [listings, reviews, claims, favorites].map(rows);
+				const all = [listings, reviews, claims, favorites, inbox].map(rows);
 				const refs = await listingRefs(ctx, all.flat().map((row) => asString(row.listingId)));
+				const days = await expiryDays(ctx);
 				const named = (items: ReturnType<typeof rows>, own = false) =>
 					items.map((row) => {
 						const ref = refs.get(asString(row.listingId));
@@ -500,6 +575,9 @@ const plugin: SandboxedPlugin = {
 							// A listing that is not public only shows the title the member typed themselves.
 							listing_title: ref?.published ? ref.title : own ? asString(row.title) : "",
 							listing_url: ref?.published ? `/listings/${ref.slug}/` : "",
+							...(own && ref?.published && days
+								? { expires_at: ref.expires_at, expired: ref.expired, can_renew: renewable(ref) }
+								: {}),
 						};
 					});
 				return {
@@ -510,11 +588,16 @@ const plugin: SandboxedPlugin = {
 						reviews: reviews.items.length,
 						claims: claims.items.length,
 						favorites: favorites.items.length,
+						messages: inbox.items.length,
 					},
 					listings: named(all[0], true),
 					reviews: named(all[1]),
 					claims: named(all[2]),
 					favorites: named(all[3]),
+					messages: named(all[4]).map((row) => {
+						const { status: _status, notice: _notice, ...rest } = row as Record<string, unknown>;
+						return rest;
+					}),
 				};
 			},
 		},
@@ -546,38 +629,13 @@ const plugin: SandboxedPlugin = {
 					// Capped so the admin table can show every character.
 					message: message.slice(0, 1000),
 					status: "new",
-					emailed: false,
+					notice: "none",
 					createdAt: nowIso(),
 				};
 				// Stored first, so a mail failure never loses the message.
 				await ctx.storage.contacts.put(id, row);
-				// Only ever to the address on the listing itself, plain text, behind the rate limit above.
-				// ctx.email is absent when the site has no mail provider.
-				if (
-					ctx.email &&
-					EMAIL_RE.test(listing.email) &&
-					(await ctx.settings.get<boolean>("email_messages")) !== false
-				) {
-					try {
-						await ctx.email.send({
-							to: listing.email,
-							replyTo: EMAIL_RE.test(row.email) ? row.email : undefined,
-							subject: `New message about ${listing.title}`.replace(/\s+/g, " ").slice(0, 150),
-							text: [
-								`Someone sent a message from your listing "${listing.title}".`,
-								"",
-								`From: ${row.name || "No name given"}${row.email ? ` (${row.email})` : ""}`,
-								"",
-								row.message,
-								"",
-								row.email ? "Reply to this email to answer them." : "They left no email address.",
-							].join("\n"),
-						});
-						await ctx.storage.contacts.put(id, { ...row, emailed: true });
-					} catch {
-						// Left as emailed: false. The Messages page shows it was not sent.
-					}
-				}
+				const notice = await notifyOwner(ctx, listingId);
+				if (notice !== "none") await ctx.storage.contacts.put(id, { ...row, notice });
 				return { ok: true, id };
 			},
 		},
@@ -683,23 +741,29 @@ const plugin: SandboxedPlugin = {
 				const user = routeCtx.user as Member | undefined;
 				if (!user) return SIGN_IN;
 				const listingId = asString(asRecord(routeCtx.input).listingId);
-				if (!listingId || !ctx.content?.update) {
+				if (!listingId) {
 					return { ok: false, error: { code: "VALIDATION_ERROR", message: "Listing is required." } };
 				}
 				const owner = asRecord(await ctx.storage.submissions.get(listingId)).member_id;
-				if (owner !== user.id && user.role < ADMIN_ROLE) {
+				if (owner !== user.id) {
 					return { ok: false, error: { code: "FORBIDDEN", message: "Only the listing owner can renew it." } };
 				}
-				const existing = await ctx.content.get?.(LISTINGS, listingId);
-				if (!existing) return { ok: false, error: { code: "NOT_FOUND" } };
-				const expires = new Date();
-				expires.setFullYear(expires.getFullYear() + 1);
-				await ctx.content.update(LISTINGS, listingId, {
-					...existing.data,
-					listing_status: "live",
-					expires_at: expires.toISOString(),
-				});
-				return { ok: true, listingId, listing_status: "live", expires_at: expires.toISOString() };
+				const days = await expiryDays(ctx);
+				const ref = (await listingRefs(ctx, [listingId])).get(listingId);
+				if (!days || !ref?.published || !renewable(ref)) {
+					return { ok: false, error: { code: "NOT_RENEWABLE", message: "This listing does not need renewing." } };
+				}
+				// Only these two fields, both set here. Nothing the member sent reaches the listing,
+				// and patchListing refuses when the listing has unpublished edits.
+				const expires_at = expiryFrom(days);
+				const patched = await patchListing(ctx, listingId, { listing_status: "live", expires_at });
+				if (patched.state !== "done") {
+					return {
+						ok: false,
+						error: { code: "BUSY", message: "This listing is being edited. Try again later." },
+					};
+				}
+				return { ok: true, listingId, expires_at };
 			},
 		},
 		admin: {
