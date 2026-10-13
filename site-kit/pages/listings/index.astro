@@ -51,7 +51,19 @@ const byCount = <T extends { label: string; count: number }>(map: Map<string, T>
 const categoryFacets = byCount(categoryCounts);
 const cityFacets = byCount(cityCounts);
 
-const filtered = sortListings(
+// Ratings live in plugin storage, so sorting by rating asks the plugin once. If that fails
+// the list keeps its normal order: the page never breaks over a sort.
+let ratings: Record<string, { average: number }> = {};
+if (sort === "rating") {
+	try {
+		const answer = await fetch(new URL("/_emdash/api/plugins/listora/ratings?all=1", Astro.url.origin));
+		ratings = (await answer.json())?.data?.ratings ?? {};
+	} catch {
+		ratings = {};
+	}
+}
+
+const matching = sortListings(
 	published.filter((entry) => {
 		if (type && entry.data.listing_type !== type) return false;
 		if (category && !inCategory(entry.data.id, category)) return false;
@@ -62,11 +74,20 @@ const filtered = sortListings(
 	}),
 	sort,
 );
-const featured = published.filter((entry) => entry.data.is_featured);
+const filtered =
+	sort === "rating"
+		? [...matching].sort((a, b) => (ratings[b.data.id]?.average ?? 0) - (ratings[a.data.id]?.average ?? 0))
+		: matching;
+const featured = published.filter((entry) => entry.data.is_featured).slice(0, 3);
+// The featured row shows on the plain directory only. Its listings are then left out of the
+// list below, so nothing appears twice. Counts still say how many listings there are in all.
+const showFeatured = featured.length > 0 && !q && !type && !location && !category;
+const featuredIds = new Set(showFeatured ? featured.map((entry) => entry.id) : []);
+const listed = filtered.filter((entry) => !featuredIds.has(entry.id));
 const PER_PAGE = 24;
-const pages = Math.max(1, Math.ceil(filtered.length / PER_PAGE));
+const pages = Math.max(1, Math.ceil(listed.length / PER_PAGE));
 const page = Math.min(Math.max(Number(Astro.url.searchParams.get("page")) || 1, 1), pages);
-const shown = filtered.slice((page - 1) * PER_PAGE, page * PER_PAGE);
+const shown = listed.slice((page - 1) * PER_PAGE, page * PER_PAGE);
 const querySuffix = [
 	type ? `type=${encodeURIComponent(type)}` : "",
 	q ? `q=${encodeURIComponent(q)}` : "",
@@ -112,7 +133,7 @@ function amenityList(value: unknown): string[] {
 			<a class="listora-btn" href="/listings/submit/">Add a listing</a>
 		</header>
 
-		<form class="listora-search" role="search" id="listora-search-form" data-zone={zone}>
+		<form class="listora-search" role="search" id="listora-search-form">
 			<div class="listora-search__bar">
 				<div class="listora-search__field listora-search__field--keyword">
 					<label class="listora-sr-only" for="listora-q">Search</label>
@@ -151,11 +172,6 @@ function amenityList(value: unknown): string[] {
 						placeholder="City or neighborhood"
 						autocomplete="off"
 					/>
-					<button class="listora-search__near-me" type="button" id="listora-near" aria-label="Find listings near your location">
-						<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-							<polygon points="3 11 22 2 13 21 11 13 3 11"></polygon>
-						</svg>
-					</button>
 				</div>
 				<button class="listora-btn listora-search__submit" type="submit">
 					<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
@@ -230,12 +246,13 @@ function amenityList(value: unknown): string[] {
 			) : null
 		}
 
+		<div id="listora-featured-slot">
 		{
-			featured.length > 0 && !q && !type && !location && !category ? (
+			showFeatured ? (
 				<section class="listora-featured" aria-label="Featured listings">
 					<h2 class="listora-meta">Featured</h2>
 					<div class="listora-featured__track">
-						{featured.slice(0, 3).map((listing) => (
+						{featured.map((listing) => (
 							<article class="listora-card">
 								<div class="listora-card-media">
 									{listing.data.featured_image ? (
@@ -258,6 +275,7 @@ function amenityList(value: unknown): string[] {
 				</section>
 			) : null
 		}
+		</div>
 
 		<div class="listora-toolbar">
 			<div id="listora-toolbar-count">{filtered.length === 1 ? "1 result" : `${filtered.length} results`}</div>
@@ -337,6 +355,7 @@ function amenityList(value: unknown): string[] {
 			}
 		</div>
 
+		<div id="listora-pager-slot">
 		{
 			pages > 1 ? (
 				<nav class="listora-pager" id="listora-pager" aria-label="Pages of listings">
@@ -346,7 +365,7 @@ function amenityList(value: unknown): string[] {
 				</nav>
 			) : null
 		}
-		<p class="listora-pager" id="listora-more" hidden><a class="listora-btn listora-btn--secondary" href="/listings/">See all results</a></p>
+		</div>
 
 		<div class="listora-skeletons" aria-hidden="true">
 			<div class="listora-skeleton"></div>
@@ -360,142 +379,73 @@ function amenityList(value: unknown): string[] {
 
 <link rel="stylesheet" href="/vendor/leaflet/leaflet.css" />
 <script>
-	import { api, isOpenNow, placeholderHtml, signInUrl } from "../../lib/listora";
+	import { api, signInUrl } from "../../lib/listora";
 
 	const form = document.getElementById("listora-search-form") as HTMLFormElement | null;
 	const q = document.getElementById("listora-q") as HTMLInputElement | null;
 	const locationInput = document.getElementById("listora-location") as HTMLInputElement | null;
 	const sortSelect = document.getElementById("listora-sort") as HTMLSelectElement | null;
 	const results = document.getElementById("listora-results");
-	const count = document.getElementById("listora-count");
-	const toolbar = document.getElementById("listora-toolbar-count");
 	const mapEl = document.getElementById("listora-map");
-	const featuredEl = document.querySelector(".listora-featured");
 	const clearBtn = document.getElementById("listora-clear") as HTMLButtonElement | null;
-	// The same zone the server used for the cards already on the page.
-	const zone = form?.dataset.zone || "UTC";
 	let activeType = new URLSearchParams(location.search).get("type") || "";
 	const activeCategory = new URLSearchParams(location.search).get("category") || "";
-	let near: { lat: string; lng: string } | null = null;
 
-	function escapeHtml(value: string) {
-		return value.replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char] || char);
-	}
+	// The parts of the page a search changes. Live search loads this same page for the new
+	// query and swaps them in, so there is one way a card is drawn: the server's.
+	const LIVE = ["listora-count", "listora-featured-slot", "listora-toolbar-count", "listora-results", "listora-pager-slot"];
 
-	function cardHtml(item: {
-		id: string;
-		slug: string;
-		title: string;
-		listing_type: string;
-		type_name: string;
-		city: string;
-		country: string;
-		excerpt: string;
-		is_featured: boolean;
-		rating_avg: number;
-		hours?: Array<{ day: number; open: string; close: string }>;
-		owner_name?: string;
-		amenities?: string[];
-		lat?: number;
-		lng?: number;
-	}) {
-		const place = [item.city, item.country].filter(Boolean).join(", ");
-		const amenities = (item.amenities || []).slice(0, 3).map((row) =>
-			row.replace(/[-_]/g, " ").replace(/\b\w/g, (char) => char.toUpperCase()),
-		);
-		return `<article class="listora-card" data-slug="${escapeHtml(item.slug)}" data-lat="${item.lat ?? ""}" data-lng="${item.lng ?? ""}">
-			<div class="listora-card-media">
-				${placeholderHtml(item.listing_type)}
-				<span class="listora-badge">${escapeHtml(item.type_name)}</span>
-				${item.is_featured ? '<span class="listora-badge listora-badge--featured">Featured</span>' : ""}
-				${item.rating_avg ? `<span class="listora-card__rating">${"★".repeat(Math.max(1, Math.round(item.rating_avg)))} ${item.rating_avg.toFixed(1)}</span>` : ""}
-				<button class="listora-card__favorite" type="button" data-favorite="${escapeHtml(item.id)}" aria-label="Save ${escapeHtml(item.title)}">
-					<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"></path></svg>
-				</button>
-			</div>
-			<div class="listora-card-body">
-				<h2><a href="/listings/${escapeHtml(item.slug)}/">${escapeHtml(item.title)}</a></h2>
-				<p class="listora-meta">
-					<span>${escapeHtml(place)}</span>
-					${item.hours?.length ? (isOpenNow(item.hours, zone) ? '<span class="listora-open">Open</span>' : '<span class="listora-closed">Closed</span>') : ""}
-				</p>
-				${item.owner_name ? `<p class="listora-meta">Listed by ${escapeHtml(item.owner_name)}</p>` : ""}
-				${amenities.length ? `<p class="listora-card__features">${amenities.map((row) => `<span>${escapeHtml(row)}</span>`).join("")}</p>` : ""}
-				${item.excerpt ? `<p>${escapeHtml(item.excerpt)}</p>` : ""}
-			</div>
-		</article>`;
-	}
-
-	function emptyHtml() {
-		return `<div class="listora-empty">
-			<div class="listora-empty__icon" aria-hidden="true"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.3-4.3"></path></svg></div>
-			<h2>No listings match</h2>
-			<p>Try another type or city. You can also add a listing.</p>
-			<a class="listora-btn" href="/listings/submit/">Add a listing</a>
-		</div>`;
-	}
-
-	async function runSearch(extra: Record<string, string> = {}) {
-		if (!results || !form) return;
-		// A category filter is applied by the page itself, so keep it by loading the filtered page.
-		if (activeCategory) {
-			window.location.href = `/listings/?${new URLSearchParams({
-				...(q?.value ? { q: q.value } : {}),
-				...(locationInput?.value ? { location: locationInput.value } : {}),
-				...(activeType ? { type: activeType } : {}),
-				...(sortSelect && sortSelect.value !== "featured" ? { sort: sortSelect.value } : {}),
-				category: activeCategory,
-			})}`;
-			return;
-		}
-		form.classList.add("is-busy");
-		form.setAttribute("aria-busy", "true");
+	function searchUrl(extra: Record<string, string> = {}): string {
 		const params = new URLSearchParams({
-			q: q?.value || "",
-			location: locationInput?.value || "",
-			listing_type: activeType,
-			sort: sortSelect?.value || "featured",
+			...(q?.value ? { q: q.value } : {}),
+			...(locationInput?.value ? { location: locationInput.value } : {}),
+			...(activeType ? { type: activeType } : {}),
+			...(activeCategory ? { category: activeCategory } : {}),
+			...(sortSelect && sortSelect.value !== "featured" ? { sort: sortSelect.value } : {}),
+			...(new URLSearchParams(location.search).get("view") === "list" ? { view: "list" } : {}),
 			...extra,
 		});
-		if (near) {
-			params.set("lat", near.lat);
-			params.set("lng", near.lng);
-			params.set("radius", "8");
+		const query = params.toString();
+		return query ? `/listings/?${query}` : "/listings/";
+	}
+
+	let latest = 0;
+	async function runSearch() {
+		if (!results || !form) return;
+		const url = searchUrl();
+		const mine = ++latest;
+		form.classList.add("is-busy");
+		form.setAttribute("aria-busy", "true");
+		let next: Document | null = null;
+		try {
+			const response = await fetch(url, { headers: { Accept: "text/html" } });
+			if (response.ok) next = new DOMParser().parseFromString(await response.text(), "text/html");
+		} catch {
+			next = null;
 		}
-		const data = await api(`search?${params}`);
-		form.classList.remove("is-busy");
-		form.removeAttribute("aria-busy");
-		if (!data.ok) {
-			results.innerHTML = `<div class="listora-empty" role="alert"><h2>Search is not available right now</h2><p>${escapeHtml(data.error?.message || "Try again in a moment.")}</p></div>`;
-			return;
-		}
-		const json = { data: data as { items?: Array<Parameters<typeof cardHtml>[0]>; total?: number } };
-		const items = json.data?.items ?? [];
-		const total = json.data?.total ?? items.length;
-		results.innerHTML = items.length === 0 ? emptyHtml() : items.map((item) => cardHtml(item)).join("");
-		if (count) count.textContent = total === 1 ? "1 listing" : `${total} listings`;
-		if (toolbar) toolbar.textContent = total === 1 ? "1 result" : `${total} results`;
-		// Live search shows the first page. The full list is the same query as a normal paged page.
-		document.getElementById("listora-pager")?.setAttribute("hidden", "");
-		const more = document.getElementById("listora-more");
-		const link = more?.querySelector("a");
-		if (more && link) {
-			more.hidden = total <= items.length;
-			const full = new URLSearchParams();
-			if (params.get("q")) full.set("q", params.get("q")!);
-			if (params.get("listing_type")) full.set("type", params.get("listing_type")!);
-			if (params.get("location")) full.set("location", params.get("location")!);
-			if (params.get("sort") && params.get("sort") !== "featured") full.set("sort", params.get("sort")!);
-			link.href = `/listings/?${full}`;
-			link.textContent = `See all ${total} results`;
-		}
-		if (featuredEl instanceof HTMLElement) {
-			featuredEl.hidden = Boolean(activeType || q?.value || locationInput?.value || near);
-		}
+		// A slower, older answer must not replace a newer one.
+		if (mine !== latest) return;
 		form.classList.remove("is-busy");
 		form.removeAttribute("aria-busy");
 		if (clearBtn) clearBtn.hidden = !(q?.value || "");
+		if (!next?.getElementById("listora-results")) {
+			results.innerHTML =
+				'<div class="listora-empty" role="alert"><h2>Search is not available right now</h2><p>Check your connection and try again.</p></div>';
+			return;
+		}
+		for (const id of LIVE) {
+			const from = next.getElementById(id);
+			const to = document.getElementById(id);
+			if (!from || !to) continue;
+			to.innerHTML = from.innerHTML;
+			if (id === "listora-results") to.className = from.className;
+		}
+		history.replaceState(null, "", url);
+		fillRatings();
+		drawMap();
 	}
+	// Back and forward bring the matching page.
+	window.addEventListener("popstate", () => location.reload());
 
 	// Ratings are not in the page HTML: they come from plugin storage in one request.
 	async function fillRatings() {
@@ -512,19 +462,17 @@ function amenityList(value: unknown): string[] {
 			node.setAttribute("aria-label", `Rated ${rating.average.toFixed(1)} out of 5 from ${rating.count} reviews`);
 		});
 	}
-	// Sorting by rating needs the stored ratings, so that order comes from the search route.
-	if (new URLSearchParams(location.search).get("sort") === "rating") runSearch();
-	else fillRatings();
+	fillRatings();
 
 	q?.addEventListener("input", () => {
 		if (clearBtn) clearBtn.hidden = !q.value;
 		window.clearTimeout((q as HTMLInputElement & { t?: number }).t);
-		(q as HTMLInputElement & { t?: number }).t = window.setTimeout(() => (activeCategory ? undefined : runSearch()), 220);
+		(q as HTMLInputElement & { t?: number }).t = window.setTimeout(() => runSearch(), 280);
 	});
 
 	locationInput?.addEventListener("input", () => {
 		window.clearTimeout((locationInput as HTMLInputElement & { t?: number }).t);
-		(locationInput as HTMLInputElement & { t?: number }).t = window.setTimeout(() => (activeCategory ? undefined : runSearch()), 220);
+		(locationInput as HTMLInputElement & { t?: number }).t = window.setTimeout(() => runSearch(), 280);
 	});
 
 	form?.addEventListener("submit", (event) => {
@@ -550,20 +498,6 @@ function amenityList(value: unknown): string[] {
 		runSearch();
 	});
 
-	document.getElementById("listora-near")?.addEventListener("click", () => {
-		navigator.geolocation?.getCurrentPosition(
-			(pos) => {
-				near = { lat: String(pos.coords.latitude), lng: String(pos.coords.longitude) };
-				runSearch();
-			},
-			() => {
-				near = { lat: "40.758", lng: "-73.985" };
-				if (locationInput) locationInput.value = "New York";
-				runSearch();
-			},
-		);
-	});
-
 	results?.addEventListener("click", async (event) => {
 		const button = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-favorite]");
 		if (!button) return;
@@ -580,26 +514,38 @@ function amenityList(value: unknown): string[] {
 		button.classList.toggle("is-on", !on);
 	});
 
-	if (mapEl) {
-		const points = [...document.querySelectorAll<HTMLElement>("[data-lat]")].flatMap((node) => {
+	// The map follows whatever cards are on the page, including after a live search.
+	type Leaflet = { map: Function; tileLayer: Function; marker: Function; layerGroup: Function };
+	let map: { setView: Function } | null = null;
+	let markers: { clearLayers: Function; addLayer: Function } | null = null;
+	function drawMap() {
+		if (!mapEl) return;
+		const points = [...document.querySelectorAll<HTMLElement>("#listora-results [data-lat]")].flatMap((node) => {
 			const lat = Number(node.dataset.lat);
 			const lng = Number(node.dataset.lng);
-			if (!Number.isFinite(lat) || !Number.isFinite(lng)) return [];
+			if (!node.dataset.lat || !Number.isFinite(lat) || !Number.isFinite(lng)) return [];
 			return [{ lat, lng, title: node.querySelector("h2")?.textContent ?? "" }];
 		});
-		if (points.length) {
-			mapEl.hidden = false;
-			const leaflet = document.createElement("script");
-			leaflet.src = "/vendor/leaflet/leaflet.js";
-			leaflet.onload = () => {
-				const L = (window as unknown as { L: { map: Function; tileLayer: Function; marker: Function } }).L;
-				const map = L.map(mapEl).setView([points[0].lat, points[0].lng], 12);
-				L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
-					attribution: "&copy; OpenStreetMap",
-				}).addTo(map);
-				for (const point of points) L.marker([point.lat, point.lng]).addTo(map).bindPopup(point.title);
-			};
-			document.body.append(leaflet);
-		}
+		mapEl.hidden = points.length === 0;
+		if (!points.length) return;
+		const place = (L: Leaflet) => {
+			if (!map) {
+				map = L.map(mapEl);
+				L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", { attribution: "&copy; OpenStreetMap" }).addTo(map);
+				markers = L.layerGroup().addTo(map);
+			}
+			markers?.clearLayers();
+			for (const point of points) markers?.addLayer(L.marker([point.lat, point.lng]).bindPopup(point.title));
+			map?.setView([points[0].lat, points[0].lng], 12);
+		};
+		const ready = (window as unknown as { L?: Leaflet }).L;
+		if (ready) return place(ready);
+		if (document.getElementById("listora-leaflet")) return;
+		const leaflet = document.createElement("script");
+		leaflet.id = "listora-leaflet";
+		leaflet.src = "/vendor/leaflet/leaflet.js";
+		leaflet.onload = () => drawMap();
+		document.body.append(leaflet);
 	}
+	drawMap();
 </script>

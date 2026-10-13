@@ -2,7 +2,7 @@
 
 Read this first in a new session. Then `AGENTS.md`, `CONTRIBUTING.md`, and `docs/website/getting-started/new-machine.md`.
 
-This product is Free only. No Pro. Work is tracked as GitHub issues under the `0.3.0`, `0.4.0` and `Later` milestones. Do not add Compare, Needs, credits, Google Maps, lead forms, verification, photo reviews, or native-plugin features.
+This product is Free only. No Pro. Work is tracked as GitHub issues under the `0.3.0`, `0.4.0` and `Later` milestones. There is no Basecamp board. Do not add Compare, Needs, credits, Google Maps, lead forms, verification, photo reviews, or native-plugin features.
 
 ## Where the code lives
 
@@ -73,10 +73,10 @@ Every case in `docs/qa/QA_CHECKLIST.md` is run in a browser as guest, subscriber
 | Categories | Filtering by category is done by the kit page, not the search route, so a search inside a category reloads the page |
 | Expiry | Off by default (0 days). The daily task is scheduled when the owner saves a number above 0. 50 listings per run |
 | Dashboard rows | Renew only. No edit |
-| Featured row | The same listings repeat at the top of the grid below it |
 | Banner | `images/banner.png` is the dark-text lockup on a transparent ground. Check it on the registry page |
 | No-photo listings | `placeholderHtml(type)` in the kit lib: a panel with a type icon. No stock photos. The owner-chosen default image is not built: EmDash's media picker cannot be used in a plugin admin form. It moves to the photos task (#25) |
-| Live search cards | Still a second copy of the card in the browser, so a live result never shows the listing's real photo. Task #51 |
+| Live search | Loads the directory page for the new query and swaps in its results (`LIVE` ids in `index.astro`). One card renderer: the server's. The plugin `search`, `listings` and `types` routes are not used by the kit; they stay as the public API |
+| Near me | Removed. EmDash core sends `Permissions-Policy: geolocation=()` on every page |
 | Time zone | The site's own, from EmDash settings (`siteZone` in the kit lib). The plugin never computes open or closed: the page does, because a plugin cannot read the site zone. Listings no longer store a zone |
 
 QA cases by role: `docs/qa/QA_CHECKLIST.md` (walk all of it before a release; `./scripts/lab-role.sh subscriber` for member cases). QA source: `docs/qa/`. Screen ticks: `docs/qa/screen-checklist.md`. Parked Pro: `docs/website/pro-features/parked-work.md`.

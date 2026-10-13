@@ -271,8 +271,7 @@
 	background: var(--listora-border-default);
 }
 
-.listora-search__clear,
-.listora-search__near-me {
+.listora-search__clear {
 	position: absolute;
 	top: 50%;
 	inset-inline-end: 0.25rem;
@@ -299,9 +298,7 @@
 }
 
 .listora-search__clear:hover,
-.listora-search__near-me:hover,
-.listora-search__clear:focus-visible,
-.listora-search__near-me:focus-visible {
+.listora-search__clear:focus-visible {
 	color: var(--listora-fg-default);
 	background: var(--listora-bg-muted);
 }

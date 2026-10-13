@@ -461,8 +461,11 @@ const plugin: SandboxedPlugin = {
 			cacheControl: CACHE,
 			methods: ["GET"],
 			handler: async (routeCtx, ctx) => {
-				const ids = asString(asRecord(routeCtx.input).ids).split(",").map((id) => id.trim()).filter(Boolean).slice(0, 80);
+				const raw = asRecord(routeCtx.input);
 				const all = await ratingsMap(ctx);
+				// The directory page asks for every rating when it sorts by rating.
+				if (asString(raw.all) === "1") return { ok: true, ratings: Object.fromEntries(all) };
+				const ids = asString(raw.ids).split(",").map((id) => id.trim()).filter(Boolean).slice(0, 80);
 				const ratings: Record<string, { average: number; count: number }> = {};
 				for (const id of ids) {
 					const rating = all.get(id);

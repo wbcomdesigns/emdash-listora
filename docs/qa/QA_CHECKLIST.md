@@ -49,12 +49,17 @@ Three roles, always in this order: **guest**, **member** (subscriber role), **ad
 | G-17 | Open the archive | Rated listings show stars and a number on the card after load. Unrated ones show nothing |
 | G-18 | Open `/listings/` | A Category row and a City row of chips, each with a count. Only categories and cities that have live listings |
 | G-19 | Click a category chip | Only that category's listings, the count matches the chip, the chip is marked active, the featured row is hidden. Click it again to clear |
-| G-20 | With a category active, type a search and press Search | The category stays applied. Typing alone does not reload the page |
+| G-20 | With a category active, type a search | The category stays applied and the page does not reload |
 | G-21 | Click a city chip | The city fills the location box and the list narrows to it |
 | G-22 | Change the site time zone in EmDash Settings, General, then open the directory, a listing and the calendar | Open and Closed badges, the "today" row in the hours table and event times all follow the new zone. Live search cards show the same badges as the page |
 | G-23 | A site with no time zone set | Pages work and use UTC |
 | G-24 | A listing with no photo, on a card, on its page and in live search | A coloured panel with an icon for its type. No photograph. Readable in light and dark. The network panel shows no image from another website |
 | G-25 | A listing with a photo: view the page source | `og:image` and the structured data image are the listing's own photo, as a full address. A listing with no photo has no share image |
+| G-26 | Type in the search box | Results change without a reload and keep each listing's real photo. The address bar shows the search. The map shows only the listings in the results |
+| G-27 | Open the plain directory | No listing in the Featured row appears again in the list below. The count still says how many listings there are in all, and the last page is reachable |
+| G-28 | Sort by Rating | Highest rated first, across pages |
+| G-29 | Block the request and type a search | "Search is not available right now", and the busy state clears |
+| G-30 | Search in list view, and inside a category | The view and the category stay |
 | G-12 | Request `import`, `dashboard`, `favorites`, `privacy` routes directly | 401 each | prove: guests refused |
 
 ## Member (subscriber role)

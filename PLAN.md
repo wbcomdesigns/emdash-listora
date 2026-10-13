@@ -50,8 +50,8 @@ Scoped with the owner on 2026-10-13. Every task is a GitHub issue under the `0.5
 | 1 | #27 | Settings page, and the queue page without settings. **Done 2026-10-13** |
 | 2 | #39 | Site time zone. **Done 2026-10-14** |
 | 3 | #38 | Placeholder. **Done 2026-10-14.** The owner-chosen default image moved to #25 |
-| 3b | #51 | Live search draws the page's own cards (found during #38) |
-| 4 | #44 | Featured listings shown once |
+| 3b | #51 | Live search draws the page's own cards. **Done 2026-10-14** |
+| 4 | #44 | Featured listings shown once. **Done 2026-10-14** |
 | 5 | #45 | Admin tables: paging and find by name |
 | 6 | #43 | Owner inbox: count and mark as done |
 | 7 | #42 | Email before expiry |
