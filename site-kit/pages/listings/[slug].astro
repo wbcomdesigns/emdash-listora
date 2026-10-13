@@ -7,7 +7,7 @@ import {
 	getTermsForEntries,
 } from "emdash";
 import { Image } from "emdash/ui";
-import Base from "../../layouts/Base.astro";
+import Layout from "../../layouts/ListoraLayout.astro";
 import {
 	asNumber,
 	coverUrl,
@@ -20,7 +20,6 @@ import {
 	websiteHref,
 	weekdayIndex,
 } from "../../lib/listora";
-import { resolveBlogSiteIdentity } from "../../utils/site-identity";
 import "../../styles/listora-ui.css";
 
 const slug = decodeSlug(Astro.params.slug);
@@ -30,7 +29,7 @@ const { entry: listing, cacheHint } = await getEmDashEntry("listings", slug);
 if (!listing) return Astro.rewrite("/404");
 if (Astro.cache?.enabled) Astro.cache.set(cacheHint);
 
-const { siteTitle } = resolveBlogSiteIdentity(await getSiteSettings());
+const siteTitle = (await getSiteSettings())?.title ?? "";
 const seo = getSeoMeta(listing, {
 	siteTitle,
 	siteUrl: Astro.url.origin,
@@ -86,7 +85,7 @@ const schema = {
 };
 ---
 
-<Base
+<Layout
 	title={seo.title}
 	pageTitle={seo.ogTitle}
 	description={seo.description || data.excerpt}
@@ -459,7 +458,7 @@ const schema = {
 			</div>
 		</article>
 	</div>
-</Base>
+</Layout>
 
 <link rel="stylesheet" href="/vendor/leaflet/leaflet.css" />
 <script>

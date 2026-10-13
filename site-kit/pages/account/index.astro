@@ -1,5 +1,5 @@
 ---
-import Base from "../../layouts/Base.astro";
+import Layout from "../../layouts/ListoraLayout.astro";
 import "../../styles/listora-ui.css";
 
 const tab = Astro.url.searchParams.get("tab") || "overview";
@@ -9,7 +9,7 @@ const user = Astro.locals.user as { name?: string | null; email?: string } | und
 const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.pathname + Astro.url.search)}`;
 ---
 
-<Base title="Your listings" description="Owner dashboard for listings, reviews, claims, and favorites.">
+<Layout title="Your listings" description="Owner dashboard for listings, reviews, claims, and favorites.">
 	<div class="listora-block">
 		<header class="listora-page-head">
 			<div>
@@ -79,7 +79,7 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 		</div>
 		) : null}
 	</div>
-</Base>
+</Layout>
 
 <script>
 	import { api, esc } from "../../lib/listora";

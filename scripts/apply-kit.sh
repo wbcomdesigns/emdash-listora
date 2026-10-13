@@ -9,8 +9,10 @@ if [[ ! -d "$LAB/src" ]]; then
 	exit 1
 fi
 
-mkdir -p "$LAB/src/styles" "$LAB/src/lib" "$LAB/src/pages/listings" "$LAB/src/pages/account"
+mkdir -p "$LAB/src/layouts" "$LAB/src/styles" "$LAB/src/lib" "$LAB/src/pages/listings" "$LAB/src/pages/account"
 
+# The owner edits this file to point at their own layout, so never overwrite it.
+[[ -f "$LAB/src/layouts/ListoraLayout.astro" ]] || cp "$PLUGIN/site-kit/layouts/ListoraLayout.astro" "$LAB/src/layouts/ListoraLayout.astro"
 cp "$PLUGIN/site-kit/listora-ui.css" "$LAB/src/styles/listora-ui.css"
 cp "$PLUGIN/site-kit/lib/listora.ts" "$LAB/src/lib/listora.ts"
 cp "$PLUGIN/site-kit/pages/listings/index.astro" "$LAB/src/pages/listings/index.astro"

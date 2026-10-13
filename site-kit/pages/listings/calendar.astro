@@ -1,6 +1,6 @@
 ---
 import { getEmDashCollection } from "emdash";
-import Base from "../../layouts/Base.astro";
+import Layout from "../../layouts/ListoraLayout.astro";
 import { formatEventWhen } from "../../lib/listora";
 import "../../styles/listora-ui.css";
 
@@ -15,7 +15,7 @@ const events = entries
 	.sort((a, b) => String(a.data.event_start).localeCompare(String(b.data.event_start)));
 ---
 
-<Base title="Listing calendar" description="Upcoming events in the Listora directory.">
+<Layout title="Listing calendar" description="Upcoming events in the directory.">
 	<div class="listora-block">
 		<header class="listora-page-head">
 			<div>
@@ -48,4 +48,4 @@ const events = entries
 			)
 		}
 	</div>
-</Base>
+</Layout>

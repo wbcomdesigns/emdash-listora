@@ -4,6 +4,8 @@ set -euo pipefail
 PLUGIN="${LISTORA_PLUGIN:-$(cd "$(dirname "$0")/.." && pwd)}"
 LAB="${LISTORA_LAB:-$(cd "$PLUGIN/.." && pwd)/emdash-local}"
 
+PORT="${LISTORA_PORT:-4321}"
+
 export LISTORA_PLUGIN="$PLUGIN"
 export LISTORA_LAB="$LAB"
 
@@ -39,10 +41,10 @@ fi
 cd "$LAB"
 npx astro dev stop || true
 mkdir -p data
-npx astro dev start --host 127.0.0.1 --port 4321 >/tmp/listora-lab.log 2>&1 &
+npx astro dev start --host 127.0.0.1 --port "$PORT" >/tmp/listora-lab.log 2>&1 &
 for _ in $(seq 1 40); do
-	if curl -sf http://127.0.0.1:4321/_emdash/api/plugins/listora/health >/dev/null; then
-		curl -sf "http://127.0.0.1:4321/_emdash/api/setup/dev-bypass?redirect=/_emdash/admin" >/dev/null
+	if curl -sf http://127.0.0.1:$PORT/_emdash/api/plugins/listora/health >/dev/null; then
+		curl -sf "http://127.0.0.1:$PORT/_emdash/api/setup/dev-bypass?redirect=/_emdash/admin" >/dev/null
 		echo "Lab is up and seeded"
 		exit 0
 	fi

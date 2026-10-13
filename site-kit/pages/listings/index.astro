@@ -1,7 +1,7 @@
 ---
 import { getEmDashCollection } from "emdash";
 import { Image } from "emdash/ui";
-import Base from "../../layouts/Base.astro";
+import Layout from "../../layouts/ListoraLayout.astro";
 import {
 	LISTING_TYPES,
 	coverUrl,
@@ -73,7 +73,7 @@ function amenityList(value: unknown): string[] {
 }
 ---
 
-<Base title="Listings" description="Browse the Listora directory. Search by type, place, or name.">
+<Layout title="Listings" description="Browse the directory. Search by type, place, or name.">
 	<div class="listora-block">
 		<header class="listora-page-head">
 			<div>
@@ -278,7 +278,7 @@ function amenityList(value: unknown): string[] {
 
 		<div id="listora-map" class="listora-map" hidden></div>
 	</div>
-</Base>
+</Layout>
 
 <link rel="stylesheet" href="/vendor/leaflet/leaflet.css" />
 <script>

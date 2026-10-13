@@ -173,6 +173,11 @@
 	margin-bottom: var(--listora-space-6);
 }
 
+/* A site may reset heading margins: keep the label off the cards. */
+.listora-featured > .listora-meta {
+	margin: 0 0 0.75rem;
+}
+
 .listora-featured__track {
 	display: grid;
 	grid-auto-flow: column;

@@ -1,5 +1,5 @@
 ---
-import Base from "../../layouts/Base.astro";
+import Layout from "../../layouts/ListoraLayout.astro";
 import { LISTING_TYPES } from "../../lib/listora";
 import "../../styles/listora-ui.css";
 
@@ -9,7 +9,7 @@ const user = Astro.locals.user;
 const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.pathname)}`;
 ---
 
-<Base
+<Layout
 	title="Add a listing"
 	description="Submit a directory listing in five steps. New listings stay in review until they are published."
 >
@@ -191,7 +191,7 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 		</Fragment>
 		) : null}
 	</div>
-</Base>
+</Layout>
 
 <script>
 	import { api, esc } from "../../lib/listora";

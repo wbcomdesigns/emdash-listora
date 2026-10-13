@@ -8,7 +8,9 @@ Last walk: 2026-10-13, version 0.4.1, on the lab, as guest, subscriber and admin
 
 In the browser, on the rendered pages: G-1 to G-17, M-1 to M-9, M-13, M-15, P-1 to P-8 (five pages at 1440, 768 and 390 for sideways scroll, raw ids and tap targets; contrast at 1440 and 390 in light and dark). From the signed-in browser session against the real routes, then checked on the public page: M-10 to M-12, M-14, A-1 to A-11, A-13 to A-16. The Reviews and Messages admin pages were also clicked through in the EmDash admin itself. Covered by an automated test only, because the lab cannot remove its collection: A-12.
 
-Not done by hand: a screen reader pass, right-to-left layout, and a clean second-site install.
+Second site, 2026-10-13 (after 0.4.1): the kit was applied to a clean `portfolio` template site and walked there. P-9 passed: all five pages render inside that site's own header, colours and fonts with no sideways scroll at 1440 and 390 in light and dark; a subscriber added a listing, a review and a favourite; an admin approved both and they showed on the public pages.
+
+Not done by hand: a screen reader pass, right-to-left layout, and a preview deploy of a live site.
 
 ## Setup
 
@@ -102,6 +104,7 @@ Screens: archive, detail, submit, calendar, account, and the three admin pages. 
 | P-6 | Empty, error and busy states | Each list has an empty state with a next step. Failed requests show a message, never a blank area |
 | P-7 | Names, not ids | No screen shows a raw id where a listing or member name belongs |
 | P-8 | Images | No broken images. Covers keep their shape while loading |
+| P-9 | Second site | On a site that is not the starter (see `ops/handoff.md`), the five pages render inside that site's layout and follow its colours and fonts. Add a listing and a review as a subscriber, approve both as admin, and see them live |
 
 ## Known gaps (do not fail a release on these, do not hide them)
 

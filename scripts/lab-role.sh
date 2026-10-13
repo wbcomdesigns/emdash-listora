@@ -6,6 +6,7 @@ set -euo pipefail
 PLUGIN="${LISTORA_PLUGIN:-$(cd "$(dirname "$0")/.." && pwd)}"
 LAB="${LISTORA_LAB:-$(cd "$PLUGIN/.." && pwd)/emdash-local}"
 DB="$LAB/data/emdash.db"
+[[ -f "$DB" ]] || DB="$LAB/data.db"
 
 case "${1:-}" in
 	subscriber) level=10 ;;
@@ -19,4 +20,4 @@ esac
 [[ -f "$DB" ]] || { echo "Lab database not found at $DB. Run scripts/reset-lab.sh first." >&2; exit 1; }
 sqlite3 "$DB" "update users set role = $level where email = 'dev@emdash.local';"
 echo "Lab dev account is now: $1 ($(sqlite3 "$DB" "select role from users where email = 'dev@emdash.local';"))"
-echo "Sign in: http://localhost:4321/_emdash/api/setup/dev-bypass?redirect=/account/"
+echo "Sign in: http://localhost:${LISTORA_PORT:-4321}/_emdash/api/setup/dev-bypass?redirect=/account/"

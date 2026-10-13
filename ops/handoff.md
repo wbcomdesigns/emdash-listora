@@ -41,7 +41,7 @@ npm install --legacy-peer-deps
 ./scripts/prove-lab.sh --all
 ```
 
-Override lab folder with `LISTORA_LAB`. After a kit change: edit `site-kit/`, then `./scripts/apply-kit.sh`. After a plugin change: `npm run build`, then restart the lab dev server (reset-lab also wipes the lab database). Sign in on the lab with `/_emdash/api/setup/dev-bypass?redirect=/account/`.
+Override lab folder with `LISTORA_LAB`. After a kit change: edit `site-kit/`, then `./scripts/apply-kit.sh`. Second site for proving the kit off the starter: `npm create emdash@latest -- emdash-lab-listora2 --template portfolio --platform node --pm npm --yes` beside this repo, then run the lab scripts with `LISTORA_LAB=../emdash-lab-listora2 LISTORA_PORT=4322` (and `LISTORA_BASE=http://localhost:4322` for `prove-lab.sh`). After a plugin change: `npm run build`, then restart the lab dev server (reset-lab also wipes the lab database). Sign in on the lab with `/_emdash/api/setup/dev-bypass?redirect=/account/`.
 
 `emdash-plugin publish` needs `vapvarun.bsky.social`. Open a PR. The publisher ships after merge.
 
@@ -69,7 +69,7 @@ Every case in `docs/qa/QA_CHECKLIST.md` is run in a browser as guest, subscriber
 
 | Item | Note |
 | --- | --- |
-| Second-site apply | Kit pages still import the starter's `layouts/Base.astro` and `utils/site-identity`. Not proven on a clean site |
+| Live-site preview | Kit is proven on a clean second site (`portfolio` template). Not yet proven on a preview deploy of a live fleet site (Cloudflare, EmDash 1.1) |
 | Directory size | Reads at most 500 listings and filters in memory |
 | Contact | Shown in the Messages admin page. Not emailed to anyone |
 | Dashboard rows | Read only. No edit or renew action |
