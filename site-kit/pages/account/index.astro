@@ -33,7 +33,7 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 				<a class:list={{ "listora-chip": true, "is-active": tab === "overview" }} href="/account/">Overview</a>
 				<a class:list={{ "listora-chip": true, "is-active": tab === "listings" }} href="/account/?tab=listings">My listings</a>
 				<a class:list={{ "listora-chip": true, "is-active": tab === "reviews" }} href="/account/?tab=reviews">Reviews</a>
-				<a class:list={{ "listora-chip": true, "is-active": tab === "messages" }} href="/account/?tab=messages">Messages</a>
+				<a class:list={{ "listora-chip": true, "is-active": tab === "messages" }} href="/account/?tab=messages">Messages<span id="dash-messages-count" class="listora-chip__count" hidden></span></a>
 				<a class:list={{ "listora-chip": true, "is-active": tab === "claims" }} href="/account/?tab=claims">Claims</a>
 				<a class:list={{ "listora-chip": true, "is-active": tab === "favorites" }} href="/account/?tab=favorites">Favorites</a>
 				<a class:list={{ "listora-chip": true, "is-active": tab === "profile" }} href="/account/?tab=profile">Profile</a>
@@ -147,6 +147,19 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 	}
 
 	document.addEventListener("click", async (event) => {
+		const button = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-message]");
+		if (!button) return;
+		button.disabled = true;
+		const data = await api("message", { id: button.dataset.message, done: button.dataset.done === "1" });
+		if (data.ok) return load();
+		button.disabled = false;
+		button.insertAdjacentHTML(
+			"afterend",
+			` <span class="listora-status" data-tone="error" role="alert">${esc(data.error?.message || "Could not update that message.")}</span>`,
+		);
+	});
+
+	document.addEventListener("click", async (event) => {
 		const button = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-renew]");
 		if (!button) return;
 		button.disabled = true;
@@ -179,6 +192,13 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 				.map(([key, value]) => `<span class="listora-chip">${esc(LABELS[key] ?? key)}: ${esc(value)}</span>`)
 				.join(""),
 		);
+		const fresh = Number((data.counts as Record<string, number> | undefined)?.messages) || 0;
+		const badge = document.getElementById("dash-messages-count");
+		if (badge) {
+			badge.hidden = fresh === 0;
+			badge.textContent = String(fresh);
+			badge.setAttribute("aria-label", `${fresh} new`);
+		}
 		type Rows = Array<Record<string, unknown>>;
 		fill("dash-listings", list(data.listings as Rows, ["city", "status"]));
 		fill("dash-reviews", list(data.reviews as Rows, ["body", "status"]));
@@ -193,7 +213,10 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 							const from = esc(item.name || "No name given");
 							const mail = item.email ? ` · <a href="mailto:${esc(item.email)}">${esc(item.email)}</a>` : "";
 							const day = esc(String(item.createdAt || "").slice(0, 10));
-							return `<li class="listora-review"><strong>${esc(item.listing_title || "Listing")}</strong> · ${from}${mail} · ${day}<p>${esc(item.message)}</p></li>`;
+							// "New" is said in words, not by colour alone.
+							const state = item.done ? "" : '<span class="listora-badge listora-badge--new">New</span> ';
+							const button = `<button type="button" class="listora-btn listora-btn--secondary" data-message="${esc(item.id)}" data-done="${item.done ? "0" : "1"}">${item.done ? "Mark as new" : "Mark as done"}</button>`;
+							return `<li class="listora-review${item.done ? " is-done" : ""}">${state}<strong>${esc(item.listing_title || "Listing")}</strong> · ${from}${mail} · ${day}<p>${esc(item.message)}</p>${button}</li>`;
 						})
 						.join("")}</ul>`
 				: `<div class="listora-empty"><h2>No messages yet</h2><p>Messages from your listing pages show here.</p></div>`,

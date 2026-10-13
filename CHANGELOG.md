@@ -23,6 +23,7 @@ Copy `site-kit/` again after you update, including the new `site-kit/layouts/Lis
 - New      - Browse by category and by city on the directory page, with a count on each. A category on a listing page links to its filtered list.
 - New      - The add-a-listing form offers the site's own categories and saves the choice on the listing. Needs one new permission: reading and assigning categories.
 - New      - Messages tab in the owner's account: the member who added or claimed a listing reads the messages visitors send about it.
+- New      - The owner's Messages tab shows how many are new, marks new ones in words, and lets the owner mark a message as done or as new again.
 - New      - Once an hour the owner gets a short email saying messages are waiting. It goes to their account email and carries no visitor text. Needs a mail provider on the site and one new permission: sending email. A setting turns it off.
 - New      - Listing expiry. Set how many days a listing stays live (0 means never). A daily check takes expired listings out of the directory, and the owner can renew from their account.
 - Fix      - Renew now works and has a button. Before, it saved a change that never went live.

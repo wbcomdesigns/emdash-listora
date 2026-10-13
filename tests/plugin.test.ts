@@ -389,6 +389,20 @@ describe("contact messages", () => {
 		expect(own).not.toHaveProperty("member_id");
 		expect(own).not.toHaveProperty("member_email");
 
+		// The owner marks one as done: it moves to the bottom and leaves the count. Another member cannot.
+		const first = ((await route("dashboard", {}, { user: ana })) as { messages: Array<{ id: string; done: boolean }>; counts: { messages: number } });
+		expect(first.counts.messages).toBe(2);
+		expect(await route("message", { id: first.messages[0].id, done: true }, { method: "POST", user: ben })).toMatchObject({ ok: false, error: { code: "NOT_FOUND" } });
+		expect(await route("message", { id: "no-such-message", done: true }, { method: "POST", user: ana })).toMatchObject({ ok: false, error: { code: "NOT_FOUND" } });
+		expect(await route("message", { id: first.messages[0].id, done: true }, { method: "POST" })).not.toMatchObject({ ok: true });
+		expect(await route("message", { id: first.messages[0].id, done: true }, { method: "POST", user: ana })).toMatchObject({ ok: true, done: true });
+		const second = ((await route("dashboard", {}, { user: ana })) as typeof first);
+		expect(second.counts.messages).toBe(1);
+		expect(second.messages.map((item) => item.done)).toEqual([false, true]);
+		// The admin's own flag is untouched.
+		expect(await rt.inspect.storage.get("contacts", first.messages[0].id)).toMatchObject({ status: "new", owner_done: true });
+		await route("message", { id: first.messages[0].id, done: false }, { method: "POST", user: ana });
+
 		// Ben claims the listing and the claim is approved: the inbox and the notices move to Ben.
 		await route("claims", { listingId: id, name: "Ben", email: "typed@elsewhere.test", message: "It is mine" }, { method: "POST", user: ben });
 		const claim = (await rt.inspect.storage.list<{ rev: string }>("claims"))[0];

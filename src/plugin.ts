@@ -649,17 +649,40 @@ const plugin: SandboxedPlugin = {
 						reviews: reviews.items.length,
 						claims: claims.items.length,
 						favorites: favorites.items.length,
-						messages: inbox.items.length,
+						// What still needs the owner: the tab shows this number.
+						messages: inbox.items.filter((item) => asRecord(item.data).owner_done !== true).length,
 					},
 					listings: named(all[0], true),
 					reviews: named(all[1]),
 					claims: named(all[2]),
 					favorites: named(all[3]),
-					messages: named(all[4]).map((row) => {
-						const { status: _status, notice: _notice, ...rest } = row as Record<string, unknown>;
-						return rest;
-					}),
+					// New ones first. "Done" is the owner's own mark, separate from the admin's handled flag.
+					messages: named(all[4])
+						.map((row) => {
+							const { status: _status, notice: _notice, owner_done, tries: _tries, ...rest } = row as Record<string, unknown>;
+							return { ...rest, done: owner_done === true };
+						})
+						.sort((x, y) => Number(x.done) - Number(y.done)),
 				};
+			},
+		},
+		// The listing owner marks a message as done or as new again. Their own mark only.
+		message: {
+			permission: MEMBER,
+			methods: ["POST"],
+			handler: async (routeCtx, ctx) => {
+				const user = routeCtx.user as Member | undefined;
+				if (!user) return SIGN_IN;
+				const raw = asRecord(routeCtx.input);
+				const id = asString(raw.id);
+				const row = asRecord(await ctx.storage.contacts.get(id));
+				// The same answer for "no such message" and "not yours", so ids cannot be probed.
+				if (!row.listingId || (await listingOwner(ctx, asString(row.listingId))) !== user.id) {
+					return { ok: false, error: { code: "NOT_FOUND", message: "That message is not available." } };
+				}
+				// Guarded in the database: only this one field, and only if the row still exists.
+				await ctx.storage.contacts.updateIf(id, { where: {}, set: { owner_done: raw.done === true } });
+				return { ok: true, id, done: raw.done === true };
 			},
 		},
 		contact: {

@@ -511,6 +511,19 @@ ul.listora-chips {
 	display: block;
 }
 
+.listora-badge--new {
+	background: var(--listora-primary-bg, var(--listora-primary));
+	color: var(--listora-primary-fg);
+}
+
+.listora-review.is-done {
+	opacity: 0.72;
+}
+
+.listora-review > .listora-btn {
+	margin-block-start: var(--listora-space-2);
+}
+
 /* A listing with no photo: the site's own colour, an icon for its type, and no outside image. */
 .listora-placeholder {
 	display: grid;

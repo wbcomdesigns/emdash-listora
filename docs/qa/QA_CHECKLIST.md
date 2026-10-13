@@ -85,6 +85,10 @@ Three roles, always in this order: **guest**, **member** (subscriber role), **ad
 | M-18 | Call `renew` for someone else's listing | Refused | same test |
 | M-19 | Add a listing and pick a category on step 4 | The list shows the site's own categories plus "No category". After approval the listing page shows the category as a link, and the directory count for it goes up by one | |
 | M-20 | Add an event: the Starts and Ends fields | Date-and-time pickers. The help says the site's time zone. After approval the calendar shows the time exactly as entered |
+| M-21 | Open Messages as a listing owner with two new messages | The tab shows 2. Each message carries the word New and a Mark as done button |
+| M-22 | Mark one as done, reload | The count drops to 1, the message moves to the bottom without the New mark, and stays so after reload. Mark as new puts it back |
+| M-23 | Block the request and press Mark as done | A message says it could not be done, and the button works again |
+| M-24 | Call `message` for a message on someone else's listing, or with a made-up id | The same "not available" answer for both | notifies the current owner from the hourly task |
 | M-13 | Dashboard at 390 | Tabs are one sideways-scrolling row. Content starts above the fold | |
 
 ## Admin
