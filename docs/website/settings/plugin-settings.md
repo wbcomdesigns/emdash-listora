@@ -2,14 +2,14 @@
 
 **Included in Free**
 
-Settings live on the Listora queue page in EmDash admin. There is not a separate settings IA yet.
+Settings are a page of their own: `/_emdash/admin/plugins/listora/settings`. Each group is a tab with one Save.
 
-| Setting | What it does | Default |
+| Tab | What it does | Default |
 | --- | --- | --- |
-| Require moderation | Keep public submissions as drafts until someone approves them | On |
-| Default listing type | Type pre-selected on submit | Business |
-| Spam keywords | Comma-separated words that reject a public submit | `viagra, crypto pump` |
-
-Open: `/_emdash/admin/plugins/listora/queue`
+| Submissions | Approve listings before they show, the type already selected on the form, and blocked words | Approval on, type Business, words `viagra, crypto pump` |
+| Listing lifetime | Days before a listing expires (0 means never), and a reminder 7 days before | 0, reminder on |
+| Photos | How many photos an owner may add. 0 turns owner photos off | 5 |
+| Messages | Email the owner when a message arrives | On |
+| Import and export | A link to `/listings/import/` on the site. Nothing on this tab is saved |  |
 
 A later settings page should split submit, search, maps, reviews, and spam the way WordPress Listora does. Until then, do not add settings only in code. Declare them in `emdash-plugin.jsonc` `admin.settingsSchema` so the host encrypts secrets and the consent dialog stays honest.

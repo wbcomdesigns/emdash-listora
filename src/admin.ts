@@ -64,14 +64,18 @@ const PAGE = 25;
 // ponytail: reads at most this many waiting rows per list. A site with more waiting than
 // this needs a paged storage query; the count line says when the list is cut.
 const LIST_CAP = 300;
-type View = { show: number; find: string };
+type View = { show: number; find: string; open: string };
 type Stored = { id: string; data: unknown };
 
 // What the admin is looking at is kept per list, so a decision keeps the place.
 // ponytail: one saved view per list, shared by every admin. Fine for a moderation queue.
 async function viewOf(ctx: PluginContext, list: string): Promise<View> {
 	const saved = asRecord(await ctx.kv.get(`view:${list}`));
-	return { show: Math.min(Math.max(Number(saved.show) || PAGE, PAGE), LIST_CAP), find: asString(saved.find).slice(0, 80) };
+	return {
+		show: Math.min(Math.max(Number(saved.show) || PAGE, PAGE), LIST_CAP),
+		find: asString(saved.find).slice(0, 80),
+		open: asString(saved.open),
+	};
 }
 
 function page<T extends Stored>(items: T[], text: (item: T) => string, view: View) {
@@ -84,23 +88,25 @@ function page<T extends Stored>(items: T[], text: (item: T) => string, view: Vie
 	};
 }
 
-/** The find box, and a line saying how much of the list is on screen. */
+/** The find box on every list. The count line appears once the list is cut or a search is on. */
 function findBlocks(list: string, view: View, shown: number, total: number, waiting: number): BlockMap[] {
-	if (waiting <= PAGE && !view.find) return [];
-	return [
+	const blocks: BlockMap[] = [
 		{
 			type: "form",
 			block_id: `${list}_find`,
 			fields: [{ type: "text_input", action_id: "find", label: "Find in this list", initial_value: view.find }],
 			submit: { label: view.find ? "Find again" : "Find", action_id: `${list}_find` },
 		},
-		{
+	];
+	if (view.find || shown < total || waiting >= LIST_CAP) {
+		blocks.push({
 			type: "context",
 			text: view.find
 				? `Showing ${shown} of ${total} that contain "${view.find}". Clear the box and press Find to see everything.`
 				: `Showing ${shown} of ${total}.${waiting >= LIST_CAP ? ` Only the newest ${LIST_CAP} are listed: decide some to reach older ones.` : ""}`,
-		},
-	];
+		});
+	}
+	return blocks;
 }
 
 const lowerText = (...parts: unknown[]) => parts.map((part) => asString(part)).join(" ");
@@ -250,10 +256,6 @@ export async function renderQueue(
 			{ type: "header", text: "Listings queue" },
 			...onboardBlocks,
 			{
-				type: "section",
-				text: "Moderate directory submissions and publish listings.",
-			},
-			{
 				type: "stats",
 				items: [
 					{ label: "Pending", value: pendingCount },
@@ -261,7 +263,6 @@ export async function renderQueue(
 					{ label: "Rejected", value: rejectedCount },
 				],
 			},
-			{ type: "header", text: "Pending queue" },
 			...queueBlocks,
 			...(await editBlocks(ctx)),
 			...(await photoBlocks(ctx)),
@@ -352,7 +353,18 @@ async function photoBlocks(ctx: PluginContext): Promise<BlockMap[]> {
 						type: "actions",
 						elements: [
 							{ type: "button", label: "Approve the photo", action_id: "photo_mod", style: "primary", value: stamped("approve", item.id, photo) },
-							{ type: "button", label: "Reject and delete", action_id: "photo_mod", value: stamped("reject", item.id, photo) },
+							{
+								type: "button",
+								label: "Reject and delete",
+								action_id: "photo_mod",
+								value: stamped("reject", item.id, photo),
+								confirm: {
+									title: "Delete this photo?",
+									text: "The file is removed. This cannot be undone.",
+									confirm: "Delete",
+									deny: "Cancel",
+								},
+							},
 						],
 					},
 				],
@@ -399,11 +411,16 @@ async function renderReviewQueue(
 	ctx: PluginContext,
 	extra?: Pick<BlockResponse, "toast">,
 ): Promise<BlockResponse> {
-	const pending = await ctx.storage.reviews.query({
-		where: { status: "pending" },
-		orderBy: { createdAt: "desc" },
-		limit: LIST_CAP,
-	});
+	const [pendingCount, publishedCount, rejectedCount, pending] = await Promise.all([
+		ctx.storage.reviews.count({ status: "pending" }),
+		ctx.storage.reviews.count({ status: "published" }),
+		ctx.storage.reviews.count({ status: "rejected" }),
+		ctx.storage.reviews.query({
+			where: { status: "pending" },
+			orderBy: { createdAt: "desc" },
+			limit: LIST_CAP,
+		}),
+	]);
 	const titles = await listingTitles(ctx, pending.items);
 	const view = await viewOf(ctx, "reviews");
 	const listed = page(pending.items, (row) => lowerText(titles.get(asString(asRecord(row.data).listingId)), asRecord(row.data).title, asRecord(row.data).body, asRecord(row.data).author), view);
@@ -430,8 +447,12 @@ async function renderReviewQueue(
 		blocks: [
 			{ type: "header", text: "Reviews" },
 			{
-				type: "section",
-				text: "Approve public reviews. Pending reviews stay off the listing.",
+				type: "stats",
+				items: [
+					{ label: "Pending", value: pendingCount },
+					{ label: "Published", value: publishedCount },
+					{ label: "Rejected", value: rejectedCount },
+				],
 			},
 			...findBlocks("reviews", view, rows.length, listed.total, pending.items.length),
 			rows.length === 0
@@ -461,11 +482,16 @@ async function renderClaimQueue(
 	ctx: PluginContext,
 	extra?: Pick<BlockResponse, "toast">,
 ): Promise<BlockResponse> {
-	const pending = await ctx.storage.claims.query({
-		where: { status: "pending" },
-		orderBy: { createdAt: "desc" },
-		limit: LIST_CAP,
-	});
+	const [pendingCount, approvedCount, rejectedCount, pending] = await Promise.all([
+		ctx.storage.claims.count({ status: "pending" }),
+		ctx.storage.claims.count({ status: "approved" }),
+		ctx.storage.claims.count({ status: "rejected" }),
+		ctx.storage.claims.query({
+			where: { status: "pending" },
+			orderBy: { createdAt: "desc" },
+			limit: LIST_CAP,
+		}),
+	]);
 	const titles = await listingTitles(ctx, pending.items);
 	const view = await viewOf(ctx, "claims");
 	const listed = page(pending.items, (row) => lowerText(titles.get(asString(asRecord(row.data).listingId)), asRecord(row.data).name, asRecord(row.data).email, asRecord(row.data).message), view);
@@ -491,11 +517,18 @@ async function renderClaimQueue(
 		blocks: [
 			{ type: "header", text: "Claims" },
 			{
-				type: "section",
-				text: "People saying they own a listing.",
+				type: "stats",
+				items: [
+					{ label: "Pending", value: pendingCount },
+					{ label: "Approved", value: approvedCount },
+					{ label: "Rejected", value: rejectedCount },
+				],
 			},
+			...findBlocks("claims", view, rows.length, listed.total, pending.items.length),
 			rows.length === 0
-				? { type: "empty", title: "No pending claims", description: "Claim requests wait here." }
+				? view.find
+					? { type: "empty", title: "Nothing matches", description: "No waiting claim contains that text." }
+					: { type: "empty", title: "No pending claims", description: "Claim requests wait here." }
 				: {
 						type: "table",
 						page_action_id: "claims_page",
@@ -567,141 +600,140 @@ function renderOnboardBlocks(onboard: Awaited<ReturnType<typeof getOnboardState>
 	];
 }
 
-const HELP = {
-	submissions: [
-		"Approve listings before they show: when on, a new listing waits in the Listings queue. When off, it goes live at once.",
-		"Default listing type: the type already selected on the add-a-listing form.",
-		"Blocked words: a listing that contains any of these words is refused. Separate them with commas.",
-	],
-	lifetime: [
-		"Listings expire after this many days: 0 means listings never expire. Above 0, a listing leaves the directory after that many days, its page says it has expired, and its owner can renew it from their account.",
-		"Email the owner 7 days before: one short notice to the owner's account email, telling them to sign in and renew. Needs email set up on your site.",
-	],
-	photos: [
-		"Photos an owner may add: the owner adds photos from their account, up to this number per listing, JPEG, PNG or WebP, 5 MB each. Each photo waits in the Listings queue until you approve it. 0 turns owner photos off. You can always add photos yourself by editing the listing.",
-	],
-	messages: [
-		"Email the listing owner when a message arrives: one short notice an hour to the owner's account email. The message itself stays on the site. Needs email set up on your site.",
-	],
-};
-
-const lines = (items: string[]) => items.map((text) => ({ type: "context", text }));
-
 export async function renderSettings(
 	ctx: PluginContext,
 	extra?: Pick<BlockResponse, "toast">,
 ): Promise<BlockResponse> {
 	const settings = await loadSettings(ctx);
+	const importUrl = /^https?:\/\//.test(asString(ctx.site?.url))
+		? new URL("/listings/import/", asString(ctx.site.url)).href
+		: "";
 	return {
 		blocks: [
 			{ type: "header", text: "Settings" },
-			{ type: "section", text: "Each group saves on its own." },
-			{ type: "header", text: "Submissions" },
-			...lines(HELP.submissions),
 			{
-				type: "form",
-				block_id: "settings_submissions",
-				fields: [
+				type: "tab",
+				panels: [
 					{
-						type: "toggle",
-						action_id: "require_moderation",
-						label: "Approve listings before they show",
-						initial_value: settings.requireModeration,
+						label: "Submissions",
+						blocks: [
+							{ type: "context", text: "New listings wait in the queue until you approve them, unless you turn that off." },
+							{
+								type: "form",
+								block_id: "settings_submissions",
+								fields: [
+									{
+										type: "toggle",
+										action_id: "require_moderation",
+										label: "Approve listings before they show",
+										initial_value: settings.requireModeration,
+									},
+									{
+										type: "select",
+										action_id: "default_listing_type",
+										label: "Default listing type",
+										initial_value: settings.defaultListingType,
+										options: LISTING_TYPES.map((type) => ({ label: type.name, value: type.slug })),
+									},
+									{
+										type: "text_input",
+										action_id: "spam_keywords",
+										label: "Blocked words, separated by commas",
+										initial_value: settings.spamKeywords,
+									},
+								],
+								submit: { label: "Save", action_id: "save_submissions" },
+							},
+						],
 					},
 					{
-						type: "select",
-						action_id: "default_listing_type",
-						label: "Default listing type",
-						initial_value: settings.defaultListingType,
-						options: LISTING_TYPES.map((type) => ({ label: type.name, value: type.slug })),
+						label: "Listing lifetime",
+						blocks: [
+							{ type: "context", text: "0 means a listing never expires. Above 0, it leaves the directory after that many days and its owner can renew it." },
+							{
+								type: "form",
+								block_id: "settings_lifetime",
+								fields: [
+									{
+										type: "number_input",
+										action_id: "expiry_days",
+										label: "Days before a listing expires",
+										min: 0,
+										max: 3650,
+										initial_value: settings.expiryDays,
+									},
+									{
+										type: "toggle",
+										action_id: "email_expiry",
+										label: "Email the owner 7 days before",
+										initial_value: settings.emailExpiry,
+									},
+								],
+								submit: { label: "Save", action_id: "save_lifetime" },
+							},
+						],
 					},
 					{
-						type: "text_input",
-						action_id: "spam_keywords",
-						label: "Blocked words",
-						initial_value: settings.spamKeywords,
+						label: "Photos",
+						blocks: [
+							...(settings.galleryReady
+								? []
+								: [
+										{
+											type: "banner",
+											title: "Owner photos need a Photos field",
+											description: "Run the setup command from the install guide. It adds the field. If you created listings by hand, add a repeater field called gallery with one image inside it named image.",
+											variant: "alert",
+										},
+									]),
+							{ type: "context", text: "Owners add photos from their account. Each one waits in the queue until you approve it. 0 turns this off." },
+							{
+								type: "form",
+								block_id: "settings_photos",
+								fields: [
+									{
+										type: "number_input",
+										action_id: "photo_limit",
+										label: "Photos an owner may add (0 means none)",
+										min: 0,
+										max: 20,
+										initial_value: settings.photoLimit,
+									},
+								],
+								submit: { label: "Save", action_id: "save_photos" },
+							},
+						],
+					},
+					{
+						label: "Messages",
+						blocks: [
+							{ type: "context", text: "One short notice an hour to the owner's account email. The message itself stays on the site." },
+							{
+								type: "form",
+								block_id: "settings_messages",
+								fields: [
+									{
+										type: "toggle",
+										action_id: "email_messages",
+										label: "Email the owner when a message arrives",
+										initial_value: settings.emailMessages,
+									},
+								],
+								submit: { label: "Save", action_id: "save_messages" },
+							},
+						],
+					},
+					{
+						label: "Import and export",
+						blocks: [
+							{ type: "context", text: "Download published listings, or add drafts from a spreadsheet. Nothing goes live until you approve it." },
+							...(importUrl
+								? [{ type: "actions", elements: [{ type: "link", label: "Open import and export", target: { kind: "external", url: importUrl } }] }]
+								: []),
+						],
 					},
 				],
-				submit: { label: "Save submissions", action_id: "save_submissions" },
 			},
-			{ type: "divider" },
-			{ type: "header", text: "Listing lifetime" },
-			...lines(HELP.lifetime),
-			{
-				type: "form",
-				block_id: "settings_lifetime",
-				fields: [
-					{
-						type: "number_input",
-						action_id: "expiry_days",
-						label: "Listings expire after this many days (0 = never)",
-						min: 0,
-						max: 3650,
-						initial_value: settings.expiryDays,
-					},
-					{
-						type: "toggle",
-						action_id: "email_expiry",
-						label: "Email the owner 7 days before their listing expires",
-						initial_value: settings.emailExpiry,
-					},
-				],
-				submit: { label: "Save lifetime", action_id: "save_lifetime" },
-			},
-			{ type: "divider" },
-			{ type: "header", text: "Photos" },
-			...lines(HELP.photos),
-			...(settings.galleryReady
-				? []
-				: [
-						{
-							type: "banner",
-							title: "Photos are off: the listings collection has no Photos field",
-							description: 'In Content Types, open Listings and add a field named "gallery" of type Repeater with one Image sub-field named "image". New sites set up from the Listora seed already have it.',
-							variant: "alert",
-						},
-					]),
-			{
-				type: "form",
-				block_id: "settings_photos",
-				fields: [
-					{
-						type: "number_input",
-						action_id: "photo_limit",
-						label: "Photos an owner may add to one listing (0 = none)",
-						min: 0,
-						max: 20,
-						initial_value: settings.photoLimit,
-					},
-				],
-				submit: { label: "Save photos", action_id: "save_photos" },
-			},
-			{ type: "divider" },
-			{ type: "header", text: "Messages" },
-			...lines(HELP.messages),
-			{
-				type: "form",
-				block_id: "settings_messages",
-				fields: [
-					{
-						type: "toggle",
-						action_id: "email_messages",
-						label: "Email the listing owner when a message arrives",
-						initial_value: settings.emailMessages,
-					},
-				],
-				submit: { label: "Save messages", action_id: "save_messages" },
-			},
-			{ type: "divider" },
-			{ type: "header", text: "Import and export" },
-			{
-				type: "section",
-				text: "Download your published listings as a spreadsheet, or add listings from one, 100 at a time. Imported listings arrive in the Listings queue as drafts. This runs on the site kit's page at /listings/import/.",
-			},
-			// A link out of the admin needs a full address, which only a configured site has.
-			...(/^https?:\/\//.test(asString(ctx.site?.url))
-				? [{ type: "actions", elements: [{ type: "link", label: "Open import and export", target: { kind: "external", url: new URL("/listings/import/", asString(ctx.site.url)).href } }] }]
-				: []),
 		],
 		toast: extra?.toast,
 	};
@@ -758,6 +790,8 @@ export async function renderSetup(
 	extra?: Pick<BlockResponse, "toast">,
 ): Promise<BlockResponse> {
 	const onboard = await getOnboardState(ctx);
+	// Once the directory exists, this page is the queue. Status lines are only for what is still missing.
+	if (onboard.ready) return renderQueue(ctx, extra);
 	return {
 		blocks: [
 			{ type: "header", text: "Get started" },
@@ -814,14 +848,45 @@ async function renderMessages(ctx: PluginContext, extra?: Pick<BlockResponse, "t
 	if (ctx.cron && !(await ctx.cron.list()).some((task) => task.name === "notify")) {
 		await ctx.cron.schedule("notify", { schedule: NOTIFY_CRON });
 	}
-	const found = await ctx.storage.contacts.query({
-		where: { status: "new" },
-		orderBy: { createdAt: "desc" },
-		limit: LIST_CAP,
-	});
+	const [freshCount, handledCount, found] = await Promise.all([
+		ctx.storage.contacts.count({ status: "new" }),
+		ctx.storage.contacts.count({ status: "handled" }),
+		ctx.storage.contacts.query({
+			where: { status: "new" },
+			orderBy: { createdAt: "desc" },
+			limit: LIST_CAP,
+		}),
+	]);
 	const titles = await listingTitles(ctx, found.items);
 	const view = await viewOf(ctx, "messages");
 	const listed = page(found.items, (row) => lowerText(titles.get(asString(asRecord(row.data).listingId)), asRecord(row.data).name, asRecord(row.data).email, asRecord(row.data).message), view);
+	const opened = view.open ? asRecord(await ctx.storage.contacts.get(view.open)) : null;
+	const openedBlocks: BlockMap[] = opened?.listingId
+		? [
+				{ type: "section", text: titles.get(asString(opened.listingId)) ?? "Removed listing" },
+				{ type: "context", text: [asString(opened.name), asString(opened.email)].filter(Boolean).join(", ") || "No name given" },
+				{ type: "code", language: "bash", code: asString(opened.message) },
+				{
+					type: "actions",
+					elements: [
+						{
+							type: "button",
+							label: "Delete this message",
+							action_id: "message_mod",
+							style: "danger",
+							value: `delete|${view.open}`,
+							confirm: {
+								title: "Delete this message?",
+								text: "This cannot be undone.",
+								confirm: "Delete",
+								deny: "Cancel",
+							},
+						},
+						{ type: "button", label: "Close", action_id: "message_mod", value: "close|" },
+					],
+				},
+			]
+		: [];
 	const table = listed.items.map((row) => {
 		const data = asRecord(row.data);
 		return {
@@ -842,7 +907,8 @@ async function renderMessages(ctx: PluginContext, extra?: Pick<BlockResponse, "t
 				label: "Handle",
 				items: [
 					{ label: "Mark as handled", value: `done|${row.id}` },
-					{ label: "Delete", value: `delete|${row.id}` },
+					// A menu cannot ask first, so Delete opens the message and that button confirms.
+					{ label: "Delete", value: `ask|${row.id}` },
 				],
 			},
 		};
@@ -851,11 +917,18 @@ async function renderMessages(ctx: PluginContext, extra?: Pick<BlockResponse, "t
 		blocks: [
 			{ type: "header", text: "Messages" },
 			{
-				type: "section",
-				text: "Messages visitors sent from a listing page. The member who added or claimed the listing reads them in their account. Once an hour they get a short email saying messages are waiting, when the site has a mail provider. Anything marked Owner not notified has no owner account, so pass it on yourself.",
+				type: "stats",
+				items: [
+					{ label: "New", value: freshCount },
+					{ label: "Handled", value: handledCount },
+				],
 			},
+			...openedBlocks,
+			...findBlocks("messages", view, table.length, listed.total, found.items.length),
 			table.length === 0
-				? { type: "empty", title: "No new messages", description: "Messages from the contact form on a listing wait here." }
+				? view.find
+					? { type: "empty", title: "Nothing matches", description: "No new message contains that text." }
+					: { type: "empty", title: "No new messages", description: "Messages from the contact form on a listing wait here." }
 				: {
 						type: "table",
 						page_action_id: "messages_page",
@@ -1127,12 +1200,22 @@ export async function handleAdmin(
 	if (type === "block_action" && asString(raw.action_id) === "message_mod") {
 		const [action = "", ...rest] = asString(raw.value).split("|");
 		const id = rest.join("|");
+		const current = await viewOf(ctx, "messages");
+		if (action === "ask") {
+			await ctx.kv.set("view:messages", { ...current, open: id });
+			return renderMessages(ctx);
+		}
+		if (action === "close") {
+			await ctx.kv.set("view:messages", { ...current, open: "" });
+			return renderMessages(ctx);
+		}
 		const existing = asRecord(await ctx.storage.contacts.get(id));
 		if (!existing.listingId) {
 			return renderMessages(ctx, { toast: { message: "Someone already handled that message.", type: "info" } });
 		}
 		if (action === "delete") await ctx.storage.contacts.delete(id);
 		else await ctx.storage.contacts.put(id, { ...existing, status: "handled" });
+		await ctx.kv.set("view:messages", { ...current, open: "" });
 		return renderMessages(ctx, {
 			toast: { message: action === "delete" ? "Message deleted." : "Marked as handled.", type: "success" },
 		});
