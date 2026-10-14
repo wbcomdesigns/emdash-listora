@@ -15,7 +15,7 @@ Status is against WordPress Listora chrome, not "the URL loads". Engine column i
 | Submit wizard | `submit`, `duplicate` | Five steps | Autosave, live card preview |
 | Categories | taxonomies on site | Missing as its own screen | Icon grid, counts |
 | Featured | `is_featured` | Static row of three | Carousel, arrows, dots |
-| Calendar | event dates | `/listings/calendar/` | Month plus phone agenda |
+| Calendar | event dates | `/listings/calendar/` | Upcoming events as a list, soonest first |
 | User dashboard | `dashboard` | One `/account/` page | Left nav, own data only |
 | Admin queues | `admin` | Listings, reviews, claims | Empty states, primary action |
 | Admin types | types in code | Missing | Block Kit type editor |

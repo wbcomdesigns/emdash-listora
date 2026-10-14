@@ -18,6 +18,8 @@ Every Listora page is wrapped in `src/layouts/ListoraLayout.astro`, and that fil
 
 Colours and fonts come from your site: the kit reads `--color-bg`, `--color-text`, `--color-surface`, `--color-border`, `--color-brand`, `--color-on-brand` and `--font-body` when they exist, and falls back to its own neutral set when they do not.
 
+Every phrase a visitor sees is in `site-kit/lib/listora-strings.ts` (copied to `src/lib/listora-strings.ts`). Change it there, then rebuild. Running the setup command again replaces that file, so keep a copy of your wording and put it back. The steps are in [Reword the directory](../docs/website/customize/wording.md).
+
 Proven on two sites: the EmDash `starter` template and a clean `portfolio` template site, as guest, member and admin, in light and dark, at 1440 and 390.
 
 Collection: `npx emdash seed .emdash/listora-seed.json --no-content` in your site, after the setup command.

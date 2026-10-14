@@ -94,6 +94,24 @@ describe("admin route", () => {
 		});
 	});
 
+	it("renders every list with counts and a find box, and Get started becomes the queue once listings exist", async () => {
+		const { rt } = await directory();
+		for (const [path, header] of [
+			["/queue", "Listings queue"],
+			["/reviews", "Reviews"],
+			["/claims", "Claims"],
+			["/messages", "Messages"],
+		] as const) {
+			const page = JSON.stringify(await rt.transport.invokeRoute("admin", { type: "page_load", page: path }));
+			expect(page).toContain(header);
+			expect(page).toContain('"type":"stats"');
+			expect(page).toContain("_find");
+		}
+		const setup = JSON.stringify(await rt.transport.invokeRoute("admin", { type: "page_load", page: "/setup" }));
+		expect(setup).toContain("Listings queue");
+		expect(setup).not.toContain("Then copy the site kit");
+	});
+
 	it("renders Get started on /setup", async () => {
 		host = await createPluginTestHost();
 		const result = await host.invokeRoute("admin", { type: "page_load", page: "/setup" });
@@ -344,6 +362,25 @@ describe("contact messages", () => {
 		expect(page.blocks.map((block) => block.type)).toContain("table");
 		await host!.invokeRoute("admin", { type: "block_action", action_id: "message_mod", value: `done|${rows[0].id}`, page: "/messages" });
 		expect(await host!.storage("contacts").get(rows[0].id)).toMatchObject({ status: "handled" });
+	});
+
+	it("opens a message before delete, and only the confirm button removes it", async () => {
+		const { a } = await directory();
+		await host!.invokeRoute(
+			"contact",
+			{ listingId: a, name: "Vee", email: "vee@example.com", message: "Please call." },
+			{ method: "POST", meta: { ip: "203.0.113.9", userAgent: null, referer: null, geo: null } },
+		);
+		const listed = JSON.stringify(await host!.invokeRoute("admin", { type: "page_load", page: "/messages" }));
+		const ask = listed.match(/ask\|[^"\\]+/)?.[0];
+		expect(ask).toBeTruthy();
+		const opened = await host!.invokeRoute("admin", { type: "block_action", action_id: "message_mod", value: ask, page: "/messages" });
+		const openedText = JSON.stringify(opened);
+		expect(openedText).toContain("Delete this message");
+		expect(await host!.storage("contacts").list()).toHaveLength(1);
+		const remove = openedText.match(/delete\|[^"\\]+/)?.[0];
+		await host!.invokeRoute("admin", { type: "block_action", action_id: "message_mod", value: remove, page: "/messages" });
+		expect(await host!.storage("contacts").list()).toHaveLength(0);
 	});
 
 	it("notifies the current owner from the hourly task, with nothing a visitor wrote", async () => {
@@ -661,10 +698,19 @@ describe("settings page and dashboard card", () => {
 		const admin = (input: Record<string, unknown>) =>
 			rt.transport.invokeRoute("admin", input) as Promise<{ blocks: Array<{ type: string }>; toast?: { type: string; message: string } }>;
 
-		const page = await rt.admin.loadPage("/settings");
-		expect(page.blocks.filter((block) => block.type === "form")).toHaveLength(4);
-		// The queue page no longer carries a settings form.
-		expect((await rt.admin.loadPage("/queue")).blocks.map((block) => block.type)).not.toContain("form");
+		const page = JSON.stringify(await rt.admin.loadPage("/settings"));
+		expect(page).toContain('"type":"tab"');
+		expect(page).not.toContain("Each group saves");
+		for (const label of ["Submissions", "Listing lifetime", "Photos", "Messages", "Import and export"]) {
+			expect(page).toContain(label);
+		}
+		for (const action of ["save_submissions", "save_lifetime", "save_photos", "save_messages"]) {
+			expect(page).toContain(action);
+		}
+		// The queue has a find box, not a settings form.
+		const queue = JSON.stringify(await rt.admin.loadPage("/queue"));
+		expect(queue).toContain("queue_find");
+		expect(queue).not.toContain("save_submissions");
 
 		await admin({ type: "form_submit", action_id: "save_lifetime", page: "/settings", values: { expiry_days: 30 } });
 		for (const bad of ["abc", -1, 2.5, 99999]) {

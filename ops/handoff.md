@@ -49,8 +49,8 @@ Override lab folder with `LISTORA_LAB`. After a kit change: edit `site-kit/`, th
 
 0.5.0 is released: merged to `main`, tagged `v0.5.0`, published to the registry and on GitHub releases. `PLAN.md` holds every owner decision behind it and its corrections. `docs/qa/QA_CHECKLIST.md` says how it was walked and lists the known gaps honestly.
 
-1. Check the listing passed: `npx emdash-plugin info vapvarun.bsky.social listora --version 0.5.0`. Then open the public page and look at the icon, banner and five screenshots.
-2. Nothing else is planned. Issue #28 (type editor, reminders, health check) stays under Later until the owner picks it.
+1. `0.6.0` is the open release branch. Issue #59 moved visitor phrases into `site-kit/lib/listora-strings.ts`. Issue #55 puts Settings in tabs and keeps Load more on the lists. Issue #60 rewrites the owner guides for those screens. Do not merge, tag, or publish until the bundle PR is ready.
+2. Issue #28 (type editor, reminders, health check) stays under Later until the owner picks it.
 3. Worth proving when a site allows it, none of it blocking: a 100-row import and the scheduled tasks on a Cloudflare-hosted site, owner photos on R2, real mail delivery, and the kit on a live site once one runs EmDash 1.2 (never on a preview that shares the live database).
 
 How 0.5.0 was checked, for the next release to copy: an independent agent walked the whole checklist in a browser and looked at every screenshot (it found 22 points, including that listing pages never showed the extra fields of their type), then an independent review read the new code (no security hole, six practical fixes). The builder fixed and re-checked each. The automatic security review that used to follow each push did not arrive for the last pushes, so do not wait on it: ask for an independent review.

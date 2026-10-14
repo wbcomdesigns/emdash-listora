@@ -23,7 +23,8 @@ Done in $SITE
 
   Pages    src/pages/listings/ (directory, one listing, add a listing, calendar, import and export)
            src/pages/account/  (owner dashboard)
-  Styles   src/styles/listora-ui.css, src/lib/listora.ts, public/vendor/
+  Styles   src/styles/listora-ui.css, src/lib/listora.ts, src/lib/listora-strings.ts, public/vendor/
+  Wording  src/lib/listora-strings.ts (running this again replaces that file, so keep a copy of any wording you changed)
   Layout   src/layouts/ListoraLayout.astro $([[ $first_run == 1 ]] && echo "(new)" || echo "(yours, left as it is)")
   Block    src/listora-block/ (optional Listings block for post text, off until you add it to astro.config.mjs)
   Seed     ${seed#"$SITE/"} (the listings collection, no content)

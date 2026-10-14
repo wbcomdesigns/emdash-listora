@@ -6,74 +6,54 @@
   "tagline": "Directory listings for EmDash. The plugin is the engine. Screens live on the site kit.",
   "note": "GitHub-only documentation. Metadata only. No publish or sync target.",
   "images_dir": "images",
-  "version": "0.5.1",
+  "version": "0.5.2",
   "sections": [
     {
       "name": "Getting Started",
       "folder": "getting-started",
-      "description": "Install the plugin, set up a new machine, run the lab, and see what already ships.",
+      "description": "Install Listora, pick a way to use the directory, and add it next to your posts.",
       "pages": [
-        {
-          "slug": "install",
-          "title": "Install the plugin"
-        }
+        { "slug": "install", "title": "Set up Listora on your site" },
+        { "slug": "use-cases", "title": "Use cases" },
+        { "slug": "posts-and-pages", "title": "Posts and pages" }
       ]
     },
     {
       "name": "Browse and Submit",
       "folder": "features",
-      "description": "Search the directory, open a listing, submit one, and manage reviews or claims.",
+      "description": "What visitors see, how someone adds a listing, and how you approve it.",
       "pages": [
-        {
-          "slug": "directory",
-          "title": "Browse, search, and maps"
-        },
-        {
-          "slug": "submit",
-          "title": "Submit a listing"
-        },
-        {
-          "slug": "reviews-claims",
-          "title": "Reviews and claims"
-        },
-        {
-          "slug": "owner-dashboard",
-          "title": "Owner dashboard"
-        },
-        {
-          "slug": "admin",
-          "title": "Admin queue"
-        }
+        { "slug": "directory", "title": "Browse the directory" },
+        { "slug": "submit", "title": "Add a listing" },
+        { "slug": "reviews-claims", "title": "Reviews and claims" },
+        { "slug": "owner-dashboard", "title": "Your account" },
+        { "slug": "admin", "title": "Admin screens" }
+      ]
+    },
+    {
+      "name": "Customize",
+      "folder": "customize",
+      "description": "Reword the directory visitors see.",
+      "pages": [
+        { "slug": "wording", "title": "Reword the directory" }
       ]
     },
     {
       "name": "Settings",
       "folder": "settings",
-      "description": "Moderation, default listing type, and spam keywords.",
+      "description": "Approval, how long a listing lasts, photos, and messages.",
       "pages": [
-        {
-          "slug": "plugin-settings",
-          "title": "Plugin settings"
-        }
+        { "slug": "plugin-settings", "title": "Settings" }
       ]
     },
     {
       "name": "Developer Guide",
       "folder": "developer-guide",
-      "description": "Plugin versus site kit, routes, and how to publish a version.",
+      "description": "How the plugin, the site kit, and the host fit together.",
       "pages": [
-        {
-          "slug": "plugin-and-site-kit",
-          "title": "Plugin, site kit, and host"
-        },
-        {
-          "slug": "routes",
-          "title": "Plugin routes"
-        },
-        {
-          "slug": "site-kit",
-          "title": "Site kit"
-        }
+        { "slug": "plugin-and-site-kit", "title": "Plugin, site kit, and host" },
+        { "slug": "routes", "title": "Plugin routes" },
+        { "slug": "site-kit", "title": "Site kit" }
       ]
     },
     {
@@ -81,53 +61,32 @@
       "folder": "whats-new",
       "description": "Registry versions, newest first.",
       "pages": [
-        {
-          "slug": "0-5-1",
-          "title": "0.5.1"
-        },
-        {
-          "slug": "0-5-0",
-          "title": "0.5.0"
-        },
-        {
-          "slug": "0-4-1",
-          "title": "0.4.1"
-        },
-        {
-          "slug": "0-4-0",
-          "title": "0.4.0"
-        },
-        {
-          "slug": "0-3-1",
-          "title": "0.3.1"
-        },
-        {
-          "slug": "0-3-0",
-          "title": "0.3.0"
-        },
-        {
-          "slug": "0-2-1",
-          "title": "0.2.1"
-        },
-        {
-          "slug": "0-2-0",
-          "title": "0.2.0"
-        },
-        {
-          "slug": "0-1-0",
-          "title": "0.1.0"
-        }
+        { "slug": "0-5-2", "title": "0.5.2" },
+        { "slug": "0-5-1", "title": "0.5.1" },
+        { "slug": "0-5-0", "title": "0.5.0" },
+        { "slug": "0-4-1", "title": "0.4.1" },
+        { "slug": "0-4-0", "title": "0.4.0" },
+        { "slug": "0-3-1", "title": "0.3.1" },
+        { "slug": "0-3-0", "title": "0.3.0" },
+        { "slug": "0-2-1", "title": "0.2.1" },
+        { "slug": "0-2-0", "title": "0.2.0" },
+        { "slug": "0-1-0", "title": "0.1.0" }
       ]
     },
     {
       "name": "FAQ",
       "folder": "faq",
-      "description": "Short answers for install, pages, and the collection listing.",
+      "description": "Short answers for install, pages, and approval.",
       "pages": [
-        {
-          "slug": "faqs",
-          "title": "FAQ"
-        }
+        { "slug": "faqs", "title": "FAQ" }
+      ]
+    },
+    {
+      "name": "Troubleshooting",
+      "folder": "troubleshooting",
+      "description": "A missing directory, an empty list, and photos that will not turn on.",
+      "pages": [
+        { "slug": "common", "title": "When something looks wrong" }
       ]
     }
   ]

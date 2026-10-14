@@ -2,6 +2,7 @@
 import { getEmDashCollection, getTermsForEntries } from "emdash";
 import { Image } from "emdash/ui";
 import { matchesPlace, placeOf, placeholderHtml, sortListings, typeName } from "../lib/listora";
+import { S } from "../lib/listora-strings";
 import "../styles/listora-ui.css";
 
 const node = (Astro.props.node ?? {}) as { heading?: string; listingType?: string; category?: string; city?: string; count?: number | string };
@@ -30,7 +31,7 @@ const shown = sortListings(matching, "featured").slice(0, count);
 {
 	// Nothing to show means nothing on the page: an article never carries an empty box.
 	shown.length ? (
-		<section class="listora-block listora-inline" aria-label={node.heading || "Listings"}>
+		<section class="listora-block listora-inline" aria-label={node.heading || S.block.label}>
 			{node.heading ? <h2>{node.heading}</h2> : null}
 			<div class="listora-featured__track">
 				{shown.map((listing) => (

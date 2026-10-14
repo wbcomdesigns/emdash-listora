@@ -2,6 +2,7 @@
 import { getEmDashCollection, getSiteSettings } from "emdash";
 import Layout from "../../layouts/ListoraLayout.astro";
 import { formatEventWhen, siteZone } from "../../lib/listora";
+import { eventCount, S } from "../../lib/listora-strings";
 import "../../styles/listora-ui.css";
 
 const { entries, cacheHint } = await getEmDashCollection("listings", {
@@ -17,21 +18,21 @@ const events = entries
 	.sort((a, b) => String(a.data.event_start).localeCompare(String(b.data.event_start)));
 ---
 
-<Layout title="Listing calendar" description="Upcoming events in the directory.">
+<Layout title={S.calendar.title} description={S.calendar.description}>
 	<div class="listora-block">
 		<header class="listora-page-head">
 			<div>
-				<h1>Calendar</h1>
-				<p>{events.length === 1 ? "1 upcoming event" : `${events.length} upcoming events`}</p>
+				<h1>{S.calendar.heading}</h1>
+				<p>{eventCount(events.length)}</p>
 			</div>
-			<a class="listora-btn listora-btn--ghost" href="/listings/">Directory</a>
+			<a class="listora-btn listora-btn--ghost" href="/listings/">{S.calendar.directory}</a>
 		</header>
 		{
 			events.length === 0 ? (
 				<div class="listora-empty">
-					<h2>No upcoming events</h2>
-					<p>Event listings with a start date appear here.</p>
-					<a class="listora-btn" href="/listings/submit/">Add an event</a>
+					<h2>{S.calendar.emptyTitle}</h2>
+					<p>{S.calendar.emptyBody}</p>
+					<a class="listora-btn" href="/listings/submit/">{S.calendar.add}</a>
 				</div>
 			) : (
 				<div class="listora-grid is-list">

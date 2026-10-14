@@ -4,6 +4,18 @@ Versions match `package.json`, the git tag, and the EmDash registry release. New
 
 ## [Unreleased]
 
+Copy the kit again (`scripts/add-to-site.sh`) after you update. That copy replaces `src/lib/listora-strings.ts`, so keep a copy of any wording you changed and put it back.
+
+- Improve  - Every phrase a visitor sees lives in `site-kit/lib/listora-strings.ts`, so a site can reword or translate the directory in one file.
+- Improve  - Settings are tabs, one Save each. Each admin list has Find and shows 25 at a time with Load more. Get started becomes the queue once the directory has listings.
+- Improve  - Owner guides describe the screens a site owner uses. Developer notes live in `docs/dev`.
+
+## [0.5.2] - 2026-10-14
+
+Copy the kit again (`scripts/add-to-site.sh`) after you update.
+
+- Fix      - The directory offers a type filter only for the types its listings use, and hides the row when there is only one, so a visitor never picks a type with no listings.
+
 ## [0.5.1] - 2026-10-14
 
 Fixes the site pages on a site that installed Listora from the registry. Copy the kit again (`scripts/add-to-site.sh`) after you update.
