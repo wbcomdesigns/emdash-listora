@@ -8,6 +8,7 @@ Copy these into an EmDash site after the plugin is installed.
 | --- | --- |
 | `site-kit/listora-ui.css` | Tokens and directory chrome |
 | `site-kit/lib/listora.ts` | Helpers the pages import |
+| `site-kit/lib/listora-strings.ts` | Every phrase a visitor can see |
 | `site-kit/pages/` | Archive, detail, submit, calendar, account |
 | `site-kit/seed/listings.mjs` | Collection fields, taxonomies, 33 NYC listings |
 | `site-kit/pages/listings/import.astro` | Import and export, admins only |

@@ -4,6 +4,10 @@ Versions match `package.json`, the git tag, and the EmDash registry release. New
 
 ## [Unreleased]
 
+Copy the kit again (`scripts/add-to-site.sh`) after you update. That copy replaces `src/lib/listora-strings.ts`, so keep a copy of any wording you changed and put it back.
+
+- Improve  - Every phrase a visitor sees lives in `site-kit/lib/listora-strings.ts`, so a site can reword or translate the directory in one file.
+
 ## [0.5.2] - 2026-10-14
 
 Copy the kit again (`scripts/add-to-site.sh`) after you update.

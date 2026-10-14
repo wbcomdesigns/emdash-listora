@@ -62,6 +62,14 @@
       ]
     },
     {
+      "name": "Customize",
+      "folder": "customize",
+      "description": "Reword the directory visitors see.",
+      "pages": [
+        { "slug": "wording", "title": "Reword the directory" }
+      ]
+    },
+    {
       "name": "Developer Guide",
       "folder": "developer-guide",
       "description": "Plugin versus site kit, routes, and how to publish a version.",

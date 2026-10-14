@@ -13,7 +13,7 @@ fi
 # A file that is not Listora's is never replaced: say which ones are in the way and stop.
 FORCE="${2:-}"
 blocked=()
-for target in src/styles/listora-ui.css src/lib/listora.ts src/pages/listings/index.astro "src/pages/listings/[slug].astro" \
+for target in src/styles/listora-ui.css src/lib/listora.ts src/lib/listora-strings.ts src/pages/listings/index.astro "src/pages/listings/[slug].astro" \
 	src/pages/listings/submit.astro src/pages/listings/calendar.astro src/pages/listings/import.astro src/pages/account/index.astro; do
 	if [[ -f "$LAB/$target" ]] && ! grep -qi "listora" "$LAB/$target"; then blocked+=("$target"); fi
 done
@@ -30,6 +30,7 @@ mkdir -p "$LAB/src/layouts" "$LAB/src/styles" "$LAB/src/lib" "$LAB/src/pages/lis
 [[ -f "$LAB/src/layouts/ListoraLayout.astro" ]] || cp "$PLUGIN/site-kit/layouts/ListoraLayout.astro" "$LAB/src/layouts/ListoraLayout.astro"
 cp "$PLUGIN/site-kit/listora-ui.css" "$LAB/src/styles/listora-ui.css"
 cp "$PLUGIN/site-kit/lib/listora.ts" "$LAB/src/lib/listora.ts"
+cp "$PLUGIN/site-kit/lib/listora-strings.ts" "$LAB/src/lib/listora-strings.ts"
 cp "$PLUGIN/site-kit/pages/listings/index.astro" "$LAB/src/pages/listings/index.astro"
 cp "$PLUGIN/site-kit/pages/listings/[slug].astro" "$LAB/src/pages/listings/[slug].astro"
 cp "$PLUGIN/site-kit/pages/listings/submit.astro" "$LAB/src/pages/listings/submit.astro"
