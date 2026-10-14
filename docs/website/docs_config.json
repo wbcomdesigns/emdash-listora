@@ -6,7 +6,7 @@
   "tagline": "Directory listings for EmDash. The plugin is the engine. Screens live on the site kit.",
   "note": "GitHub-only documentation. Metadata only. No publish or sync target.",
   "images_dir": "images",
-  "version": "0.2.1",
+  "version": "0.5.2",
   "sections": [
     {
       "name": "Getting Started",
@@ -16,7 +16,9 @@
         { "slug": "new-machine", "title": "Set up a new machine" },
         { "slug": "install", "title": "Install the plugin" },
         { "slug": "local-lab", "title": "Run the local lab" },
-        { "slug": "what-we-built", "title": "What we built in 0.1.0" }
+        { "slug": "what-we-built", "title": "What we built in 0.1.0" },
+        { "slug": "use-cases", "title": "Use cases" },
+        { "slug": "posts-and-pages", "title": "Posts and pages" }
       ]
     },
     {
