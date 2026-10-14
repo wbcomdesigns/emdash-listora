@@ -6,17 +6,17 @@
   "tagline": "Directory listings for EmDash. The plugin is the engine. Screens live on the site kit.",
   "note": "GitHub-only documentation. Metadata only. No publish or sync target.",
   "images_dir": "images",
-  "version": "0.2.1",
+  "version": "0.5.1",
   "sections": [
     {
       "name": "Getting Started",
       "folder": "getting-started",
       "description": "Install the plugin, set up a new machine, run the lab, and see what already ships.",
       "pages": [
-        { "slug": "new-machine", "title": "Set up a new machine" },
-        { "slug": "install", "title": "Install the plugin" },
-        { "slug": "local-lab", "title": "Run the local lab" },
-        { "slug": "what-we-built", "title": "What we built in 0.1.0" }
+        {
+          "slug": "install",
+          "title": "Install the plugin"
+        }
       ]
     },
     {
@@ -24,23 +24,26 @@
       "folder": "features",
       "description": "Search the directory, open a listing, submit one, and manage reviews or claims.",
       "pages": [
-        { "slug": "directory", "title": "Browse, search, and maps" },
-        { "slug": "submit", "title": "Submit a listing" },
-        { "slug": "reviews-claims", "title": "Reviews and claims" },
-        { "slug": "owner-dashboard", "title": "Owner dashboard" },
-        { "slug": "admin", "title": "Admin queue" }
-      ]
-    },
-    {
-      "name": "How-To Guides",
-      "folder": "how-to",
-      "description": "Match WordPress Listora chrome, then rebuild the public screens.",
-      "pages": [
-        { "slug": "match-listora-chrome", "title": "Match Listora chrome" },
-        { "slug": "form-presentation", "title": "Form presentation" },
-        { "slug": "directory-screens", "title": "Directory screens" },
-        { "slug": "improve-the-screens", "title": "Improve the screens" },
-        { "slug": "qa-catalog", "title": "QA catalog" }
+        {
+          "slug": "directory",
+          "title": "Browse, search, and maps"
+        },
+        {
+          "slug": "submit",
+          "title": "Submit a listing"
+        },
+        {
+          "slug": "reviews-claims",
+          "title": "Reviews and claims"
+        },
+        {
+          "slug": "owner-dashboard",
+          "title": "Owner dashboard"
+        },
+        {
+          "slug": "admin",
+          "title": "Admin queue"
+        }
       ]
     },
     {
@@ -48,15 +51,10 @@
       "folder": "settings",
       "description": "Moderation, default listing type, and spam keywords.",
       "pages": [
-        { "slug": "plugin-settings", "title": "Plugin settings" }
-      ]
-    },
-    {
-      "name": "Out of scope",
-      "folder": "pro-features",
-      "description": "Pro catalog rows to skip. No Pro plan in this pass.",
-      "pages": [
-        { "slug": "parked-work", "title": "Not now" }
+        {
+          "slug": "plugin-settings",
+          "title": "Plugin settings"
+        }
       ]
     },
     {
@@ -64,12 +62,18 @@
       "folder": "developer-guide",
       "description": "Plugin versus site kit, routes, and how to publish a version.",
       "pages": [
-        { "slug": "handoff", "title": "Session handoff" },
-        { "slug": "plugin-and-site-kit", "title": "Plugin, site kit, and host" },
-        { "slug": "wordpress-vs-emdash", "title": "WordPress Listora versus this plugin" },
-        { "slug": "routes", "title": "Plugin routes" },
-        { "slug": "site-kit", "title": "Site kit" },
-        { "slug": "release", "title": "Version and publish" }
+        {
+          "slug": "plugin-and-site-kit",
+          "title": "Plugin, site kit, and host"
+        },
+        {
+          "slug": "routes",
+          "title": "Plugin routes"
+        },
+        {
+          "slug": "site-kit",
+          "title": "Site kit"
+        }
       ]
     },
     {
@@ -77,15 +81,42 @@
       "folder": "whats-new",
       "description": "Registry versions, newest first.",
       "pages": [
-        { "slug": "0-5-1", "title": "0.5.1" },
-        { "slug": "0-5-0", "title": "0.5.0" },
-        { "slug": "0-4-1", "title": "0.4.1" },
-        { "slug": "0-4-0", "title": "0.4.0" },
-        { "slug": "0-3-1", "title": "0.3.1" },
-        { "slug": "0-3-0", "title": "0.3.0" },
-        { "slug": "0-2-1", "title": "0.2.1" },
-        { "slug": "0-2-0", "title": "0.2.0" },
-        { "slug": "0-1-0", "title": "0.1.0" }
+        {
+          "slug": "0-5-1",
+          "title": "0.5.1"
+        },
+        {
+          "slug": "0-5-0",
+          "title": "0.5.0"
+        },
+        {
+          "slug": "0-4-1",
+          "title": "0.4.1"
+        },
+        {
+          "slug": "0-4-0",
+          "title": "0.4.0"
+        },
+        {
+          "slug": "0-3-1",
+          "title": "0.3.1"
+        },
+        {
+          "slug": "0-3-0",
+          "title": "0.3.0"
+        },
+        {
+          "slug": "0-2-1",
+          "title": "0.2.1"
+        },
+        {
+          "slug": "0-2-0",
+          "title": "0.2.0"
+        },
+        {
+          "slug": "0-1-0",
+          "title": "0.1.0"
+        }
       ]
     },
     {
@@ -93,15 +124,10 @@
       "folder": "faq",
       "description": "Short answers for install, pages, and the collection listing.",
       "pages": [
-        { "slug": "faqs", "title": "FAQ" }
-      ]
-    },
-    {
-      "name": "Troubleshooting",
-      "folder": "troubleshooting",
-      "description": "Empty listings, stale workerd, and publish errors.",
-      "pages": [
-        { "slug": "lab", "title": "Lab and publish problems" }
+        {
+          "slug": "faqs",
+          "title": "FAQ"
+        }
       ]
     }
   ]
