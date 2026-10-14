@@ -15,6 +15,9 @@ import {
 	typeName,
 } from "../../lib/listora";
 import "../../styles/listora-ui.css";
+import { serverOrigin } from "../../lib/listora";
+// Server-side calls go to the site address from settings, never the request's Host header.
+const origin = serverOrigin((await getSiteSettings())?.url, Astro.url);
 
 const type = Astro.url.searchParams.get("type") || "";
 const q = Astro.url.searchParams.get("q") || "";
@@ -60,7 +63,7 @@ const typeChips = LISTING_TYPES.filter((item) => typesInUse.has(item.slug) || it
 let ratings: Record<string, { average: number }> = {};
 if (sort === "rating") {
 	try {
-		const answer = await listoraFetch("ratings?all=1", {}, Astro.url.origin);
+		const answer = await listoraFetch("ratings?all=1", {}, origin);
 		ratings = (await answer.json())?.data?.ratings ?? {};
 	} catch {
 		ratings = {};

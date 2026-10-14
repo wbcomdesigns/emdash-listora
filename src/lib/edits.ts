@@ -79,8 +79,24 @@ export function filled(value: unknown): Record<string, string> {
 	return out;
 }
 
+/**
+ * A website only as a full http or https address; anything else (javascript:, data:, a bare
+ * word) is dropped, so a stored listing can never carry a link that runs code.
+ */
+export function webAddress(value: unknown): string {
+	const text = clean(value, 200);
+	if (!text || /[\s<>"'`\\]/.test(text)) return "";
+	try {
+		const parsed = new URL(text);
+		return parsed.protocol === "https:" || parsed.protocol === "http:" ? text : "";
+	} catch {
+		return "";
+	}
+}
+
 /** One editable field, cleaned and capped, as it is stored on a listing. */
 export function fieldValue(key: string, value: unknown): string {
+	if (key === "website") return webAddress(value);
 	return key === "type_fields" ? JSON.stringify(filled(value)) : clean(value, CAPS[key] ?? 200);
 }
 

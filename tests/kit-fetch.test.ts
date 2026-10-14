@@ -13,8 +13,12 @@ async function fresh() {
 
 afterEach(() => vi.unstubAllGlobals());
 
+// These cases are browser calls (relative addresses). A server-side call is tested on its own below.
+const inBrowser = () => vi.stubGlobal("window", {});
+
 describe("kit finds Listora's routes on any install", () => {
 	it("uses the registry id on a registry install and remembers it", async () => {
+		inBrowser();
 		const call = await fresh();
 		const seen: string[] = [];
 		vi.stubGlobal("fetch", async (url: string) => (seen.push(url), url.includes(REGISTRY_ID) ? ok() : missing()));
@@ -24,6 +28,7 @@ describe("kit finds Listora's routes on any install", () => {
 	});
 
 	it("falls back to the name on a local install", async () => {
+		inBrowser();
 		const call = await fresh();
 		const seen: string[] = [];
 		vi.stubGlobal("fetch", async (url: string) => (seen.push(url), url.includes("/listora/") ? ok() : missing()));
@@ -34,6 +39,7 @@ describe("kit finds Listora's routes on any install", () => {
 	});
 
 	it("never remembers a failure, and forgets an address that stops answering", async () => {
+		inBrowser();
 		const call = await fresh();
 		let up = false;
 		const seen: string[] = [];
@@ -48,10 +54,24 @@ describe("kit finds Listora's routes on any install", () => {
 	});
 
 	it("keeps Listora's own 404 answer instead of trying another address", async () => {
+		inBrowser();
 		const call = await fresh();
 		const seen: string[] = [];
 		vi.stubGlobal("fetch", async (url: string) => (seen.push(url), new Response(JSON.stringify({ success: false, error: { code: "NOT_FOUND", message: "No such listing" } }), { status: 404 })));
 		expect((await call("listing?id=x")).status).toBe(404);
 		expect(seen).toHaveLength(1);
+	});
+});
+
+describe("server-side calls", () => {
+	it("are refused without a trusted site address, so a request's Host header is never called", async () => {
+		const call = await fresh();
+		const seen: string[] = [];
+		vi.stubGlobal("fetch", async (url: string) => (seen.push(url), ok()));
+		expect((await call("ratings", {}, "")).status).toBe(503);
+		expect((await call("ratings", {}, "http://evil.internal/path")).status).toBe(503);
+		expect(seen).toHaveLength(0);
+		expect((await call("ratings", {}, "https://fieldnote.example")).status).toBe(200);
+		expect(seen[0]).toMatch(/^https:\/\/fieldnote\.example\/_emdash\/api\/plugins\//);
 	});
 });

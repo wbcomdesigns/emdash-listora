@@ -1,3 +1,7 @@
+## 0.5.3
+
+- Security: website links are only http or https addresses; server-side calls use the Site URL from EmDash settings. Copy the kit again after updating.
+
 ## 0.5.2
 
 - Fix: the directory offers a type filter only for types its listings use, and hides it when there is just one. Copy the kit again after updating.

@@ -91,12 +91,22 @@ export function initials(title: string): string {
 		.toUpperCase();
 }
 
+/** A listing's website as a link, only when it is a full http or https address (never javascript:). */
 export function websiteHref(value: unknown): string {
-	if (typeof value === "string") return value;
-	if (value && typeof value === "object" && "href" in value) {
-		return String((value as { href?: string }).href ?? "");
+	const raw =
+		typeof value === "string"
+			? value
+			: value && typeof value === "object" && "href" in value
+				? String((value as { href?: string }).href ?? "")
+				: "";
+	const text = raw.trim();
+	if (!text || /[\s<>"'`\\]/.test(text)) return "";
+	try {
+		const parsed = new URL(text);
+		return parsed.protocol === "https:" || parsed.protocol === "http:" ? parsed.href : "";
+	} catch {
+		return "";
 	}
-	return "";
 }
 
 export function asNumber(value: unknown): number {
@@ -346,12 +356,33 @@ function rememberId(id: string): void {
 }
 
 /**
- * fetch() for a Listora route. `origin` is for server-side calls from a page (Astro.url.origin).
+ * The address a page's server-side code may call back to. Never the request's Host header: a
+ * visitor can send any Host, and the server would then call that address (server-side request
+ * forgery). Uses the site address set in EmDash settings (Settings, Site URL); on a local machine
+ * (localhost) the request's own address is fine. Anything else returns "", and listoraFetch then
+ * refuses the call. Same rule as serverOrigin in the shared wbcom-kit.ts.
+ */
+export function serverOrigin(siteUrl: unknown, requestUrl: URL): string {
+	try {
+		const configured = new URL(String(siteUrl ?? ""));
+		if (configured.protocol === "https:" || configured.protocol === "http:") return configured.origin;
+	} catch {
+		// No site address set: fall through.
+	}
+	return ["localhost", "127.0.0.1", "[::1]"].includes(requestUrl.hostname) ? requestUrl.origin : "";
+}
+
+/**
+ * fetch() for a Listora route. `origin` is for server-side calls from a page: pass
+ * serverOrigin(settings.url, Astro.url), never Astro.url.origin; without it the call is refused.
  * Only an address Listora itself answered on is remembered: on the server this memory is shared
  * by every visitor, so a failure is never remembered, and a remembered address that stops
  * answering is forgotten.
  */
 export async function listoraFetch(path: string, init: RequestInit = {}, origin = ""): Promise<Response> {
+	if (typeof window === "undefined" && !/^https?:\/\/[^/]+$/.test(origin)) {
+		return new Response(null, { status: 503, statusText: "No trusted site address for a server-side call" });
+	}
 	const known = chosenId || rememberedId();
 	if (known) {
 		const response = await fetch(`${origin}/_emdash/api/plugins/${known}/${path}`, init);
