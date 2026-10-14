@@ -4,6 +4,13 @@ Versions match `package.json`, the git tag, and the EmDash registry release. New
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-10-14
+
+Fixes the site pages on a site that installed Listora from the registry. Copy the kit again (`scripts/add-to-site.sh`) after you update.
+
+- Fix      - The directory pages can reach Listora on a registry install. EmDash gives a registry plugin its own id, so adding a listing, reviews, saving, messages and the account page all failed there; they worked only where Listora was installed from local files.
+- Improve  - The registry banner is the full name with margins, so nothing is cut off on a phone.
+
 ## [0.5.0] - 2026-10-14
 
 Owner tools, photos, expiry, import and export, and a one-command setup. New permissions: sending email, reading and assigning categories, and adding files to the media library. Run `scripts/add-to-site.sh` again after you update.

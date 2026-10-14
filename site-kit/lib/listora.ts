@@ -308,6 +308,66 @@ export function signInUrl(): string {
 	return `/_emdash/admin/login?redirect=${encodeURIComponent(location.pathname + location.search)}`;
 }
 
+/*
+ * Where Listora's routes live. Installed from the EmDash registry, a plugin does not keep its
+ * name in the address: EmDash gives it the id "r_" + the first 16 base32 characters of
+ * SHA-256(publisher DID + "\n" + slug), which for Listora is the value below on every site.
+ * Installed from local files (a lab, a trusted install), it keeps the name "listora". The kit
+ * tries the registry id, falls back to the name when EmDash says the route does not exist, and
+ * remembers the answer for the visit. (Same logic as pluginFetch in the shared wbcom-kit.ts.)
+ */
+export const REGISTRY_ID = "r_2oeji6rfeg7ovdex";
+let chosenId = "";
+
+function rememberedId(): string {
+	try {
+		return typeof sessionStorage === "undefined" ? "" : sessionStorage.getItem("wb-plugin-id:listora") || "";
+	} catch {
+		return "";
+	}
+}
+
+/** EmDash's own answer for an address with no plugin behind it (not Listora's answer). */
+async function routeMissing(response: Response): Promise<boolean> {
+	if (response.status !== 404) return false;
+	const body = await response.clone().json().catch(() => null);
+	return /route not found/i.test(String(body?.error?.message ?? ""));
+}
+
+function rememberId(id: string): void {
+	chosenId = id;
+	try {
+		if (typeof sessionStorage === "undefined") return;
+		if (id) sessionStorage.setItem("wb-plugin-id:listora", id);
+		else sessionStorage.removeItem("wb-plugin-id:listora");
+	} catch {
+		// Storage can be blocked. Nothing is lost but one extra request.
+	}
+}
+
+/**
+ * fetch() for a Listora route. `origin` is for server-side calls from a page (Astro.url.origin).
+ * Only an address Listora itself answered on is remembered: on the server this memory is shared
+ * by every visitor, so a failure is never remembered, and a remembered address that stops
+ * answering is forgotten.
+ */
+export async function listoraFetch(path: string, init: RequestInit = {}, origin = ""): Promise<Response> {
+	const known = chosenId || rememberedId();
+	if (known) {
+		const response = await fetch(`${origin}/_emdash/api/plugins/${known}/${path}`, init);
+		if (!(await routeMissing(response))) return response;
+		rememberId("");
+	}
+	let response: Response | null = null;
+	for (const id of [REGISTRY_ID, "listora"]) {
+		response = await fetch(`${origin}/_emdash/api/plugins/${id}/${path}`, init);
+		if (await routeMissing(response)) continue;
+		rememberId(id);
+		return response;
+	}
+	return response as Response;
+}
+
 export type ApiResult = { ok: boolean; error?: { code?: string; message?: string }; [key: string]: unknown };
 
 /** Call a Listora plugin route. Member routes answer SIGN_IN_REQUIRED for guests. */
@@ -320,7 +380,7 @@ export async function uploadPhoto(listingId: string, file: File): Promise<ApiRes
 	if (!PHOTO_TYPES.includes(file.type)) return { ok: false, error: { code: "WRONG_TYPE", message: "Use a JPEG, PNG or WebP photo." } };
 	if (file.size > PHOTO_MAX_BYTES) return { ok: false, error: { code: "TOO_BIG", message: "That photo is larger than 5 MB." } };
 	try {
-		const response = await fetch(`/_emdash/api/plugins/listora/photo?listingId=${encodeURIComponent(listingId)}&name=${encodeURIComponent(file.name)}`, {
+		const response = await listoraFetch(`photo?listingId=${encodeURIComponent(listingId)}&name=${encodeURIComponent(file.name)}`, {
 			method: "POST",
 			credentials: "same-origin",
 			headers: { "Content-Type": "application/octet-stream", "X-EmDash-Request": "1" },
@@ -360,7 +420,7 @@ function knownGuest(): boolean {
 export async function api(path: string, body?: unknown, method = body ? "POST" : "GET"): Promise<ApiResult> {
 	// Never throws: a dropped connection or a server error comes back as a result the page can show.
 	try {
-		const response = await fetch(`/_emdash/api/plugins/listora/${path}`, {
+		const response = await listoraFetch(path, {
 			method,
 			credentials: "same-origin",
 			headers: { "Content-Type": "application/json", "X-EmDash-Request": "1" },
