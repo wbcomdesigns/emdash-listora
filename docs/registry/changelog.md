@@ -1,3 +1,8 @@
+## 0.5.1
+
+- Fix: the directory pages now reach Listora on a site that installed it from the registry. Adding a listing, reviews, saving, messages and the account page failed there before. Copy the kit again after updating.
+- Improve: banner no longer cut off on a phone.
+
 ## 0.5.0
 
 New permissions: sending email, reading and assigning categories, adding files to the media library.
@@ -18,15 +23,5 @@ Run `scripts/add-to-site.sh` again after updating.
 - Improve: dark mode buttons and star ratings meet contrast. Tabs work with arrow keys.
 - Fix: a failed request shows a message, never a blank area.
 - Fix: rating structured data uses the listing's own type.
-
-## 0.4.0
-
-- New: paging on the directory, 24 listings per page.
-- New: Messages admin page for what visitors send from a listing.
-- New: the map library ships inside the kit. No outside scripts.
-- Improve: ratings live in the plugin's own storage and update at once.
-- Fix: Bathrooms field restored on the submit form.
-
-Copy `site-kit/` again after updating, including `site-kit/public/vendor/`.
 
 Older versions: https://github.com/wbcomdesigns/emdash-listora/blob/main/CHANGELOG.md
