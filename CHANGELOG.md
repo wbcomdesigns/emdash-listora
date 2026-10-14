@@ -9,7 +9,7 @@ Versions match `package.json`, the git tag, and the EmDash registry release. New
 Copy the kit again (`scripts/add-to-site.sh`) after you update.
 
 - Security - A listing's website is only ever a full http or https address. The directory never draws a website link that could run code, the CSV import refuses such a row, and an edit request drops it.
-- Security - Server-side calls from the directory go to the Site URL set in EmDash settings, never to the address a visitor's request names. Set Settings, Site URL on a live site.
+- Security - The directory's server-side calls run inside EmDash itself, with no web request, so a visitor can never make the site call another address.
 
 ## [0.5.2] - 2026-10-14
 

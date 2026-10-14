@@ -64,14 +64,27 @@ describe("kit finds Listora's routes on any install", () => {
 });
 
 describe("server-side calls", () => {
-	it("are refused without a trusted site address, so a request's Host header is never called", async () => {
+	it("listoraFetch refuses every server-side call, so no address is ever fetched from server code", async () => {
 		const call = await fresh();
 		const seen: string[] = [];
 		vi.stubGlobal("fetch", async (url: string) => (seen.push(url), ok()));
-		expect((await call("ratings", {}, "")).status).toBe(503);
-		expect((await call("ratings", {}, "http://evil.internal/path")).status).toBe(503);
+		expect((await call("ratings")).status).toBe(503);
 		expect(seen).toHaveLength(0);
-		expect((await call("ratings", {}, "https://fieldnote.example")).status).toBe(200);
-		expect(seen[0]).toMatch(/^https:\/\/fieldnote\.example\/_emdash\/api\/plugins\//);
+	});
+
+	it("callListoraRoute uses EmDash's in-process handler, registry id first, then the name", async () => {
+		vi.resetModules();
+		const { callListoraRoute } = await import("../site-kit/lib/listora");
+		const seen: string[] = [];
+		vi.stubGlobal("fetch", async (url: string) => (seen.push(url), ok()));
+		const routed: string[] = [];
+		const handler = (installed: string) => async (pluginId: string, _method: string, path: string) => (
+			routed.push(`${pluginId}/${path}`),
+			pluginId === installed ? { success: true, data: { ratings: { a: { average: 4 } } } } : { success: false, error: { code: "NOT_FOUND", message: "Plugin route not found" } }
+		);
+		expect(await callListoraRoute({ emdash: { handlePublicPluginApiRoute: handler("listora") } }, "ratings?all=1")).toMatchObject({ ratings: { a: { average: 4 } } });
+		expect(routed).toEqual([`${REGISTRY_ID}/ratings`, "listora/ratings"]);
+		expect(await callListoraRoute({}, "ratings")).toBeNull();
+		expect(seen).toHaveLength(0);
 	});
 });

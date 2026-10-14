@@ -1,3 +1,4 @@
+import { getPublicPluginApiRouteHandler } from "emdash/plugin-utils";
 export type HourRow = { day: number; open: string; close: string };
 
 export const LISTING_TYPES = [
@@ -356,49 +357,43 @@ function rememberId(id: string): void {
 }
 
 /**
- * The address a page's server-side code may call back to. Never the request's Host header: a
- * visitor can send any Host, and the server would then call that address (server-side request
- * forgery). Uses the site address set in EmDash settings (Settings, Site URL); only while the site
- * runs in development mode (astro dev) on localhost is the request's own address used. Anything else returns "", and listoraFetch then
- * refuses the call. Same rule as serverOrigin in the shared wbcom-kit.ts.
+ * Call a Listora public route from an Astro page's server code (pass Astro.locals). EmDash runs
+ * the route inside the server: there is no HTTP request, so a visitor's Host header or any other
+ * address can never be called. Tries the registry id, then the name. Returns the route's data,
+ * or null when Listora is not installed or the route fails.
  */
-export function serverOrigin(
-	siteUrl: unknown,
-	requestUrl: URL,
-	dev = Boolean((import.meta as { env?: { DEV?: boolean } }).env?.DEV),
-): string {
-	try {
-		const configured = new URL(String(siteUrl ?? ""));
-		if (configured.protocol === "https:" || configured.protocol === "http:") return configured.origin;
-	} catch {
-		// No site address set: fall through.
+export async function callListoraRoute(locals: unknown, path: string): Promise<Record<string, unknown> | null> {
+	const handler = getPublicPluginApiRouteHandler(locals as Parameters<typeof getPublicPluginApiRouteHandler>[0]);
+	if (!handler) return null;
+	const [route, query] = path.split("?");
+	for (const id of [REGISTRY_ID, "listora"]) {
+		const request = new Request(`http://localhost/_emdash/api/plugins/${id}/${route}${query ? `?${query}` : ""}`, { method: "GET" });
+		const result = await handler(id, "GET", route, request).catch(() => null);
+		if (!result || (!result.success && result.error?.code === "NOT_FOUND" && /plugin|route/i.test(result.error.message))) continue;
+		return result.success && result.data && typeof result.data === "object" ? (result.data as Record<string, unknown>) : null;
 	}
-	// Development only: a live site never trusts the request, not even a "localhost" Host header,
-	// which a visitor can also send to reach a service on the server's own machine.
-	if (!dev) return "";
-	return ["localhost", "127.0.0.1", "[::1]"].includes(requestUrl.hostname) ? requestUrl.origin : "";
+	return null;
 }
 
 /**
- * fetch() for a Listora route. `origin` is for server-side calls from a page: pass
- * serverOrigin(settings.url, Astro.url), never Astro.url.origin; without it the call is refused.
- * Only an address Listora itself answered on is remembered: on the server this memory is shared
- * by every visitor, so a failure is never remembered, and a remembered address that stops
- * answering is forgotten.
+ * fetch() for a Listora route from the browser. Browser only: an Astro page's server code uses
+ * callListoraRoute, which runs the route inside the server, so no address a visitor could
+ * influence is ever called. Only an address Listora itself answered on is remembered, and a
+ * remembered address that stops answering is forgotten.
  */
-export async function listoraFetch(path: string, init: RequestInit = {}, origin = ""): Promise<Response> {
-	if (typeof window === "undefined" && !/^https?:\/\/[^/]+$/.test(origin)) {
-		return new Response(null, { status: 503, statusText: "No trusted site address for a server-side call" });
+export async function listoraFetch(path: string, init: RequestInit = {}): Promise<Response> {
+	if (typeof window === "undefined") {
+		return new Response(null, { status: 503, statusText: "Server code calls Listora with callListoraRoute" });
 	}
 	const known = chosenId || rememberedId();
 	if (known) {
-		const response = await fetch(`${origin}/_emdash/api/plugins/${known}/${path}`, init);
+		const response = await fetch(`/_emdash/api/plugins/${known}/${path}`, init);
 		if (!(await routeMissing(response))) return response;
 		rememberId("");
 	}
 	let response: Response | null = null;
 	for (const id of [REGISTRY_ID, "listora"]) {
-		response = await fetch(`${origin}/_emdash/api/plugins/${id}/${path}`, init);
+		response = await fetch(`/_emdash/api/plugins/${id}/${path}`, init);
 		if (await routeMissing(response)) continue;
 		rememberId(id);
 		return response;
