@@ -54,7 +54,7 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 </Layout>
 
 <script>
-	import { api, esc, notify } from "../../lib/listora";
+	import { api, esc, listoraFetch, notify } from "../../lib/listora";
 
 	type Bad = { line: number; title: string; reason: string };
 	type Dup = { line: number; title: string; city: string };
@@ -65,7 +65,7 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 		exportBtn.textContent = "Preparing...";
 		try {
 			// A plain link cannot be used: the site only answers signed-in requests that carry this header.
-			const response = await fetch("/_emdash/api/plugins/listora/export", { credentials: "same-origin", headers: { "X-EmDash-Request": "1" } });
+			const response = await listoraFetch("export", { credentials: "same-origin", headers: { "X-EmDash-Request": "1" } });
 			if (!response.ok) throw new Error();
 			const blob = await response.blob();
 			// The column names alone mean there was nothing to export.

@@ -6,6 +6,7 @@ import {
 	LISTING_TYPES,
 	placeholderHtml,
 	isOpenNow,
+	listoraFetch,
 	siteZone,
 	matchesPlace,
 	parseHours,
@@ -56,7 +57,7 @@ const cityFacets = byCount(cityCounts);
 let ratings: Record<string, { average: number }> = {};
 if (sort === "rating") {
 	try {
-		const answer = await fetch(new URL("/_emdash/api/plugins/listora/ratings?all=1", Astro.url.origin));
+		const answer = await listoraFetch("ratings?all=1", {}, Astro.url.origin);
 		ratings = (await answer.json())?.data?.ratings ?? {};
 	} catch {
 		ratings = {};
