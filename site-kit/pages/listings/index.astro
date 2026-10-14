@@ -51,6 +51,9 @@ const byCount = <T extends { label: string; count: number }>(map: Map<string, T>
 	[...map.values()].sort((a, b) => b.count - a.count || a.label.localeCompare(b.label)).slice(0, 12);
 const categoryFacets = byCount(categoryCounts);
 const cityFacets = byCount(cityCounts);
+// Type chips only for types this directory uses (plus the one being viewed), like the city chips.
+const typesInUse = new Set(published.map((entry) => String(entry.data.listing_type || "")).filter(Boolean));
+const typeChips = LISTING_TYPES.filter((item) => typesInUse.has(item.slug) || item.slug === type);
 
 // Ratings live in plugin storage, so sorting by rating asks the plugin once. If that fails
 // the list keeps its normal order: the page never breaks over a sort.
@@ -182,10 +185,11 @@ function amenityList(value: unknown): string[] {
 					<span>Search</span>
 				</button>
 			</div>
+			{(typeChips.length > 1 || type) && (
 			<div class="listora-chips" id="listora-types">
 				<a class:list={{ "listora-chip": true, "is-active": !type }} href="/listings/">All</a>
 				{
-					LISTING_TYPES.map((item) => (
+					typeChips.map((item) => (
 						<a
 							class:list={{ "listora-chip": true, "is-active": type === item.slug }}
 							href={`/listings/?type=${item.slug}`}
@@ -196,6 +200,7 @@ function amenityList(value: unknown): string[] {
 					))
 				}
 			</div>
+			)}
 			{category ? <input type="hidden" name="category" value={category} /> : null}
 		</form>
 

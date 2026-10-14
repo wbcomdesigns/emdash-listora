@@ -32,8 +32,13 @@ if [[ ! -f "$LAB/astro.config.mjs" && ! -f "$LAB/astro.config.ts" && ! -f "$LAB/
 	parent="$(dirname "$LAB")"
 	name="$(basename "$LAB")"
 	mkdir -p "$parent"
-	echo "Creating EmDash Node starter at $LAB"
-	(cd "$parent" && npm create emdash@latest -- "$name" --template starter --platform node --pm npm --yes)
+	echo "Creating EmDash blog lab at $LAB"
+	(cd "$parent" && npm create emdash@latest -- "$name" --template blog --platform node --pm npm --yes)
+fi
+
+if [[ -f "$LAB/src/layouts/Base.astro" ]] && ! grep -q 'theme.css' "$LAB/src/layouts/Base.astro"; then
+	echo "STOP: $LAB is a starter lab (Base.astro has no theme.css). Recreate it with --template blog, or judge on ~/code/emdash-lab-all:4340. Nothing tested here counts." >&2
+	exit 1
 fi
 
 node "$PLUGIN/scripts/wire-lab.mjs"
