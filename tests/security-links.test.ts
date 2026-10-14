@@ -25,8 +25,12 @@ describe("server-side calls never follow the request's Host header", () => {
 	it("uses the site address from settings", () => {
 		expect(serverOrigin("https://fieldnote.example/blog", new URL("http://evil.internal/x"))).toBe("https://fieldnote.example");
 	});
-	it("falls back to the request only on a local machine", () => {
-		expect(serverOrigin("", new URL("http://localhost:4350/listings/"))).toBe("http://localhost:4350");
+	it("never trusts the request on a live site, not even a localhost Host header", () => {
+		expect(serverOrigin("", new URL("http://localhost:6379/listings/"), false)).toBe("");
+		expect(serverOrigin("https://fieldnote.example", new URL("http://localhost:6379/"), false)).toBe("https://fieldnote.example");
+	});
+	it("falls back to the request only on a local machine in development", () => {
+		expect(serverOrigin("", new URL("http://localhost:4350/listings/"), true)).toBe("http://localhost:4350");
 		expect(serverOrigin("", new URL("http://169.254.169.254/listings/"))).toBe("");
 		expect(serverOrigin(undefined, new URL("http://evil.internal/"))).toBe("");
 	});
