@@ -2,6 +2,15 @@
 
 Versions match `package.json`, the git tag, and the EmDash registry release. Newest first. Never publish a version that is not on `origin/main`.
 
+## [0.6.1] - 2026-10-16
+
+Copy the kit again (`scripts/add-to-site.sh`) after you update. Keep a copy of any wording you changed in `listora-strings.ts` and put it back.
+
+- Fix      - Renewing a listing checks its current owner, so after a claim the new owner can renew it and the old one cannot.
+- Fix      - The edit form shows only the member's own waiting change, never one left by a previous owner.
+- Security - Map popups on the directory and the listing page show the listing title as text. A title containing markup could run code in a visitor's browser.
+- Security - Email addresses typed into the add form, claims and messages are stored only as a plain address, so a message link cannot add recipients.
+
 ## [0.6.0] - 2026-10-15
 
 Copy the kit again (`scripts/add-to-site.sh`) after you update. That copy replaces `src/lib/listora-strings.ts`, so keep a copy of any wording you changed and put it back.

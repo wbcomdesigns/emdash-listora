@@ -1,3 +1,8 @@
+## 0.6.1
+
+- Security: map popups show listing titles as plain text; emails are stored as plain addresses only. Copy the kit again after updating.
+- Fix: renewing and editing follow the listing's current owner.
+
 ## 0.6.0
 
 - Security: website links must be a full http or https address; server-side calls run inside EmDash with no web request.
@@ -25,12 +30,5 @@ New permissions: sending email, reading and assigning categories, adding files t
 - Security: member ids never shown, stricter checks on every member action.
 
 Run `scripts/add-to-site.sh` again after updating.
-
-## 0.4.1
-
-- New: Delete my data on the account page.
-- Improve: dark mode buttons and star ratings meet contrast. Tabs work with arrow keys.
-- Fix: a failed request shows a message, never a blank area.
-- Fix: rating structured data uses the listing's own type.
 
 Older versions: https://github.com/wbcomdesigns/emdash-listora/blob/main/CHANGELOG.md

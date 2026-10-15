@@ -766,7 +766,10 @@ const schema = {
 			const mapLng = Number(mapEl.dataset.lng);
 			const map = L.map(mapEl).setView([mapLat, mapLng], 14);
 			L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", { attribution: `&copy; ${S.directory.mapCredit}` }).addTo(map);
-			L.marker([mapLat, mapLng]).addTo(map).bindPopup(mapEl.dataset.title);
+			// A text node, never a string: Leaflet puts a string popup in as HTML, and the title is member-written.
+			const popup = document.createElement("span");
+			popup.textContent = mapEl.dataset.title ?? "";
+			L.marker([mapLat, mapLng]).addTo(map).bindPopup(popup);
 		};
 		document.body.append(leaflet);
 	}

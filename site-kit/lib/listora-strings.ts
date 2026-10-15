@@ -432,6 +432,7 @@ const CODES: Record<string, string> = {
 	OWN_LISTING: "You cannot review your own listing.",
 	SPAM: "Submission rejected.",
 	FORBIDDEN: "Only the listing owner can renew it.",
+	INVALID_EMAIL: "Enter a full email address, or leave it blank.",
 	NOT_RENEWABLE: "This listing does not need renewing.",
 	BUSY: "This listing is being edited. Try again later.",
 	CONTENT_UNAVAILABLE: "The listings collection is not set up on this site.",

@@ -555,7 +555,12 @@ function amenityList(value: unknown): string[] {
 				markers = L.layerGroup().addTo(map);
 			}
 			markers?.clearLayers();
-			for (const point of points) markers?.addLayer(L.marker([point.lat, point.lng]).bindPopup(point.title));
+			for (const point of points) {
+				// A text node, never a string: Leaflet puts a string popup in as HTML, and the title is member-written.
+				const popup = document.createElement("span");
+				popup.textContent = point.title;
+				markers?.addLayer(L.marker([point.lat, point.lng]).bindPopup(popup));
+			}
 			map?.setView([points[0].lat, points[0].lng], 12);
 		};
 		const ready = (window as unknown as { L?: Leaflet }).L;

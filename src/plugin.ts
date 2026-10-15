@@ -84,7 +84,7 @@ function parseSubmit(input: unknown): { ok: true; data: SubmitInput } | { ok: fa
 			listing_type: asString(raw.listing_type) || "business",
 			phone: asString(raw.phone),
 			website: asString(raw.website),
-			email: asString(raw.email),
+			email: plainEmail(raw.email),
 			address: asString(raw.address),
 			city: asString(raw.city),
 			state: asString(raw.state),
@@ -134,7 +134,13 @@ type Member = { id: string; name: string | null; email?: string | null; role: nu
 const CACHE = "public, max-age=30, stale-while-revalidate=120";
 
 // Strict on purpose: this value becomes a mail header.
-const EMAIL_RE = /^[^\s@<>,;]+@[^\s@<>,;]+\.[^\s@<>,;]+$/;
+// Plain address only: no ? & = or other characters that add recipients or text to a mailto: link.
+const EMAIL_RE = /^[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}$/;
+/** A visitor-typed email as stored: a plain address, or empty. */
+const plainEmail = (value: unknown) => {
+	const email = asString(value).trim().slice(0, 160);
+	return EMAIL_RE.test(email) ? email : "";
+};
 /** Expired, or inside the last 30 days before its date. */
 function renewable(ref: { expires_at: string; expired: boolean }): boolean {
 	if (ref.expired) return true;
@@ -717,7 +723,7 @@ const plugin: SandboxedPlugin = {
 					listingId,
 					member_id: user.id,
 					name: (asString(raw.name) || user.name || "").slice(0, REVIEW_TITLE_MAX),
-					email: asString(raw.email).slice(0, REVIEW_TITLE_MAX),
+					email: plainEmail(raw.email),
 					message: asString(raw.message).slice(0, REVIEW_BODY_MAX),
 					status: "pending",
 					rev: crypto.randomUUID(),
@@ -1023,10 +1029,12 @@ const plugin: SandboxedPlugin = {
 
 				if (routeCtx.request.method !== "POST") {
 					// What the form opens with: the waiting change if there is one, else the live values.
-					const source = waiting.status === "pending" ? { ...current, ...asRecord(waiting.fields) } : current;
+					// Only this member's own waiting change: after a claim the listing has a new owner.
+					const mine = waiting.status === "pending" && waiting.member_id === user.id;
+					const source = mine ? { ...current, ...asRecord(waiting.fields) } : current;
 					const values: Record<string, unknown> = {};
 					for (const key of EDITABLE) values[key] = key === "type_fields" ? filled(source[key]) : asString(source[key]);
-					return { ok: true, listingId, listing_type: asString(current.listing_type), pending: waiting.status === "pending", values };
+					return { ok: true, listingId, listing_type: asString(current.listing_type), pending: mine, values };
 				}
 
 				const parsed = parseSubmit(raw);
@@ -1089,6 +1097,9 @@ const plugin: SandboxedPlugin = {
 				if (asString(raw.company_website)) {
 					return { ok: false, error: { code: "SPAM", message: "Message rejected." } };
 				}
+				if (email.trim() && !plainEmail(email)) {
+					return { ok: false, error: { code: "INVALID_EMAIL", message: "Enter a full email address, or leave it blank." } };
+				}
 				const listing = (await listingRefs(ctx, [listingId])).get(listingId);
 				if (!listing?.published) return NO_LISTING;
 				// Per visitor IP. With no IP from the host every guest shares one bucket: fail closed.
@@ -1099,7 +1110,7 @@ const plugin: SandboxedPlugin = {
 					listingId,
 					// One line each: these go into a mail subject and body.
 					name: asString(raw.name).replace(/\s+/g, " ").trim().slice(0, 80),
-					email: email.replace(/\s+/g, " ").trim().slice(0, 160),
+					email: plainEmail(email),
 					// Capped so the admin table can show every character.
 					message: message.slice(0, 1000),
 					status: "new",
@@ -1250,8 +1261,8 @@ const plugin: SandboxedPlugin = {
 				if (!listingId) {
 					return { ok: false, error: { code: "VALIDATION_ERROR", message: "Listing is required." } };
 				}
-				const owner = asRecord(await ctx.storage.submissions.get(listingId)).member_id;
-				if (owner !== user.id) {
+				// The current owner (a claim can move a listing), not whoever first submitted it.
+				if ((await listingOwner(ctx, listingId)) !== user.id) {
 					return { ok: false, error: { code: "FORBIDDEN", message: "Only the listing owner can renew it." } };
 				}
 				const days = await expiryDays(ctx);
