@@ -91,3 +91,11 @@ Every case in `docs/qa/QA_CHECKLIST.md` is run in a browser as guest, subscriber
 QA cases by role: `docs/qa/QA_CHECKLIST.md` (walk all of it before a release; `./scripts/lab-role.sh subscriber` for member cases). QA source: `docs/qa/`. Screen ticks: `docs/qa/screen-checklist.md`. Parked Pro: `docs/website/pro-features/parked-work.md`.
 
 When this page goes stale, rewrite the date and the next list in the same commit as the work.
+
+## Next
+
+- 0.6.0 is live (2026-10-15): settings in tabs, Find and Load more on admin lists, all visitor wording in `site-kit/lib/listora-strings.ts`, and the website-link and in-process route security fixes (0.5.3 was folded in and never published alone).
+- Issue #28 (type editor, reminders, health check) is closed as not planned. Owner: getting listed first.
+- No open issues. Findings after a release: patch only if a site owner is exposed, otherwise a card for the next milestone.
+- Never proven on a hosted site: a 100-row import and the scheduled tasks on Cloudflare, owner photos on R2, real mail delivery.
+
