@@ -6,7 +6,7 @@ import {
 	LISTING_TYPES,
 	placeholderHtml,
 	isOpenNow,
-	listoraFetch,
+	callListoraRoute,
 	siteZone,
 	matchesPlace,
 	parseHours,
@@ -60,12 +60,8 @@ const typeChips = LISTING_TYPES.filter((item) => typesInUse.has(item.slug) || it
 // the list keeps its normal order: the page never breaks over a sort.
 let ratings: Record<string, { average: number }> = {};
 if (sort === "rating") {
-	try {
-		const answer = await listoraFetch("ratings?all=1", {}, Astro.url.origin);
-		ratings = (await answer.json())?.data?.ratings ?? {};
-	} catch {
-		ratings = {};
-	}
+	const answer = await callListoraRoute(Astro.locals, "ratings?all=1").catch(() => null);
+	ratings = (answer?.ratings as Record<string, { average: number }> | undefined) ?? {};
 }
 
 const matching = sortListings(

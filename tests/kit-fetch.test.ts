@@ -13,8 +13,12 @@ async function fresh() {
 
 afterEach(() => vi.unstubAllGlobals());
 
+// These cases are browser calls (relative addresses). A server-side call is tested on its own below.
+const inBrowser = () => vi.stubGlobal("window", {});
+
 describe("kit finds Listora's routes on any install", () => {
 	it("uses the registry id on a registry install and remembers it", async () => {
+		inBrowser();
 		const call = await fresh();
 		const seen: string[] = [];
 		vi.stubGlobal("fetch", async (url: string) => (seen.push(url), url.includes(REGISTRY_ID) ? ok() : missing()));
@@ -24,6 +28,7 @@ describe("kit finds Listora's routes on any install", () => {
 	});
 
 	it("falls back to the name on a local install", async () => {
+		inBrowser();
 		const call = await fresh();
 		const seen: string[] = [];
 		vi.stubGlobal("fetch", async (url: string) => (seen.push(url), url.includes("/listora/") ? ok() : missing()));
@@ -34,6 +39,7 @@ describe("kit finds Listora's routes on any install", () => {
 	});
 
 	it("never remembers a failure, and forgets an address that stops answering", async () => {
+		inBrowser();
 		const call = await fresh();
 		let up = false;
 		const seen: string[] = [];
@@ -48,10 +54,37 @@ describe("kit finds Listora's routes on any install", () => {
 	});
 
 	it("keeps Listora's own 404 answer instead of trying another address", async () => {
+		inBrowser();
 		const call = await fresh();
 		const seen: string[] = [];
 		vi.stubGlobal("fetch", async (url: string) => (seen.push(url), new Response(JSON.stringify({ success: false, error: { code: "NOT_FOUND", message: "No such listing" } }), { status: 404 })));
 		expect((await call("listing?id=x")).status).toBe(404);
 		expect(seen).toHaveLength(1);
+	});
+});
+
+describe("server-side calls", () => {
+	it("listoraFetch refuses every server-side call, so no address is ever fetched from server code", async () => {
+		const call = await fresh();
+		const seen: string[] = [];
+		vi.stubGlobal("fetch", async (url: string) => (seen.push(url), ok()));
+		expect((await call("ratings")).status).toBe(503);
+		expect(seen).toHaveLength(0);
+	});
+
+	it("callListoraRoute uses EmDash's in-process handler, registry id first, then the name", async () => {
+		vi.resetModules();
+		const { callListoraRoute } = await import("../site-kit/lib/listora");
+		const seen: string[] = [];
+		vi.stubGlobal("fetch", async (url: string) => (seen.push(url), ok()));
+		const routed: string[] = [];
+		const handler = (installed: string) => async (pluginId: string, _method: string, path: string) => (
+			routed.push(`${pluginId}/${path}`),
+			pluginId === installed ? { success: true, data: { ratings: { a: { average: 4 } } } } : { success: false, error: { code: "NOT_FOUND", message: "Plugin route not found" } }
+		);
+		expect(await callListoraRoute({ emdash: { handlePublicPluginApiRoute: handler("listora") } }, "ratings?all=1")).toMatchObject({ ratings: { a: { average: 4 } } });
+		expect(routed).toEqual([`${REGISTRY_ID}/ratings`, "listora/ratings"]);
+		expect(await callListoraRoute({}, "ratings")).toBeNull();
+		expect(seen).toHaveLength(0);
 	});
 });

@@ -1120,9 +1120,11 @@ describe("spreadsheet import and export", () => {
 		].join("\n");
 		type Check = { ok: boolean; valid: number; total: number; bad: Array<{ line: number; reason: string }>; duplicates: Array<{ line: number }>; imported?: number };
 		const checked = (await route("import", { csv, mode: "check" }, { method: "POST" })) as Check;
-		expect(checked).toMatchObject({ ok: true, total: 7, valid: 2 });
+		expect(checked).toMatchObject({ ok: true, total: 7, valid: 1 });
 		expect(checked.duplicates.map((row) => row.line)).toEqual([3, 7]);
-		expect(checked.bad.map((row) => row.line)).toEqual([4, 5, 6]);
+		expect(checked.bad.map((row) => row.line)).toEqual([4, 5, 6, 8]);
+		// A website that is not a full http or https address (here javascript:) is refused, never stored.
+		expect(checked.bad.find((row) => row.line === 8)?.reason).toMatch(/http/);
 		// Checking writes nothing.
 		expect(await rt.inspect.storage.list("submissions")).toHaveLength(0);
 		// More rows than one request can safely create is refused whole, before anything is written.
@@ -1133,9 +1135,9 @@ describe("spreadsheet import and export", () => {
 		expect(await route("import", { csv: "name,city\nCafe,Lyon", mode: "check" }, { method: "POST" })).toMatchObject({ ok: false, error: { code: "VALIDATION_ERROR" } });
 
 		const done = (await route("import", { csv, mode: "import" }, { method: "POST" })) as Check;
-		expect(done).toMatchObject({ ok: true, imported: 2 });
+		expect(done).toMatchObject({ ok: true, imported: 1 });
 		const waiting = await rt.inspect.storage.list<{ title: string; status: string }>("submissions");
-		expect(waiting.map((row) => [row.data.title, row.data.status]).sort()).toEqual([["New Bakery", "pending"], ["Plain Shop", "pending"]]);
+		expect(waiting.map((row) => [row.data.title, row.data.status]).sort()).toEqual([["New Bakery", "pending"]]);
 		// Nothing went live: the directory still has only the one that was there.
 		const live = (await route("search", { q: "" }, { method: "GET" })) as { items: Array<{ title: string }> };
 		expect(live.items.map((item) => item.title)).toEqual(["Old Cafe"]);

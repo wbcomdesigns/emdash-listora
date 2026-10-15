@@ -1,5 +1,7 @@
 import { phrase, S } from "./listora-strings";
 
+import { getPublicPluginApiRouteHandler } from "emdash/plugin-utils";
+
 export type HourRow = { day: number; open: string; close: string };
 
 export const LISTING_TYPES = [
@@ -93,12 +95,22 @@ export function initials(title: string): string {
 		.toUpperCase();
 }
 
+/** A listing's website as a link, only when it is a full http or https address (never javascript:). */
 export function websiteHref(value: unknown): string {
-	if (typeof value === "string") return value;
-	if (value && typeof value === "object" && "href" in value) {
-		return String((value as { href?: string }).href ?? "");
+	const raw =
+		typeof value === "string"
+			? value
+			: value && typeof value === "object" && "href" in value
+				? String((value as { href?: string }).href ?? "")
+				: "";
+	const text = raw.trim();
+	if (!text || /[\s<>"'`\\]/.test(text)) return "";
+	try {
+		const parsed = new URL(text);
+		return parsed.protocol === "https:" || parsed.protocol === "http:" ? parsed.href : "";
+	} catch {
+		return "";
 	}
-	return "";
 }
 
 export function asNumber(value: unknown): number {
@@ -348,21 +360,43 @@ function rememberId(id: string): void {
 }
 
 /**
- * fetch() for a Listora route. `origin` is for server-side calls from a page (Astro.url.origin).
- * Only an address Listora itself answered on is remembered: on the server this memory is shared
- * by every visitor, so a failure is never remembered, and a remembered address that stops
- * answering is forgotten.
+ * Call a Listora public route from an Astro page's server code (pass Astro.locals). EmDash runs
+ * the route inside the server: there is no HTTP request, so a visitor's Host header or any other
+ * address can never be called. Tries the registry id, then the name. Returns the route's data,
+ * or null when Listora is not installed or the route fails.
  */
-export async function listoraFetch(path: string, init: RequestInit = {}, origin = ""): Promise<Response> {
+export async function callListoraRoute(locals: unknown, path: string): Promise<Record<string, unknown> | null> {
+	const handler = getPublicPluginApiRouteHandler(locals as Parameters<typeof getPublicPluginApiRouteHandler>[0]);
+	if (!handler) return null;
+	const [route, query] = path.split("?");
+	for (const id of [REGISTRY_ID, "listora"]) {
+		const request = new Request(`http://localhost/_emdash/api/plugins/${id}/${route}${query ? `?${query}` : ""}`, { method: "GET" });
+		const result = await handler(id, "GET", route, request).catch(() => null);
+		if (!result || (!result.success && result.error?.code === "NOT_FOUND" && /plugin|route/i.test(result.error.message))) continue;
+		return result.success && result.data && typeof result.data === "object" ? (result.data as Record<string, unknown>) : null;
+	}
+	return null;
+}
+
+/**
+ * fetch() for a Listora route from the browser. Browser only: an Astro page's server code uses
+ * callListoraRoute, which runs the route inside the server, so no address a visitor could
+ * influence is ever called. Only an address Listora itself answered on is remembered, and a
+ * remembered address that stops answering is forgotten.
+ */
+export async function listoraFetch(path: string, init: RequestInit = {}): Promise<Response> {
+	if (typeof window === "undefined") {
+		return new Response(null, { status: 503, statusText: "Server code calls Listora with callListoraRoute" });
+	}
 	const known = chosenId || rememberedId();
 	if (known) {
-		const response = await fetch(`${origin}/_emdash/api/plugins/${known}/${path}`, init);
+		const response = await fetch(`/_emdash/api/plugins/${known}/${path}`, init);
 		if (!(await routeMissing(response))) return response;
 		rememberId("");
 	}
 	let response: Response | null = null;
 	for (const id of [REGISTRY_ID, "listora"]) {
-		response = await fetch(`${origin}/_emdash/api/plugins/${id}/${path}`, init);
+		response = await fetch(`/_emdash/api/plugins/${id}/${path}`, init);
 		if (await routeMissing(response)) continue;
 		rememberId(id);
 		return response;
