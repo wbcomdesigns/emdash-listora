@@ -406,6 +406,14 @@ describe("contact messages", () => {
 		expect(await send("too early", "203.0.113.1")).toMatchObject({ ok: false });
 		await admin("review", `approve:${id}`, "/queue");
 
+		// An address with mail-link options would add recipients when the owner clicks it.
+		expect(
+			await route("contact", { listingId: id, name: "Vee", email: "vee@example.com?bcc=x@lure.test", message: "hi" }, {
+				method: "POST",
+				meta: { ip: "203.0.113.9", userAgent: null, referer: null, geo: null },
+			}),
+		).toMatchObject({ ok: false, error: { code: "INVALID_EMAIL" } });
+
 		expect(await send("Visit http://lure.test now", "203.0.113.1")).toMatchObject({ ok: true });
 		expect(await send("Second one", "203.0.113.2")).toMatchObject({ ok: true });
 		// Nothing is mailed from the visitor's request.
