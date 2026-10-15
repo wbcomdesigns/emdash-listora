@@ -2,7 +2,7 @@
 
 **Included in Free**
 
-Settings are a page of their own: `/_emdash/admin/plugins/listora/settings`. Each group is a tab with one Save.
+Open Admin, Listora, Settings. Each group is a tab with one Save.
 
 | Tab | What it does | Default |
 | --- | --- | --- |
