@@ -21,7 +21,7 @@ Status words: Pass, Thin, Lab only, Missing, Skip.
 | Favorites | `favorites` | Pass |
 | Contact | `contact` + honeypot | Pass |
 | Dashboard | `dashboard` | Thin. Demo member, not proven host auth |
-| Import / export | `import` | Thin. Route + CSV fixture. No admin screen |
+| Import / export | `import` | Site page `/listings/import/`. Settings, Import and export links to it. Not an admin screen |
 | Privacy | `privacy` | Thin. Route exists. Account UI is first pass |
 | Renew | `renew` | Thin. No credits (correct). Account UI is first pass |
 | Admin queues | `admin` `/queue` `/reviews` `/claims` | Pass |
@@ -30,7 +30,7 @@ Status words: Pass, Thin, Lab only, Missing, Skip.
 | Demo seed | `src/lib/demo-seed.ts` | Lab only |
 | Type editor | admin `/types` | Missing |
 | Settings IA | admin `/settings` | Missing |
-| Import admin | admin `/import` | Missing |
+| Import admin | admin `/import` | Not an admin page. The site page is `/listings/import/`, linked from Settings |
 | Paging / cursor | `listings` `cursor` is null | Thin |
 
 ## Site kit

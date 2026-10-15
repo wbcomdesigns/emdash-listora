@@ -28,4 +28,4 @@ When you change a card, change `site-kit/listora-ui.css` and the lab page togeth
 
 ## Lab site
 
-The first host is a sibling EmDash site named `emdash-local` (or `$LISTORA_LAB`). It is not this git repo. Create it with [Set up a new machine](../getting-started/new-machine.md). After a kit change, run `./scripts/apply-kit.sh`. A second clean site should be able to consume the same kit. That path is what `setup-lab.sh` is for.
+The first host is a sibling EmDash site named `emdash-local` (or `$LISTORA_LAB`). It is not this git repo. Create it with [Set up a new machine](../../dev/new-machine.md). After a kit change, run `./scripts/apply-kit.sh`. A second clean site should be able to consume the same kit. That path is what `setup-lab.sh` is for.

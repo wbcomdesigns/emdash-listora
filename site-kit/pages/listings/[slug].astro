@@ -24,6 +24,7 @@ import {
 	websiteHref,
 	weekdayIndex,
 } from "../../lib/listora";
+import { minutes, openPhoto, photoAlt, photosOf, S } from "../../lib/listora-strings";
 import "../../styles/listora-ui.css";
 
 const slug = decodeSlug(Astro.params.slug);
@@ -122,9 +123,9 @@ const schema = {
 	<script type="application/ld+json" set:html={jsonForScript(schema)} />
 	<div class="listora-block" data-zone={zone}>
 		<article class="listora-detail">
-			<nav class="listora-detail__breadcrumb" aria-label="Breadcrumb">
+			<nav class="listora-detail__breadcrumb" aria-label={S.listing.breadcrumb}>
 				<ol>
-					<li><a href="/listings/">Listings</a></li>
+					<li><a href="/listings/">{S.directory.heading}</a></li>
 					<li>
 						<a href={`/listings/?type=${data.listing_type}`}>{typeName(data.listing_type)}</a>
 					</li>
@@ -135,7 +136,7 @@ const schema = {
 			{
 				expired ? (
 					<p class="listora-detail__notice" role="status">
-						This listing has expired. Hours and contact may be out of date.
+						{S.listing.expiredNotice}
 					</p>
 				) : null
 			}
@@ -152,32 +153,32 @@ const schema = {
 
 			{
 				gallery.length > 0 ? (
-					<section class="listora-gallery" aria-label="Photos">
+					<section class="listora-gallery" aria-label={S.listing.photos}>
 						<ul class="listora-gallery__thumbs">
 							{gallery.map((row, index) => (
 								<li>
-									<button type="button" class="listora-gallery__thumb" data-photo={index} aria-label={`Open photo ${index + 1} of ${gallery.length}`}>
+									<button type="button" class="listora-gallery__thumb" data-photo={index} aria-label={openPhoto(index + 1, gallery.length)}>
 										<Image image={row.image} alt="" />
 									</button>
 								</li>
 							))}
 						</ul>
-						<dialog class="listora-lightbox" id="listora-lightbox" aria-label={`Photos of ${String(data.title)}`}>
+						<dialog class="listora-lightbox" id="listora-lightbox" aria-label={photosOf(String(data.title))}>
 							<div class="listora-lightbox__bar">
 								<span id="listora-lightbox-count" aria-live="polite"></span>
-								<button type="button" class="listora-btn listora-btn--secondary" data-lightbox-close>Close</button>
+								<button type="button" class="listora-btn listora-btn--secondary" data-lightbox-close>{S.common.close}</button>
 							</div>
 							<div class="listora-lightbox__stage">
 								{gallery.map((row, index) => (
 									<figure data-slide={index} hidden>
-										<Image image={row.image} alt={`${String(data.title)}, photo ${index + 1} of ${gallery.length}`} />
+										<Image image={row.image} alt={photoAlt(String(data.title), index + 1, gallery.length)} />
 									</figure>
 								))}
 							</div>
 							{gallery.length > 1 ? (
 								<div class="listora-lightbox__nav">
-									<button type="button" class="listora-btn listora-btn--secondary" data-lightbox-step="-1">Previous</button>
-									<button type="button" class="listora-btn listora-btn--secondary" data-lightbox-step="1">Next</button>
+									<button type="button" class="listora-btn listora-btn--secondary" data-lightbox-step="-1">{S.common.previous}</button>
+									<button type="button" class="listora-btn listora-btn--secondary" data-lightbox-step="1">{S.common.next}</button>
 								</div>
 							) : null}
 						</dialog>
@@ -192,16 +193,16 @@ const schema = {
 							<span class="listora-badge listora-badge--type">{typeName(data.listing_type)}</span>
 							{
 								data.is_featured ? (
-									<span class="listora-badge listora-badge--featured">Featured</span>
+									<span class="listora-badge listora-badge--featured">{S.common.featured}</span>
 								) : null
 							}
 							{
 								expired ? (
-									<span class="listora-badge listora-badge--expired">Expired</span>
+									<span class="listora-badge listora-badge--expired">{S.listing.expired}</span>
 								) : open === true ? (
-									<span class="listora-badge listora-badge--open" role="status">Open</span>
+									<span class="listora-badge listora-badge--open" role="status">{S.common.open}</span>
 								) : open === false ? (
-									<span class="listora-badge listora-badge--closed" role="status">Closed</span>
+									<span class="listora-badge listora-badge--closed" role="status">{S.common.closed}</span>
 								) : null
 							}
 							<span class="listora-stars" id="listora-rating" hidden></span>
@@ -237,7 +238,7 @@ const schema = {
 								<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
 									<path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
 								</svg>
-								<span data-label>Save</span>
+								<span data-label>{S.listing.save}</span>
 							</button>
 							<button class="listora-btn listora-btn--secondary" type="button" id="share-btn" data-title={data.title}>
 								<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
@@ -245,7 +246,7 @@ const schema = {
 									<polyline points="16 6 12 2 8 6"></polyline>
 									<line x1="12" x2="12" y1="2" y2="15"></line>
 								</svg>
-								Share
+								{S.listing.share}
 							</button>
 							{
 								directions ? (
@@ -253,27 +254,27 @@ const schema = {
 										<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
 											<polygon points="3 11 22 2 13 21 11 13 3 11"></polygon>
 										</svg>
-										Directions
+										{S.listing.directions}
 									</a>
 								) : null
 							}
 							{
 								!claimed ? (
-									<a class="listora-btn listora-btn--secondary" href="#claim-form">Claim</a>
+									<a class="listora-btn listora-btn--secondary" href="#claim-form">{S.listing.claim}</a>
 								) : null
 							}
 						</div>
 					</header>
 
-					<div class="listora-tabs" role="tablist" aria-label="Listing sections">
+					<div class="listora-tabs" role="tablist" aria-label={S.listing.sections}>
 						<button class="listora-tab is-active" type="button" role="tab" aria-selected="true" aria-controls="tab-details" id="tab-btn-details" data-tab="details">
-							Details
+							{S.listing.details}
 						</button>
 						<button class="listora-tab" type="button" role="tab" aria-selected="false" tabindex="-1" aria-controls="tab-reviews" id="tab-btn-reviews" data-tab="reviews">
-							Reviews
+							{S.listing.reviews}
 						</button>
 						<button class="listora-tab" type="button" role="tab" aria-selected="false" tabindex="-1" aria-controls="tab-contact" id="tab-btn-contact" data-tab="contact">
-							Contact
+							{S.listing.contact}
 						</button>
 					</div>
 
@@ -283,22 +284,22 @@ const schema = {
 								<p class="listora-detail__copy">{data.description}</p>
 							) : (
 								<div class="listora-empty">
-									<h2>No description yet</h2>
-									<p>The owner has not added a longer write-up.</p>
+									<h2>{S.listing.noDescriptionTitle}</h2>
+									<p>{S.listing.noDescriptionBody}</p>
 								</div>
 							)
 						}
 						{
 							services.length ? (
 								<div class="listora-panel">
-									<h2>Services</h2>
+									<h2>{S.listing.services}</h2>
 									<ul class="listora-service-list">
 										{services.map((service: { name?: string; price?: number; duration?: number }) => (
 											<li>
 												<span>{service.name}</span>
 												<span>
 													{service.price ? `$${service.price}` : ""}
-													{service.duration ? ` ${service.duration} min` : ""}
+													{service.duration ? ` ${minutes(service.duration)}` : ""}
 												</span>
 											</li>
 										))}
@@ -320,10 +321,10 @@ const schema = {
 					<div id="tab-reviews" hidden role="tabpanel" aria-labelledby="tab-btn-reviews">
 						<div id="listora-reviews"></div>
 					<form id="listora-review-form" class="listora-form listora-form-section">
-						<h2>Write a review</h2>
-						<p class="listora-helper">Stars and a short note. The owner can reply later.</p>
+						<h2>{S.listing.writeReview}</h2>
+						<p class="listora-helper">{S.listing.writeHelp}</p>
 						<div class="listora-field">
-							<label class="listora-label" for="rev-stars">Stars</label>
+							<label class="listora-label" for="rev-stars">{S.listing.stars}</label>
 							<select id="rev-stars" class="listora-input" name="stars" aria-describedby="rev-stars-help">
 								<option value="5">5</option>
 								<option value="4">4</option>
@@ -331,54 +332,54 @@ const schema = {
 								<option value="2">2</option>
 								<option value="1">1</option>
 							</select>
-							<p class="listora-helper" id="rev-stars-help">5 is excellent.</p>
+							<p class="listora-helper" id="rev-stars-help">{S.listing.starsHelp}</p>
 						</div>
 						<div class="listora-field">
-							<label class="listora-label" for="rev-title">Title</label>
+							<label class="listora-label" for="rev-title">{S.listing.reviewTitle}</label>
 							<input id="rev-title" class="listora-input" name="title" aria-describedby="rev-title-help" />
-							<p class="listora-helper" id="rev-title-help">A short headline for the review.</p>
+							<p class="listora-helper" id="rev-title-help">{S.listing.reviewTitleHelp}</p>
 						</div>
 						<div class="listora-field">
 							<label class="listora-label" for="rev-body">
-								Review <span class="listora-req">(required)</span>
+								{S.listing.review} <span class="listora-req">{S.common.required}</span>
 							</label>
 							<textarea id="rev-body" class="listora-input" name="body" required aria-required="true" aria-describedby="rev-body-help rev-body-error"></textarea>
-							<p class="listora-helper" id="rev-body-help">Say what a visitor should know.</p>
-							<p class="listora-field-error" id="rev-body-error" hidden>Write a review before you submit.</p>
+							<p class="listora-helper" id="rev-body-help">{S.listing.reviewHelp}</p>
+							<p class="listora-field-error" id="rev-body-error" hidden>{S.listing.reviewError}</p>
 						</div>
 						<div class="listora-actions">
-							<button class="listora-btn" type="submit">Submit review</button>
+							<button class="listora-btn" type="submit">{S.listing.submitReview}</button>
 						</div>
 					</form>
 					</div>
 
 					<div id="tab-contact" hidden role="tabpanel" aria-labelledby="tab-btn-contact">
 						<form id="listora-contact-form" class="listora-form listora-form-section">
-							<h2>Contact this listing</h2>
-							<p class="listora-helper">Do not send payment details.</p>
+							<h2>{S.listing.contactTitle}</h2>
+							<p class="listora-helper">{S.listing.contactHelp}</p>
 							<div class="listora-honeypot">
-								<label aria-hidden="true">Company website<input name="company_website" tabindex="-1" autocomplete="off" /></label>
+								<label aria-hidden="true">{S.common.companyWebsite}<input name="company_website" tabindex="-1" autocomplete="off" /></label>
 							</div>
 							<div class="listora-form-grid">
 								<div class="listora-field">
-									<label class="listora-label" for="c-name">Name</label>
+									<label class="listora-label" for="c-name">{S.listing.name}</label>
 									<input id="c-name" class="listora-input" name="name" autocomplete="name" />
 								</div>
 								<div class="listora-field">
-									<label class="listora-label" for="c-email">Email</label>
+									<label class="listora-label" for="c-email">{S.listing.email}</label>
 									<input id="c-email" class="listora-input" name="email" type="email" autocomplete="email" />
 								</div>
 							</div>
 							<div class="listora-field">
 								<label class="listora-label" for="c-message">
-									Message <span class="listora-req">(required)</span>
+									{S.listing.message} <span class="listora-req">{S.common.required}</span>
 								</label>
 								<textarea id="c-message" class="listora-input" name="message" required aria-required="true" aria-describedby="c-message-help c-message-error"></textarea>
-								<p class="listora-helper" id="c-message-help">The owner sees this message.</p>
-								<p class="listora-field-error" id="c-message-error" hidden>Write a message before you send.</p>
+								<p class="listora-helper" id="c-message-help">{S.listing.messageHelp}</p>
+								<p class="listora-field-error" id="c-message-error" hidden>{S.listing.messageError}</p>
 							</div>
 							<div class="listora-actions">
-								<button class="listora-btn" type="submit">Send message</button>
+								<button class="listora-btn" type="submit">{S.listing.send}</button>
 							</div>
 							<p id="listora-contact-status" class="listora-status" hidden></p>
 						</form>
@@ -389,7 +390,7 @@ const schema = {
 					{
 						data.owner_name ? (
 							<div class="listora-detail__owner-card">
-								<h2>Listed by</h2>
+								<h2>{S.listing.listedBy}</h2>
 								<p class="listora-detail__owner-name">{data.owner_name}</p>
 							</div>
 						) : null
@@ -398,7 +399,7 @@ const schema = {
 					{
 						hasContact ? (
 							<div class="listora-detail__contact-card">
-								<h2>Contact</h2>
+								<h2>{S.listing.contact}</h2>
 								{data.phone ? (
 									<a class="listora-detail__contact-item" href={`tel:${data.phone}`}>
 										<span class="listora-detail__contact-icon listora-detail__contact-icon--phone" aria-hidden="true">
@@ -439,11 +440,11 @@ const schema = {
 					{
 						hours.length ? (
 							<div class="listora-detail__hours-card">
-								<h2>Hours</h2>
+								<h2>{S.listing.hours}</h2>
 								{open === true ? (
-									<p class="listora-detail__hours-status is-open">Open now</p>
+									<p class="listora-detail__hours-status is-open">{S.listing.openNow}</p>
 								) : open === false ? (
-									<p class="listora-detail__hours-status is-closed">Closed now</p>
+									<p class="listora-detail__hours-status is-closed">{S.listing.closedNow}</p>
 								) : null}
 								<table class="listora-hours-table">
 									<tbody>
@@ -451,10 +452,10 @@ const schema = {
 											<tr class:list={{ "is-today": row.day === today }}>
 												<td class="listora-hours-table__day">
 													{row.label}
-													{row.day === today ? <span class="listora-sr-only"> today</span> : null}
+													{row.day === today ? <span class="listora-sr-only"> {S.listing.today}</span> : null}
 												</td>
 												<td class:list={{ "listora-hours-table__time": true, "listora-hours-table__time--closed": row.closed }}>
-													{row.closed ? "Closed" : `${row.open} - ${row.close}`}
+													{row.closed ? S.common.closed : `${row.open} - ${row.close}`}
 												</td>
 											</tr>
 										))}
@@ -467,7 +468,7 @@ const schema = {
 					{
 						hasMap || data.address ? (
 							<div class="listora-detail__map-card">
-								<h2>Location</h2>
+								<h2>{S.listing.location}</h2>
 								{/* A listing with no map position still shows where it is. */}
 								{hasMap ? <div id="detail-map" class="listora-detail__map-embed" data-lat={lat} data-lng={lng} data-title={data.title}></div> : null}
 								{address ? <p class="listora-detail__map-address">{address}</p> : null}
@@ -476,7 +477,7 @@ const schema = {
 										<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
 											<polygon points="3 11 22 2 13 21 11 13 3 11"></polygon>
 										</svg>
-										Get directions
+										{S.listing.getDirections}
 									</a>
 								) : null}
 							</div>
@@ -490,37 +491,37 @@ const schema = {
 									<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
 									<polyline points="22 4 12 14.01 9 11.01"></polyline>
 								</svg>
-								Claimed listing
+								{S.listing.claimed}
 							</div>
 						) : (
 							<div class="listora-detail__claim-card">
 								<form id="claim-form" class="listora-form">
-									<h2>Is this your business?</h2>
-									<p class="listora-helper">A claim goes to review. The decision shows in your account, under Claims.</p>
+									<h2>{S.listing.claimTitle}</h2>
+									<p class="listora-helper">{S.listing.claimHelp}</p>
 									<div class="listora-field">
 										<label class="listora-label" for="claim-name">
-											Name <span class="listora-req">(required)</span>
+											{S.listing.name} <span class="listora-req">{S.common.required}</span>
 										</label>
 										<input id="claim-name" class="listora-input" name="name" required aria-required="true" autocomplete="name" aria-describedby="claim-name-error" />
-										<p class="listora-field-error" id="claim-name-error" hidden>Enter your name.</p>
+										<p class="listora-field-error" id="claim-name-error" hidden>{S.listing.nameError}</p>
 									</div>
 									<div class="listora-field">
 										<label class="listora-label" for="claim-email">
-											Email <span class="listora-req">(required)</span>
+											{S.listing.email} <span class="listora-req">{S.common.required}</span>
 										</label>
 										<input id="claim-email" class="listora-input" name="email" type="email" required aria-required="true" autocomplete="email" aria-describedby="claim-email-error" />
-										<p class="listora-field-error" id="claim-email-error" hidden>Enter a valid email.</p>
+										<p class="listora-field-error" id="claim-email-error" hidden>{S.listing.emailError}</p>
 									</div>
 									<div class="listora-field">
 										<label class="listora-label" for="claim-message">
-											Proof <span class="listora-req">(required)</span>
+											{S.listing.proof} <span class="listora-req">{S.common.required}</span>
 										</label>
 										<textarea id="claim-message" class="listora-input" name="message" required aria-required="true" aria-describedby="claim-help claim-message-error"></textarea>
-										<p class="listora-helper" id="claim-help">Say how you can show you own this listing.</p>
-										<p class="listora-field-error" id="claim-message-error" hidden>Add proof before you claim.</p>
+										<p class="listora-helper" id="claim-help">{S.listing.proofHelp}</p>
+										<p class="listora-field-error" id="claim-message-error" hidden>{S.listing.proofError}</p>
 									</div>
 									<div class="listora-actions">
-										<button class="listora-btn" type="submit">Claim listing</button>
+										<button class="listora-btn" type="submit">{S.listing.claimSend}</button>
 									</div>
 								</form>
 							</div>
@@ -535,6 +536,7 @@ const schema = {
 <link rel="stylesheet" href="/vendor/leaflet/leaflet.css" />
 <script>
 	import { api, day, esc, notify, savedIds } from "../../lib/listora";
+	import { outOf5, photoPosition, reviewSummary, S } from "../../lib/listora-strings";
 
 	const favBtn = document.getElementById("fav-btn");
 	const listingId = favBtn?.getAttribute("data-id") || "";
@@ -589,7 +591,7 @@ const schema = {
 		const show = (index: number) => {
 			current = (index + slides.length) % slides.length;
 			slides.forEach((slide, at) => (slide.hidden = at !== current));
-			if (count) count.textContent = `Photo ${current + 1} of ${slides.length}`;
+			if (count) count.textContent = photoPosition(current + 1, slides.length);
 		};
 		document.querySelectorAll<HTMLButtonElement>("[data-photo]").forEach((button) => {
 			button.addEventListener("click", () => {
@@ -624,7 +626,7 @@ const schema = {
 		if (!box) return;
 		const data = await api(`reviews?listingId=${encodeURIComponent(listingId)}`);
 		if (!data.ok) {
-			box.innerHTML = `<div class="listora-empty" role="alert"><h2>Reviews could not be loaded</h2><p>${esc(data.error?.message || "Try again in a moment.")}</p></div>`;
+			box.innerHTML = `<div class="listora-empty" role="alert"><h2>${esc(S.listing.reviewsDown)}</h2><p>${esc(data.error?.message || S.listing.tryAgain)}</p></div>`;
 			return;
 		}
 		const items = (data.items ?? []) as Array<Record<string, unknown>>;
@@ -633,15 +635,15 @@ const schema = {
 		if (summary && count) {
 			const average = Number(data.average) || 0;
 			summary.hidden = false;
-			summary.innerHTML = `<span aria-hidden="true">${"★".repeat(Math.max(1, Math.round(average)))}</span> <span class="listora-stars__value">${esc(average.toFixed(1))} (${count} ${count === 1 ? "review" : "reviews"})</span>`;
+			summary.innerHTML = `<span aria-hidden="true">${"★".repeat(Math.max(1, Math.round(average)))}</span> <span class="listora-stars__value">${esc(reviewSummary(average.toFixed(1), count))}</span>`;
 		}
 		box.innerHTML =
 			items.length === 0
-				? `<div class="listora-empty"><h2>No reviews yet</h2><p>Be the first to review this listing.</p></div>`
+				? `<div class="listora-empty"><h2>${esc(S.listing.noReviews)}</h2><p>${esc(S.listing.firstReview)}</p></div>`
 				: items
 						.map(
 							(item) =>
-								`<article class="listora-review"><strong>${esc(item.author || "Member")}</strong> <span class="listora-stars" aria-label="${Number(item.stars) || 0} out of 5">${"★".repeat(Number(item.stars) || 0)}</span><h3>${esc(item.title)}</h3><p>${esc(item.body)}</p>${item.owner_reply ? `<div class="listora-reply"><p class="listora-reply__label">Reply from the owner${item.owner_reply_at ? ` · ${esc(day(item.owner_reply_at))}` : ""}</p><p>${esc(item.owner_reply)}</p></div>` : ""}</article>`,
+								`<article class="listora-review"><strong>${esc(item.author || S.listing.member)}</strong> <span class="listora-stars" aria-label="${esc(outOf5(Number(item.stars) || 0))}">${"★".repeat(Number(item.stars) || 0)}</span><h3>${esc(item.title)}</h3><p>${esc(item.body)}</p>${item.owner_reply ? `<div class="listora-reply"><p class="listora-reply__label">${esc(S.listing.ownerReply)}${item.owner_reply_at ? ` · ${esc(day(item.owner_reply_at))}` : ""}</p><p>${esc(item.owner_reply)}</p></div>` : ""}</article>`,
 						)
 						.join("");
 	}
@@ -665,7 +667,7 @@ const schema = {
 		});
 		form.removeAttribute("aria-busy");
 		if (result.ok) form.reset();
-		notify(form, result, "Thanks. Your review will appear once it is approved.");
+		notify(form, result, S.listing.reviewThanks);
 	});
 
 	document.getElementById("listora-contact-form")?.addEventListener("submit", async (event) => {
@@ -692,7 +694,7 @@ const schema = {
 		if (status) {
 			status.hidden = false;
 			status.dataset.tone = result.ok ? "success" : "error";
-			status.textContent = result.ok ? "Message sent." : result.error?.message || "Could not send.";
+			status.textContent = result.ok ? S.listing.messageSent : result.error?.message || S.listing.couldNotSend;
 		}
 	});
 
@@ -700,7 +702,7 @@ const schema = {
 		if (!favBtn) return;
 		favBtn.classList.toggle("is-saved", saved);
 		favBtn.setAttribute("aria-pressed", String(saved));
-		(favBtn.querySelector("[data-label]") ?? favBtn).textContent = saved ? "Saved" : "Save";
+		(favBtn.querySelector("[data-label]") ?? favBtn).textContent = saved ? S.listing.saved : S.listing.save;
 	};
 	// The page is the same for every visitor, so whether this member saved it is asked after it loads.
 	if (favBtn) savedIds().then((ids) => showSaved(ids.has(listingId)));
@@ -724,7 +726,7 @@ const schema = {
 		}
 		await navigator.clipboard.writeText(url);
 		const btn = document.getElementById("share-btn");
-		if (btn) btn.lastChild && (btn.lastChild.textContent = " Copied");
+		if (btn) btn.lastChild && (btn.lastChild.textContent = ` ${S.listing.copied}`);
 	});
 
 	document.getElementById("claim-form")?.addEventListener("submit", async (event) => {
@@ -748,7 +750,7 @@ const schema = {
 		const done = document.createElement("p");
 		done.className = "listora-status";
 		done.dataset.tone = "success";
-		done.textContent = "Claim sent for review.";
+		done.textContent = S.listing.claimSent;
 		form.replaceWith(done);
 	});
 
@@ -763,7 +765,7 @@ const schema = {
 			const mapLat = Number(mapEl.dataset.lat);
 			const mapLng = Number(mapEl.dataset.lng);
 			const map = L.map(mapEl).setView([mapLat, mapLng], 14);
-			L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", { attribution: "&copy; OpenStreetMap" }).addTo(map);
+			L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", { attribution: `&copy; ${S.directory.mapCredit}` }).addTo(map);
 			L.marker([mapLat, mapLng]).addTo(map).bindPopup(mapEl.dataset.title);
 		};
 		document.body.append(leaflet);

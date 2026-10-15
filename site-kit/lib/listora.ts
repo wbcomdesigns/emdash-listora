@@ -1,21 +1,25 @@
+import { phrase, S } from "./listora-strings";
+
+import { getPublicPluginApiRouteHandler } from "emdash/plugin-utils";
+
 export type HourRow = { day: number; open: string; close: string };
 
 export const LISTING_TYPES = [
-	{ slug: "business", name: "Business", schema: "LocalBusiness", color: "#2563EB", hint: "Shops and local services" },
-	{ slug: "restaurant", name: "Restaurant", schema: "Restaurant", color: "#DC2626", hint: "Food and drink" },
-	{ slug: "real-estate", name: "Real estate", schema: "Residence", color: "#16A34A", hint: "Homes and rentals" },
-	{ slug: "hotel", name: "Hotel", schema: "Hotel", color: "#DB2777", hint: "Rooms and stays" },
-	{ slug: "event", name: "Event", schema: "Event", color: "#7C3AED", hint: "Dates and venues" },
-	{ slug: "job", name: "Job", schema: "JobPosting", color: "#0D9488", hint: "Open roles" },
-	{ slug: "healthcare", name: "Healthcare", schema: "MedicalBusiness", color: "#0284C7", hint: "Clinics and care" },
-	{ slug: "education", name: "Education", schema: "EducationalOrganization", color: "#CA8A04", hint: "Schools and classes" },
-	{ slug: "place", name: "Place", schema: "Place", color: "#059669", hint: "Parks and landmarks" },
-	{ slug: "classified", name: "Classified", schema: "Offer", color: "#EA580C", hint: "Goods for sale" },
+	{ slug: "business", name: S.types.business.name, schema: "LocalBusiness", color: "#2563EB", hint: S.types.business.hint },
+	{ slug: "restaurant", name: S.types.restaurant.name, schema: "Restaurant", color: "#DC2626", hint: S.types.restaurant.hint },
+	{ slug: "real-estate", name: S.types.realEstate.name, schema: "Residence", color: "#16A34A", hint: S.types.realEstate.hint },
+	{ slug: "hotel", name: S.types.hotel.name, schema: "Hotel", color: "#DB2777", hint: S.types.hotel.hint },
+	{ slug: "event", name: S.types.event.name, schema: "Event", color: "#7C3AED", hint: S.types.event.hint },
+	{ slug: "job", name: S.types.job.name, schema: "JobPosting", color: "#0D9488", hint: S.types.job.hint },
+	{ slug: "healthcare", name: S.types.healthcare.name, schema: "MedicalBusiness", color: "#0284C7", hint: S.types.healthcare.hint },
+	{ slug: "education", name: S.types.education.name, schema: "EducationalOrganization", color: "#CA8A04", hint: S.types.education.hint },
+	{ slug: "place", name: S.types.place.name, schema: "Place", color: "#059669", hint: S.types.place.hint },
+	{ slug: "classified", name: S.types.classified.name, schema: "Offer", color: "#EA580C", hint: S.types.classified.hint },
 ] as const;
 
 export function typeName(slug: unknown): string {
 	const found = LISTING_TYPES.find((item) => item.slug === slug);
-	return found?.name ?? "Business";
+	return found?.name ?? S.types.business.name;
 }
 
 export function schemaType(slug: unknown): string {
@@ -91,12 +95,22 @@ export function initials(title: string): string {
 		.toUpperCase();
 }
 
+/** A listing's website as a link, only when it is a full http or https address (never javascript:). */
 export function websiteHref(value: unknown): string {
-	if (typeof value === "string") return value;
-	if (value && typeof value === "object" && "href" in value) {
-		return String((value as { href?: string }).href ?? "");
+	const raw =
+		typeof value === "string"
+			? value
+			: value && typeof value === "object" && "href" in value
+				? String((value as { href?: string }).href ?? "")
+				: "";
+	const text = raw.trim();
+	if (!text || /[\s<>"'`\\]/.test(text)) return "";
+	try {
+		const parsed = new URL(text);
+		return parsed.protocol === "https:" || parsed.protocol === "http:" ? parsed.href : "";
+	} catch {
+		return "";
 	}
-	return "";
 }
 
 export function asNumber(value: unknown): number {
@@ -120,7 +134,7 @@ export function sortListings<T extends { data: Record<string, unknown> }>(items:
 	return copy.sort((a, b) => Number(b.data.is_featured) - Number(a.data.is_featured));
 }
 
-export const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+export const DAY_NAMES = S.days;
 
 export function weekdayIndex(timeZone = "UTC"): number {
 	const map: Record<string, number> = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
@@ -240,28 +254,28 @@ export function formatEventWhen(value: unknown, timeZone = "UTC"): string {
 /** The extra fields each listing type has. The add-a-listing form asks for them and the listing page shows them. */
 export const TYPE_FIELDS: Record<string, Array<{ key: string; label: string; help: string; type?: string }>> = {
 	restaurant: [
-		{ key: "cuisine", label: "Cuisine", help: "Italian, Korean, and so on." },
-		{ key: "price_range", label: "Price range", help: "Use $ to $$$." },
+		{ key: "cuisine", label: S.fields.cuisine.label, help: S.fields.cuisine.help },
+		{ key: "price_range", label: S.fields.priceRange.label, help: S.fields.priceRange.help },
 	],
-	hotel: [{ key: "star_rating", label: "Stars", help: "1 to 5." }],
+	hotel: [{ key: "star_rating", label: S.fields.stars.label, help: S.fields.stars.help }],
 	"real-estate": [
-		{ key: "beds", label: "Bedrooms", help: "Whole number." },
-		{ key: "baths", label: "Bathrooms", help: "Whole number." },
-		{ key: "price", label: "Price", help: "Asking or nightly rate." },
+		{ key: "beds", label: S.fields.beds.label, help: S.fields.beds.help },
+		{ key: "baths", label: S.fields.baths.label, help: S.fields.baths.help },
+		{ key: "price", label: S.fields.price.label, help: S.fields.price.help },
 	],
 	event: [
-		{ key: "event_start", label: "Starts", help: "Date and time, in this site's time zone.", type: "datetime-local" },
-		{ key: "event_end", label: "Ends", help: "Date and time, in this site's time zone.", type: "datetime-local" },
+		{ key: "event_start", label: S.fields.starts.label, help: S.fields.starts.help, type: "datetime-local" },
+		{ key: "event_end", label: S.fields.ends.label, help: S.fields.ends.help, type: "datetime-local" },
 	],
 	job: [
-		{ key: "salary", label: "Salary", help: "Range is fine." },
-		{ key: "job_type", label: "Job type", help: "Full-time, contract, or intern." },
+		{ key: "salary", label: S.fields.salary.label, help: S.fields.salary.help },
+		{ key: "job_type", label: S.fields.jobType.label, help: S.fields.jobType.help },
 	],
-	healthcare: [{ key: "specialty", label: "Specialty", help: "What the practice treats." }],
-	education: [{ key: "program", label: "Program", help: "Course or school name." }],
-	classified: [{ key: "asking_price", label: "Asking price", help: "What you want for the item." }],
-	place: [{ key: "place_kind", label: "Kind of place", help: "Park, museum, or trail." }],
-	business: [{ key: "year_founded", label: "Year founded", help: "Four digits if you know it." }],
+	healthcare: [{ key: "specialty", label: S.fields.specialty.label, help: S.fields.specialty.help }],
+	education: [{ key: "program", label: S.fields.program.label, help: S.fields.program.help }],
+	classified: [{ key: "asking_price", label: S.fields.askingPrice.label, help: S.fields.askingPrice.help }],
+	place: [{ key: "place_kind", label: S.fields.placeKind.label, help: S.fields.placeKind.help }],
+	business: [{ key: "year_founded", label: S.fields.yearFounded.label, help: S.fields.yearFounded.help }],
 };
 
 /**
@@ -346,21 +360,43 @@ function rememberId(id: string): void {
 }
 
 /**
- * fetch() for a Listora route. `origin` is for server-side calls from a page (Astro.url.origin).
- * Only an address Listora itself answered on is remembered: on the server this memory is shared
- * by every visitor, so a failure is never remembered, and a remembered address that stops
- * answering is forgotten.
+ * Call a Listora public route from an Astro page's server code (pass Astro.locals). EmDash runs
+ * the route inside the server: there is no HTTP request, so a visitor's Host header or any other
+ * address can never be called. Tries the registry id, then the name. Returns the route's data,
+ * or null when Listora is not installed or the route fails.
  */
-export async function listoraFetch(path: string, init: RequestInit = {}, origin = ""): Promise<Response> {
+export async function callListoraRoute(locals: unknown, path: string): Promise<Record<string, unknown> | null> {
+	const handler = getPublicPluginApiRouteHandler(locals as Parameters<typeof getPublicPluginApiRouteHandler>[0]);
+	if (!handler) return null;
+	const [route, query] = path.split("?");
+	for (const id of [REGISTRY_ID, "listora"]) {
+		const request = new Request(`http://localhost/_emdash/api/plugins/${id}/${route}${query ? `?${query}` : ""}`, { method: "GET" });
+		const result = await handler(id, "GET", route, request).catch(() => null);
+		if (!result || (!result.success && result.error?.code === "NOT_FOUND" && /plugin|route/i.test(result.error.message))) continue;
+		return result.success && result.data && typeof result.data === "object" ? (result.data as Record<string, unknown>) : null;
+	}
+	return null;
+}
+
+/**
+ * fetch() for a Listora route from the browser. Browser only: an Astro page's server code uses
+ * callListoraRoute, which runs the route inside the server, so no address a visitor could
+ * influence is ever called. Only an address Listora itself answered on is remembered, and a
+ * remembered address that stops answering is forgotten.
+ */
+export async function listoraFetch(path: string, init: RequestInit = {}): Promise<Response> {
+	if (typeof window === "undefined") {
+		return new Response(null, { status: 503, statusText: "Server code calls Listora with callListoraRoute" });
+	}
 	const known = chosenId || rememberedId();
 	if (known) {
-		const response = await fetch(`${origin}/_emdash/api/plugins/${known}/${path}`, init);
+		const response = await fetch(`/_emdash/api/plugins/${known}/${path}`, init);
 		if (!(await routeMissing(response))) return response;
 		rememberId("");
 	}
 	let response: Response | null = null;
 	for (const id of [REGISTRY_ID, "listora"]) {
-		response = await fetch(`${origin}/_emdash/api/plugins/${id}/${path}`, init);
+		response = await fetch(`/_emdash/api/plugins/${id}/${path}`, init);
 		if (await routeMissing(response)) continue;
 		rememberId(id);
 		return response;
@@ -377,8 +413,8 @@ export const PHOTO_MAX_BYTES = 5 * 1024 * 1024;
 
 /** Send one file as the body of a request. Like `api`, it never throws. */
 export async function uploadPhoto(listingId: string, file: File): Promise<ApiResult> {
-	if (!PHOTO_TYPES.includes(file.type)) return { ok: false, error: { code: "WRONG_TYPE", message: "Use a JPEG, PNG or WebP photo." } };
-	if (file.size > PHOTO_MAX_BYTES) return { ok: false, error: { code: "TOO_BIG", message: "That photo is larger than 5 MB." } };
+	if (!PHOTO_TYPES.includes(file.type)) return { ok: false, error: { code: "WRONG_TYPE", message: phrase("WRONG_TYPE") } };
+	if (file.size > PHOTO_MAX_BYTES) return { ok: false, error: { code: "TOO_BIG", message: phrase("TOO_BIG") } };
 	try {
 		const response = await listoraFetch(`photo?listingId=${encodeURIComponent(listingId)}&name=${encodeURIComponent(file.name)}`, {
 			method: "POST",
@@ -386,15 +422,15 @@ export async function uploadPhoto(listingId: string, file: File): Promise<ApiRes
 			headers: { "Content-Type": "application/octet-stream", "X-EmDash-Request": "1" },
 			body: file,
 		});
-		if (response.status === 401) return { ok: false, error: { code: "SIGN_IN_REQUIRED", message: "Sign in to continue." } };
-		if (response.status === 413) return { ok: false, error: { code: "TOO_BIG", message: "That photo is larger than 5 MB." } };
+		if (response.status === 401) return { ok: false, error: { code: "SIGN_IN_REQUIRED", message: phrase("SIGN_IN_REQUIRED") } };
+		if (response.status === 413) return { ok: false, error: { code: "TOO_BIG", message: phrase("TOO_BIG") } };
 		const json = await response.json().catch(() => null);
 		if (!response.ok || !json) {
-			return { ok: false, error: { code: "FAILED", message: json?.error?.message || "The photo could not be added. Try again." } };
+			return { ok: false, error: { code: "FAILED", message: json?.error?.message || S.account.photoFailed } };
 		}
 		return json.data ?? { ok: false };
 	} catch {
-		return { ok: false, error: { code: "OFFLINE", message: "Could not reach the site. Check your connection and try again." } };
+		return { ok: false, error: { code: "OFFLINE", message: phrase("OFFLINE") } };
 	}
 }
 
@@ -428,16 +464,16 @@ export async function api(path: string, body?: unknown, method = body ? "POST" :
 		});
 		if (response.status === 401) {
 			remember(true);
-			return { ok: false, error: { code: "SIGN_IN_REQUIRED", message: "Sign in to continue." } };
+			return { ok: false, error: { code: "SIGN_IN_REQUIRED", message: phrase("SIGN_IN_REQUIRED") } };
 		}
 		remember(false);
 		const json = await response.json().catch(() => null);
 		if (!response.ok || !json) {
-			return { ok: false, error: { code: "FAILED", message: json?.error?.message || "Something went wrong. Try again." } };
+			return { ok: false, error: { code: "FAILED", message: json?.error?.message || phrase("FAILED") } };
 		}
 		return json.data ?? { ok: false };
 	} catch {
-		return { ok: false, error: { code: "OFFLINE", message: "Could not reach the site. Check your connection and try again." } };
+		return { ok: false, error: { code: "OFFLINE", message: phrase("OFFLINE") } };
 	}
 }
 
@@ -478,6 +514,6 @@ export function notify(after: Element, result: ApiResult, success: string): void
 	box.dataset.tone = result.ok ? "success" : "error";
 	if (result.ok) box.textContent = success;
 	else if (result.error?.code === "SIGN_IN_REQUIRED") {
-		box.innerHTML = `Sign in to continue. <a href="${esc(signInUrl())}">Sign in</a>`;
-	} else box.textContent = result.error?.message || "Something went wrong. Try again.";
+		box.innerHTML = `${esc(S.common.signInContinue)} <a href="${esc(signInUrl())}">${esc(S.common.signIn)}</a>`;
+	} else box.textContent = result.error?.message || phrase(result.error?.code);
 }

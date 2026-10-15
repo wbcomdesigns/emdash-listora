@@ -18,7 +18,7 @@ import {
 	publishNow,
 } from "./lib/listings-query";
 import { CSV_COLUMNS, parseCsv, toCsv, unguard } from "./lib/csv";
-import { clean, EDITABLE, editPatch, filled } from "./lib/edits";
+import { clean, EDITABLE, editPatch, filled, webAddress } from "./lib/edits";
 import { galleryReady, imageType, PHOTO_MAX_BYTES, photoLimit } from "./lib/photos";
 export { imageType } from "./lib/photos";
 import { LISTING_TYPES, LISTINGS, NOTIFY_CRON, listingTypeBySlug } from "./lib/types";
@@ -1164,6 +1164,7 @@ const plugin: SandboxedPlugin = {
 					const data: Record<string, string> = {};
 					for (const column of CSV_COLUMNS) data[column] = clean(unguard(source[column] ?? ""), column === "description" ? 5000 : column === "excerpt" ? 280 : 200);
 					if (!data.title) return bad.push({ line, title: "", reason: "It has no title." });
+					if (data.website && !webAddress(data.website)) return bad.push({ line, title: data.title, reason: "Website must be a full address starting with http:// or https://." });
 					const number = (value: string, max: number) => value === "" || (Number.isFinite(Number(value)) && Math.abs(Number(value)) <= max);
 					if (!number(data.lat, 90) || !number(data.lng, 180)) return bad.push({ line, title: data.title, reason: "Latitude or longitude is not a valid number." });
 					const type = LISTING_TYPES.find((item) => item.slug === data.listing_type.toLowerCase() || item.name.toLowerCase() === data.listing_type.toLowerCase());

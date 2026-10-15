@@ -1,5 +1,6 @@
 ---
 import Layout from "../../layouts/ListoraLayout.astro";
+import { S } from "../../lib/listora-strings";
 import "../../styles/listora-ui.css";
 
 // This page differs per visitor. Sites cache pages without regard to cookies, so say so.
@@ -10,43 +11,42 @@ const isAdmin = Number(user?.role) >= 50;
 const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.pathname)}`;
 ---
 
-<Layout title="Import and export listings" description="Move listings in and out of the directory as a spreadsheet.">
+<Layout title={S.transfer.title} description={S.transfer.description}>
 	<div class="listora-block">
 		<header class="listora-page-head">
 			<div>
-				<h1>Import and export</h1>
-				<p>Move listings in and out of the directory as a spreadsheet (CSV file).</p>
+				<h1>{S.transfer.heading}</h1>
+				<p>{S.transfer.intro}</p>
 			</div>
 		</header>
 		{
 			isAdmin ? (
 				<div class="listora-transfer">
 					<section class="listora-panel" aria-labelledby="export-title">
-						<h2 id="export-title">Export</h2>
-						<p>Download your published listings (up to 500) as one spreadsheet, with the main details of each. Open it in Excel, Numbers or Google Sheets.</p>
-						<button class="listora-btn" type="button" id="export-btn">Download listings</button>
+						<h2 id="export-title">{S.transfer.exportTitle}</h2>
+						<p>{S.transfer.exportBody}</p>
+						<button class="listora-btn" type="button" id="export-btn">{S.transfer.download}</button>
 					</section>
 					<section class="listora-panel" aria-labelledby="import-title">
-						<h2 id="import-title">Import</h2>
+						<h2 id="import-title">{S.transfer.importTitle}</h2>
 						<p>
-							Add up to 100 listings at a time from a spreadsheet saved as CSV. Nothing goes live: each row becomes a draft
-							waiting for your approval. <a href="/vendor/listora-sample.csv" download>Download a sample file</a>
+							{S.transfer.importLead} <a href="/vendor/listora-sample.csv" download>{S.transfer.sample}</a>
 						</p>
 						<form id="import-form" class="listora-form">
 							<label class="listora-field">
-								<span>Spreadsheet (CSV)</span>
+								<span>{S.transfer.fileLabel}</span>
 								<input type="file" id="import-file" accept=".csv,text/csv" required />
 							</label>
-							<button class="listora-btn" type="submit" id="check-btn">Check file</button>
+							<button class="listora-btn" type="submit" id="check-btn">{S.transfer.check}</button>
 						</form>
 						<div id="import-result" aria-live="polite"></div>
 					</section>
 				</div>
 			) : (
 				<div class="listora-empty">
-					<h2>For site admins</h2>
-					<p>Only a site admin can import or export listings.</p>
-					{user ? null : <a class="listora-btn" href={loginUrl}>Sign in</a>}
+					<h2>{S.transfer.adminsTitle}</h2>
+					<p>{S.transfer.adminsBody}</p>
+					{user ? null : <a class="listora-btn" href={loginUrl}>{S.common.signIn}</a>}
 				</div>
 			)
 		}
@@ -55,6 +55,7 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 
 <script>
 	import { api, esc, listoraFetch, notify } from "../../lib/listora";
+	import { importDrafts, importedDrafts, rowDup, rowLine, rowsCannot, rowsReady, rowsSkipped, S } from "../../lib/listora-strings";
 
 	type Bad = { line: number; title: string; reason: string };
 	type Dup = { line: number; title: string; city: string };
@@ -62,7 +63,7 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 	const exportBtn = document.getElementById("export-btn") as HTMLButtonElement | null;
 	exportBtn?.addEventListener("click", async () => {
 		exportBtn.disabled = true;
-		exportBtn.textContent = "Preparing...";
+		exportBtn.textContent = S.transfer.preparing;
 		try {
 			// A plain link cannot be used: the site only answers signed-in requests that carry this header.
 			const response = await listoraFetch("export", { credentials: "same-origin", headers: { "X-EmDash-Request": "1" } });
@@ -70,9 +71,9 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 			const blob = await response.blob();
 			// The column names alone mean there was nothing to export.
 			if ((await blob.text()).trim().split("\n").length < 2) {
-				notify(exportBtn, { ok: false, error: { message: "There are no published listings to download yet." } }, "");
+				notify(exportBtn, { ok: false, error: { message: S.transfer.none } }, "");
 				exportBtn.disabled = false;
-				exportBtn.textContent = "Download listings";
+				exportBtn.textContent = S.transfer.download;
 				return;
 			}
 			const link = document.createElement("a");
@@ -81,12 +82,12 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 			link.click();
 			// Not at once: some browsers cancel a download whose address is withdrawn straight away.
 			setTimeout(() => URL.revokeObjectURL(link.href), 2000);
-			notify(exportBtn, { ok: true }, "Your download has started.");
+			notify(exportBtn, { ok: true }, S.transfer.started);
 		} catch {
-			notify(exportBtn, { ok: false, error: { message: "The download could not be prepared. Try again." } }, "");
+			notify(exportBtn, { ok: false, error: { message: S.transfer.downloadFailed } }, "");
 		}
 		exportBtn.disabled = false;
-		exportBtn.textContent = "Download listings";
+		exportBtn.textContent = S.transfer.download;
 	});
 
 	const form = document.getElementById("import-form") as HTMLFormElement | null;
@@ -98,12 +99,12 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 	const rowsList = (title: string, items: string[]) =>
 		items.length ? `<h3>${esc(title)}</h3><ul class="listora-transfer__rows">${items.map((item) => `<li>${item}</li>`).join("")}</ul>` : "";
 	const skipped = (bad: Bad[], duplicates: Dup[]) =>
-		rowsList(`${bad.length} ${bad.length === 1 ? "row" : "rows"} cannot be imported`, bad.map((row) => `Row ${row.line}${row.title ? ` (${esc(row.title)})` : ""}: ${esc(row.reason)}`)) +
-		rowsList(`${duplicates.length} already in the directory, skipped`, duplicates.map((row) => `Row ${row.line}: ${esc(row.title)}${row.city ? `, ${esc(row.city)}` : ""}`));
+		rowsList(rowsCannot(bad.length), bad.map((row) => esc(rowLine(row.line, row.title, row.reason)))) +
+		rowsList(rowsSkipped(duplicates.length), duplicates.map((row) => esc(rowDup(row.line, row.title, row.city))));
 	const show = (tone: string, html: string) => {
 		if (out) out.innerHTML = `<div class="listora-status" data-tone="${tone}">${html}</div>`;
 	};
-	const failed = (message?: string) => show("error", esc(message || "Something went wrong. Try again."));
+	const failed = (message?: string) => show("error", esc(message || S.common.fallback));
 
 	fileInput?.addEventListener("change", () => {
 		if (out) out.innerHTML = "";
@@ -114,40 +115,40 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 		const file = fileInput?.files?.[0];
 		if (!file || !checkBtn) return;
 		checkBtn.disabled = true;
-		checkBtn.textContent = "Checking...";
+		checkBtn.textContent = S.transfer.checking;
 		// The site takes about 1 MB per request, and a file grows on the way. Say so here, in plain words.
 		if (file.size > 600 * 1024) {
 			checkBtn.disabled = false;
-			checkBtn.textContent = "Check file";
-			return failed("That file is too large. Split it into files of up to 100 listings.");
+			checkBtn.textContent = S.transfer.check;
+			return failed(S.transfer.tooBig);
 		}
 		csv = await file.text();
 		const result = await api("import", { csv, mode: "check" });
 		checkBtn.disabled = false;
-		checkBtn.textContent = "Check file";
+		checkBtn.textContent = S.transfer.check;
 		if (!result.ok) return failed(result.error?.message);
 		const valid = Number(result.valid);
 		const bad = (result.bad as Bad[]) || [];
 		const duplicates = (result.duplicates as Dup[]) || [];
 		show(
 			valid ? "info" : "error",
-			`<p><strong>${valid} of ${Number(result.total)} ${Number(result.total) === 1 ? "row is" : "rows are"} ready to import.</strong></p>` +
+			`<p><strong>${esc(rowsReady(valid, Number(result.total)))}</strong></p>` +
 				skipped(bad, duplicates) +
-				(valid ? `<button class="listora-btn" type="button" id="import-btn">Import ${valid} ${valid === 1 ? "listing" : "listings"} as drafts</button>` : ""),
+				(valid ? `<button class="listora-btn" type="button" id="import-btn">${esc(importDrafts(valid))}</button>` : ""),
 		);
 		document.getElementById("import-btn")?.addEventListener("click", async (click) => {
 			const button = click.currentTarget as HTMLButtonElement;
 			button.disabled = true;
-			button.textContent = "Importing...";
+			button.textContent = S.transfer.importing;
 			const done = await api("import", { csv, mode: "import" });
 			if (!done.ok) return failed(done.error?.message);
 			const count = Number(done.imported);
 			form.reset();
 			show(
 				count ? "success" : "error",
-				`<p><strong>${count} ${count === 1 ? "listing" : "listings"} added as drafts.</strong> Nothing is live until you approve it.</p>` +
+				`<p><strong>${esc(importedDrafts(count))}</strong> ${esc(S.transfer.nothingLive)}</p>` +
 					skipped((done.bad as Bad[]) || [], (done.duplicates as Dup[]) || []) +
-					`<a class="listora-btn" href="/_emdash/admin/plugins/listora/queue">Review them in the queue</a>`,
+					`<a class="listora-btn" href="/_emdash/admin/plugins/listora/queue">${esc(S.transfer.queue)}</a>`,
 			);
 		});
 	});

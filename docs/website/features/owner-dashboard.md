@@ -1,16 +1,17 @@
-# Owner dashboard
+# Your account
 
 **Included in Free**
 
-Page: `/account/`. Data: `dashboard`, plus `favorites` and `privacy`.
+`/account/` is the member's own page. A guest sees **Sign in to see your dashboard**. A signed-in member sees **Dashboard** and **Signed in as** their name.
 
-## What works in 0.3.0
+## The tabs
 
-- Signed-in members see their own listings, reviews, claims and favorites
-- Guests see a sign-in prompt
-- A listing appears under My listings when the member submitted it or an admin approved their claim on it
-- Profile tab downloads the member's data as JSON
+- **Overview.** Counts for listings, reviews, claims, favorites, and messages. Choose one to open it.
+- **My listings.** Each listing shows its status. **Edit** sends changes for approval. The public page stays as it is until you approve those changes in the Listings queue. **Renew** appears when a listing is due to expire.
+- **Reviews.** Reviews of the member's listings, with a reply box, and reviews the member wrote.
+- **Messages.** Messages sent from the member's listing pages.
+- **Claims.** Claims the member sent.
+- **Favorites.** Listings the member saved with **Save**.
+- **Profile.** **Download my data** saves a file of their reviews, claims, and saved listings. **Delete my data** asks a second time, then removes those. Listings they added stay in the directory.
 
-## What is still thin
-
-WordPress Free has a left nav with edit and renew actions per listing. Here the rows are read only: there is no edit link, and renew has a route but no button because nothing expires a listing yet. Contact messages are stored but not shown to the listing owner.
+Photos are added from **My listings**. Each photo waits in the Listings queue until you approve it. Settings, Photos has **Photos an owner may add (0 means none)**. 0 turns owner photos off.

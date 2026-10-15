@@ -2,6 +2,7 @@
 import { getTaxonomyTerms } from "emdash";
 import Layout from "../../layouts/ListoraLayout.astro";
 import { LISTING_TYPES } from "../../lib/listora";
+import { S } from "../../lib/listora-strings";
 import "../../styles/listora-ui.css";
 
 // This page differs per visitor. Sites cache pages without regard to cookies, so say so.
@@ -12,36 +13,33 @@ const categories = await getTaxonomyTerms("listing_category").catch(() => []);
 const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.pathname)}`;
 ---
 
-<Layout
-	title="Add a listing"
-	description="Submit a directory listing in five steps. New listings stay in review until they are published."
->
+<Layout title={S.submit.title} description={S.submit.description}>
 	<div class="listora-block">
 		<header class="listora-page-head">
 			<div>
-				<h1 id="wizard-title">Add a listing</h1>
-				<p id="wizard-intro">Type, basics, details, categories, then a card preview.</p>
+				<h1 id="wizard-title">{S.submit.heading}</h1>
+				<p id="wizard-intro">{S.submit.intro}</p>
 			</div>
-			<a class="listora-btn listora-btn--ghost" id="wizard-back" href="/listings/">All listings</a>
+			<a class="listora-btn listora-btn--ghost" id="wizard-back" href="/listings/">{S.submit.backAll}</a>
 		</header>
 
 		{
 			user ? null : (
 				<div class="listora-empty">
-					<h2>Sign in to add a listing</h2>
-					<p>An account lets you edit, renew and track your listing later.</p>
-					<a class="listora-btn" href={loginUrl}>Sign in</a>
+					<h2>{S.submit.signInTitle}</h2>
+					<p>{S.submit.signInBody}</p>
+					<a class="listora-btn" href={loginUrl}>{S.common.signIn}</a>
 				</div>
 			)
 		}
 		{user ? (
 		<Fragment>
 		<ol class="listora-wizard-steps" id="wizard-steps">
-			<li><button type="button" data-step="1" aria-current="step">Type</button></li>
-			<li><button type="button" data-step="2">Basics</button></li>
-			<li><button type="button" data-step="3">Details</button></li>
-			<li><button type="button" data-step="4">Categories</button></li>
-			<li><button type="button" data-step="5">Preview</button></li>
+			<li><button type="button" data-step="1" aria-current="step">{S.submit.stepType}</button></li>
+			<li><button type="button" data-step="2">{S.submit.stepBasics}</button></li>
+			<li><button type="button" data-step="3">{S.submit.stepDetails}</button></li>
+			<li><button type="button" data-step="4">{S.submit.stepCategories}</button></li>
+			<li><button type="button" data-step="5">{S.submit.stepPreview}</button></li>
 		</ol>
 
 		<div id="listora-status" class="listora-status" hidden></div>
@@ -49,12 +47,12 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 
 		<form id="listora-submit" class="listora-form" novalidate>
 			<div class="listora-honeypot">
-				<label>Company website<input name="company_website" tabindex="-1" autocomplete="off" /></label>
+				<label>{S.common.companyWebsite}<input name="company_website" tabindex="-1" autocomplete="off" /></label>
 			</div>
 
 			<section class="listora-form-section" data-panel="1">
-				<h2>What are you listing?</h2>
-				<p class="listora-helper" id="type-help">Pick one type. Extra fields change on the Details step.</p>
+				<h2>{S.submit.what}</h2>
+				<p class="listora-helper" id="type-help">{S.submit.typeHelp}</p>
 				<div class="listora-type-grid" role="radiogroup" aria-labelledby="type-help">
 					{
 						LISTING_TYPES.map((item, index) => (
@@ -74,11 +72,11 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 			</section>
 
 			<section class="listora-form-section" data-panel="2" hidden>
-				<h2>Basics</h2>
-				<p class="listora-helper">Name and place first. Contact comes next.</p>
+				<h2>{S.submit.stepBasics}</h2>
+				<p class="listora-helper">{S.submit.basicsHelp}</p>
 				<div class="listora-field">
 					<label class="listora-label" for="title">
-						Listing title <span class="listora-req">(required)</span>
+						{S.submit.titleLabel} <span class="listora-req">{S.common.required}</span>
 					</label>
 					<input
 						id="title"
@@ -90,102 +88,102 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 						aria-required="true"
 						aria-describedby="title-help title-error"
 					/>
-					<p class="listora-helper" id="title-help">Use the public business name.</p>
-					<p class="listora-field-error" id="title-error" hidden>Enter a title.</p>
+					<p class="listora-helper" id="title-help">{S.submit.titleHelp}</p>
+					<p class="listora-field-error" id="title-error" hidden>{S.submit.titleError}</p>
 				</div>
 				<div class="listora-field">
-					<label class="listora-label" for="excerpt">Short summary</label>
+					<label class="listora-label" for="excerpt">{S.submit.summary}</label>
 					<textarea id="excerpt" class="listora-input" name="excerpt" rows="2" maxlength="280" aria-describedby="excerpt-help"></textarea>
-					<p class="listora-helper" id="excerpt-help">Shown on cards. 280 characters or fewer.</p>
+					<p class="listora-helper" id="excerpt-help">{S.submit.summaryHelp}</p>
 				</div>
 				<div class="listora-field">
-					<label class="listora-label" for="description">Description</label>
+					<label class="listora-label" for="description">{S.submit.descriptionLabel}</label>
 					<textarea id="description" class="listora-input" name="description" rows="5" aria-describedby="description-help"></textarea>
-					<p class="listora-helper" id="description-help">What a visitor should know before they arrive.</p>
+					<p class="listora-helper" id="description-help">{S.submit.descriptionHelp}</p>
 				</div>
 				<div class="listora-form-grid">
 					<div class="listora-field">
-						<label class="listora-label" for="city">City</label>
+						<label class="listora-label" for="city">{S.submit.city}</label>
 						<input id="city" class="listora-input" name="city" autocomplete="address-level2" />
 					</div>
 					<div class="listora-field">
-						<label class="listora-label" for="address">Street address</label>
+						<label class="listora-label" for="address">{S.submit.address}</label>
 						<input id="address" class="listora-input" name="address" autocomplete="street-address" />
 					</div>
 				</div>
 			</section>
 
 			<section class="listora-form-section" data-panel="3" hidden>
-				<h2>Details</h2>
-				<p class="listora-helper">Phone, web, and fields for this listing type.</p>
+				<h2>{S.submit.stepDetails}</h2>
+				<p class="listora-helper">{S.submit.detailsHelp}</p>
 				<div class="listora-form-grid">
 					<div class="listora-field">
-						<label class="listora-label" for="phone">Phone</label>
+						<label class="listora-label" for="phone">{S.submit.phone}</label>
 						<input id="phone" class="listora-input" name="phone" type="tel" autocomplete="tel" />
 					</div>
 					<div class="listora-field">
-						<label class="listora-label" for="email">Email</label>
+						<label class="listora-label" for="email">{S.submit.email}</label>
 						<input id="email" class="listora-input" name="email" type="email" autocomplete="email" />
 					</div>
 				</div>
 				<div class="listora-field">
-					<label class="listora-label" for="website">Website</label>
+					<label class="listora-label" for="website">{S.submit.website}</label>
 					<input id="website" class="listora-input" name="website" type="url" aria-describedby="website-help" />
-					<p class="listora-helper" id="website-help">Full URL, including https.</p>
+					<p class="listora-helper" id="website-help">{S.submit.websiteHelp}</p>
 				</div>
 				<div class="listora-form-grid">
 					<div class="listora-field">
-						<label class="listora-label" for="owner_name">Listed by</label>
+						<label class="listora-label" for="owner_name">{S.submit.listedBy}</label>
 						<input id="owner_name" class="listora-input" name="owner_name" />
 					</div>
 					<div class="listora-field">
-						<label class="listora-label" for="amenities">Amenities</label>
+						<label class="listora-label" for="amenities">{S.submit.amenities}</label>
 						<input id="amenities" class="listora-input" name="amenities" aria-describedby="amenities-help" />
-						<p class="listora-helper" id="amenities-help">Comma-separated, such as wifi, parking, outdoor.</p>
+						<p class="listora-helper" id="amenities-help">{S.submit.amenitiesHelp}</p>
 					</div>
 				</div>
 				<div id="type-fields"></div>
 			</section>
 
 			<section class="listora-form-section" data-panel="4" hidden>
-				<h2>Categories</h2>
-				<p class="listora-helper">Help people filter this listing.</p>
+				<h2>{S.submit.stepCategories}</h2>
+				<p class="listora-helper">{S.submit.categoriesHelp}</p>
 				<div class="listora-field">
-					<label class="listora-label" for="category">Category</label>
+					<label class="listora-label" for="category">{S.submit.category}</label>
 					<select id="category" class="listora-input" name="category">
-						<option value="">No category</option>
+						<option value="">{S.submit.noCategory}</option>
 						{categories.map((term) => <option value={term.slug}>{term.label}</option>)}
 					</select>
 				</div>
 				<div class="listora-form-grid">
 					<div class="listora-field">
-						<label class="listora-label" for="country">Country</label>
+						<label class="listora-label" for="country">{S.submit.country}</label>
 						<input id="country" class="listora-input" name="country" autocomplete="country" />
 					</div>
 					<div class="listora-field">
-						<label class="listora-label" for="state">State</label>
+						<label class="listora-label" for="state">{S.submit.state}</label>
 						<input id="state" class="listora-input" name="state" autocomplete="address-level1" />
 					</div>
 				</div>
 			</section>
 
 			<section class="listora-form-section" data-panel="5" hidden>
-				<h2>Preview</h2>
-				<p class="listora-helper">This is how the listing card will read.</p>
+				<h2>{S.submit.stepPreview}</h2>
+				<p class="listora-helper">{S.submit.previewHelp}</p>
 				<div id="preview"></div>
 				<div class="listora-field">
 					<div class="listora-check">
 						<input id="agree_terms" name="agree_terms" type="checkbox" value="true" aria-describedby="agree-error" />
-						<label class="listora-label" for="agree_terms">I confirm this listing is accurate.</label>
+						<label class="listora-label" for="agree_terms">{S.submit.agree}</label>
 					</div>
-					<p class="listora-field-error" id="agree-error" hidden>Confirm the listing is accurate before you submit.</p>
+					<p class="listora-field-error" id="agree-error" hidden>{S.submit.agreeError}</p>
 				</div>
 			</section>
 
 			<div class="listora-actions">
-				<button class="listora-btn listora-btn--ghost" type="button" id="back-btn" hidden>Back</button>
-				<button class="listora-btn" type="button" id="next-btn">Continue</button>
-				<button class="listora-btn" type="submit" id="submit-btn" hidden>Submit for review</button>
+				<button class="listora-btn listora-btn--ghost" type="button" id="back-btn" hidden>{S.submit.back}</button>
+				<button class="listora-btn" type="button" id="next-btn">{S.submit.continue}</button>
+				<button class="listora-btn" type="submit" id="submit-btn" hidden>{S.submit.send}</button>
 			</div>
 		</form>
 		</Fragment>
@@ -195,6 +193,7 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 
 <script>
 	import { api, esc, TYPE_FIELDS, typeName } from "../../lib/listora";
+	import { S } from "../../lib/listora-strings";
 
 	const form = document.getElementById("listora-submit") as HTMLFormElement | null;
 	if (form) wizard(form);
@@ -250,7 +249,7 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 		const preview = document.getElementById("preview");
 		const type = String(data.listing_type || "business");
 		if (preview) {
-			preview.innerHTML = `<article class="listora-card"><div class="listora-card-body"><p class="listora-meta"><span class="listora-badge listora-badge--type">${esc(typeName(type))}</span></p><h2>${esc(data.title || "Untitled")}</h2><p class="listora-meta">${esc(data.city || "City not set")}</p><p>${esc(data.excerpt || "No summary yet.")}</p></div></article>`;
+			preview.innerHTML = `<article class="listora-card"><div class="listora-card-body"><p class="listora-meta"><span class="listora-badge listora-badge--type">${esc(typeName(type))}</span></p><h2>${esc(data.title || S.submit.untitled)}</h2><p class="listora-meta">${esc(data.city || S.submit.cityMissing)}</p><p>${esc(data.excerpt || S.submit.noSummary)}</p></div></article>`;
 		}
 	}
 
@@ -264,7 +263,7 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 		warning.innerHTML =
 			matches.length === 0
 				? ""
-				: `A listing named <a href="/listings/${esc(matches[0].slug)}/">${esc(matches[0].title)}</a> already exists.`;
+				: `${esc(S.submit.duplicateBefore)}<a href="/listings/${esc(matches[0].slug)}/">${esc(matches[0].title)}</a>${esc(S.submit.duplicateAfter)}`;
 	}
 
 	form.querySelectorAll<HTMLInputElement>('input[name="listing_type"]').forEach((input) => {
@@ -313,24 +312,22 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 			if (status) {
 				status.hidden = false;
 				status.dataset.tone = "error";
-				status.innerHTML = `${esc(data.error?.message || "That listing is not available to edit.")} <a href="/account/?tab=listings">Back to your listings</a>`;
+				status.innerHTML = `${esc(data.error?.message || S.submit.editUnavailable)} <a href="/account/?tab=listings">${esc(S.submit.backListings)}</a>`;
 			}
 			return;
 		}
 		const values = (data.values ?? {}) as Record<string, unknown>;
 		const title = document.getElementById("wizard-title");
 		const intro = document.getElementById("wizard-intro");
-		if (title) title.textContent = "Edit your listing";
-		document.title = document.title.replace("Add a listing", "Edit your listing");
+		if (title) title.textContent = S.submit.editTitle;
+		document.title = document.title.replace(S.submit.title, S.submit.editTitle);
 		const back = document.getElementById("wizard-back") as HTMLAnchorElement | null;
 		if (back) {
-			back.textContent = "Back to my listings";
+			back.textContent = S.submit.editBack;
 			back.href = "/account/?tab=listings";
 		}
 		if (intro) {
-			intro.textContent = data.pending
-				? "You already sent changes that are waiting for approval. Sending again replaces them."
-				: "Your listing stays as it is until your changes are approved.";
+			intro.textContent = data.pending ? S.submit.editPending : S.submit.editQuiet;
 		}
 		// The type of a live listing is fixed: pick it, lock the others, and start on Basics.
 		form.querySelectorAll<HTMLInputElement>('input[name="listing_type"]').forEach((input) => {
@@ -351,7 +348,7 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 		// The category is set by the site's admin, so it is not part of an edit.
 		document.getElementById("category")?.closest<HTMLElement>(".listora-field")?.setAttribute("hidden", "");
 		const submit = document.getElementById("submit-btn");
-		if (submit) submit.textContent = "Send changes for approval";
+		if (submit) submit.textContent = S.submit.editSend;
 		showStep(2);
 	}
 
@@ -411,15 +408,15 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 						place_kind: String(data.get("place_kind") ?? ""),
 					},
 				});
-			if (!result.ok) throw new Error(result.error?.message || "Could not submit.");
+			if (!result.ok) throw new Error(result.error?.message || S.submit.couldNot);
 			if (editId) {
 				// Stay on the form with what they sent, and say plainly what happens next.
 				if (status) {
 					status.hidden = false;
 					status.dataset.tone = "success";
 					status.innerHTML = result.unchanged
-						? 'Nothing was different, so there is nothing to approve. <a href="/account/?tab=listings">Back to your listings</a>'
-						: 'Thanks. Your changes are waiting for approval. Your listing stays as it is until then. <a href="/account/?tab=listings">Back to your listings</a>';
+						? `${esc(S.submit.unchanged)} <a href="/account/?tab=listings">${esc(S.submit.backListings)}</a>`
+						: `${esc(S.submit.changesWaiting)} <a href="/account/?tab=listings">${esc(S.submit.backListings)}</a>`;
 					status.scrollIntoView({ block: "center" });
 				}
 				return;
@@ -429,15 +426,13 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 			if (status) {
 				status.hidden = false;
 				status.dataset.tone = "success";
-				status.textContent = result.pendingReview
-					? "Thanks. Your listing is in review and will appear after it is published."
-					: "Thanks. Your listing was submitted.";
+				status.textContent = result.pendingReview ? S.submit.thanksReview : S.submit.thanksLive;
 			}
 		} catch (error) {
 			if (status) {
 				status.hidden = false;
 				status.dataset.tone = "error";
-				status.textContent = error instanceof Error ? error.message : "Could not submit.";
+				status.textContent = error instanceof Error ? error.message : S.submit.couldNot;
 			}
 		} finally {
 			button.disabled = false;

@@ -2,38 +2,30 @@
 
 **Included in Free**
 
-## How do I set this up on a new laptop?
+## Does installing the plugin add the directory pages?
 
-Clone this repo. Run `./scripts/setup-lab.sh`. That creates a sibling EmDash site if you do not have one, wires the plugin, and copies the kit. Then `./scripts/reset-lab.sh` and `./scripts/prove-lab.sh --all`. Full page: [Set up a new machine](../getting-started/new-machine.md).
+No. The plugin adds the admin screens and the directory engine. The pages (`/listings/`, the add form, the calendar, and `/account/`) come from the site kit. [Set up Listora on your site](../getting-started/install.md) copies them in.
 
-## Can we install the WordPress plugin on EmDash?
+## Where do I approve a listing?
 
-No. EmDash does not load PHP. This TypeScript plugin is the port. WordPress Listora stays its own product.
+Admin, Listora, Listings queue. Open **Review** on a row and choose **Approve and publish** to put it on the directory. **Reject** keeps it off. Get started shows the same queue once the directory already has listings.
 
-## Does the plugin load sample listings on install?
+## Why is the directory empty?
 
-No. Health does not create listings. Open Admin → Get started, create the `listings` collection if it is missing, then click **Load sample directory**. Copy the site kit so `/listings/` exists.
+New listings wait for approval when **Approve listings before they show** is on. Approve them in the Listings queue. Drafts and rejected listings stay hidden.
 
-## Does a site get pages when they install from the registry?
+## Can visitors add a listing without an account?
 
-No. They get routes, storage, and Block Kit admin. They still copy the site kit (CSS, seed, pages) into the Astro site.
+No. The add form asks them to sign in. Turn on member sign-up in EmDash if you want people other than your staff to add listings and reviews.
 
-## Why is the public collection page empty?
+## Where do I change the words on the directory?
 
-`0.1.0` is published to the publisher PDS. Testers install `0.2.1`. The public site hides a package until the labeler approves it. Watch with `emdash-plugin info vapvarun.bsky.social listora --version 0.2.1 --watch`.
+In `src/lib/listora-strings.ts`, the file the setup command copies. [Reword the directory](../customize/wording.md) shows the example of renaming Listings to Find a partner. Running the setup command again replaces that file, so keep a copy of your wording.
 
-## Why publish as vapvarun if the repo is wbcomdesigns?
+## Where is import and export?
 
-The founder Atmosphere account is the publisher identity. GitHub is the company source. Those can differ. Do not change `publisher` unless the Atmosphere account really moves.
+On the site, at `/listings/import/`, for a site admin. Settings, Import and export links to it. An import adds drafts. Nothing goes live until you approve it in the Listings queue.
 
-## Do we need GitHub Actions to ship?
+## Can I use the WordPress plugin on EmDash?
 
-No. `emdash-plugin publish` from a trusted machine is enough. Actions plus provenance are optional later.
-
-## Is the lab UI the product?
-
-No. It is a working prototype with real jobs and thin chrome. Next work starts from [Improve the screens](../how-to/improve-the-screens.md).
-
-## Where do I read the long plans?
-
-[`ops/`](https://github.com/wbcomdesigns/emdash-listora/tree/main/ops) on this repo. Start with `listora-as-built.md` and `ux-plan.md`.
+No. EmDash does not run PHP. This is the EmDash plugin. WordPress Listora stays its own product.

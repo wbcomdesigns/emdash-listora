@@ -17,6 +17,8 @@ emdash-listora/scripts/add-to-site.sh /path/to/your/site
 
 It copies the directory pages, styles and scripts into your site, writes a small seed file for the listings collection, and prints what is left. It is safe to run again after every plugin update: it replaces Listora's own files and never touches `src/layouts/ListoraLayout.astro` once that file exists. If your site already has its own page at one of the kit's addresses (an `/account/` page, for example), the command stops and names it, and copies nothing.
 
+The phrases visitors read live in `src/lib/listora-strings.ts`. See [Reword the directory](../customize/wording.md). Running the setup command again replaces that file, so keep a copy of any wording you changed and put it back after the update.
+
 ## 3. Create the listings collection
 
 ```bash
@@ -77,4 +79,4 @@ This part runs as trusted site code, not inside the plugin sandbox, which is why
 
 ## Working on the plugin itself
 
-See [Set up a new machine](new-machine.md) and [Local lab](local-lab.md).
+See [Set up a new machine](../../dev/new-machine.md) and [Local lab](../../dev/local-lab.md).

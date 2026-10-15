@@ -2,6 +2,7 @@
 import { getSiteSettings } from "emdash";
 import Layout from "../../layouts/ListoraLayout.astro";
 import { siteZone } from "../../lib/listora";
+import { signedInAs, S } from "../../lib/listora-strings";
 import "../../styles/listora-ui.css";
 
 const tab = Astro.url.searchParams.get("tab") || "overview";
@@ -13,79 +14,79 @@ const user = Astro.locals.user as { name?: string | null; email?: string } | und
 const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.pathname + Astro.url.search)}`;
 ---
 
-<Layout title="Your listings" description="Owner dashboard for listings, reviews, claims, and favorites.">
+<Layout title={S.account.title} description={S.account.description}>
 	<div class="listora-block">
 		<header class="listora-page-head">
 			<div>
-				<h1>Dashboard</h1>
-				<p>{user ? `Signed in as ${user.name || user.email}.` : "Your listings, reviews, claims and saved places."}</p>
+				<h1>{S.account.heading}</h1>
+				<p>{user ? signedInAs(user.name || user.email || "") : S.account.guestIntro}</p>
 			</div>
-			<a class="listora-btn" href="/listings/submit/">Add a listing</a>
+			<a class="listora-btn" href="/listings/submit/">{S.account.add}</a>
 		</header>
 		{
 			user ? null : (
 				<div class="listora-empty">
-					<h2>Sign in to see your dashboard</h2>
-					<p>Your listings, reviews, claims and saved places live here.</p>
-					<a class="listora-btn" href={loginUrl}>Sign in</a>
+					<h2>{S.account.signInTitle}</h2>
+					<p>{S.account.signInBody}</p>
+					<a class="listora-btn" href={loginUrl}>{S.common.signIn}</a>
 				</div>
 			)
 		}
 		{user ? (
 		<div class="listora-dash">
-			<nav aria-label="Dashboard">
-				<a class:list={{ "listora-chip": true, "is-active": tab === "overview" }} href="/account/">Overview</a>
-				<a class:list={{ "listora-chip": true, "is-active": tab === "listings" }} href="/account/?tab=listings">My listings</a>
-				<a class:list={{ "listora-chip": true, "is-active": tab === "reviews" }} href="/account/?tab=reviews">Reviews</a>
-				<a class:list={{ "listora-chip": true, "is-active": tab === "messages" }} href="/account/?tab=messages">Messages<span id="dash-messages-count" class="listora-chip__count" hidden></span></a>
-				<a class:list={{ "listora-chip": true, "is-active": tab === "claims" }} href="/account/?tab=claims">Claims</a>
-				<a class:list={{ "listora-chip": true, "is-active": tab === "favorites" }} href="/account/?tab=favorites">Favorites</a>
-				<a class:list={{ "listora-chip": true, "is-active": tab === "profile" }} href="/account/?tab=profile">Profile</a>
+			<nav aria-label={S.account.nav}>
+				<a class:list={{ "listora-chip": true, "is-active": tab === "overview" }} href="/account/">{S.account.overview}</a>
+				<a class:list={{ "listora-chip": true, "is-active": tab === "listings" }} href="/account/?tab=listings">{S.account.myListings}</a>
+				<a class:list={{ "listora-chip": true, "is-active": tab === "reviews" }} href="/account/?tab=reviews">{S.account.reviews}</a>
+				<a class:list={{ "listora-chip": true, "is-active": tab === "messages" }} href="/account/?tab=messages">{S.account.messages}<span id="dash-messages-count" class="listora-chip__count" hidden></span></a>
+				<a class:list={{ "listora-chip": true, "is-active": tab === "claims" }} href="/account/?tab=claims">{S.account.claims}</a>
+				<a class:list={{ "listora-chip": true, "is-active": tab === "favorites" }} href="/account/?tab=favorites">{S.account.favorites}</a>
+				<a class:list={{ "listora-chip": true, "is-active": tab === "profile" }} href="/account/?tab=profile">{S.account.profile}</a>
 			</nav>
 			<div id="dash-main" data-tab={tab} data-zone={zone}>
 				<section id="overview-panel">
-					<p class="listora-helper">What you have in the directory. Choose one to open it.</p>
+					<p class="listora-helper">{S.account.overviewHelp}</p>
 					<div class="listora-chips" id="dash-counts"></div>
 				</section>
 				<section id="list-panel" hidden>
-					<h2>My listings</h2>
+					<h2>{S.account.myListings}</h2>
 					<div id="dash-listings"></div>
 				</section>
 				<section id="reviews-panel" hidden>
-					<h2>Reviews of your listings</h2>
-					<p class="listora-helper">Reply once to each review. Your reply shows under it after it is approved.</p>
+					<h2>{S.account.reviewsOf}</h2>
+					<p class="listora-helper">{S.account.reviewsHelp}</p>
 					<div id="dash-received"></div>
-					<h2>Reviews you wrote</h2>
+					<h2>{S.account.reviewsWrote}</h2>
 					<div id="dash-reviews"></div>
 				</section>
 				<section id="messages-panel" hidden>
-					<h2>Messages</h2>
-					<p class="listora-helper">Sent by visitors from your listing pages. Reply to them by email.</p>
+					<h2>{S.account.messages}</h2>
+					<p class="listora-helper">{S.account.messagesHelp}</p>
 					<div id="dash-messages"></div>
 				</section>
 				<section id="claims-panel" hidden>
-					<h2>Claims</h2>
+					<h2>{S.account.claims}</h2>
 					<div id="dash-claims"></div>
 				</section>
 				<section id="fav-panel" hidden>
-					<h2>Favorites</h2>
+					<h2>{S.account.favorites}</h2>
 					<div id="dash-favs"></div>
 				</section>
 				<section id="profile-panel" hidden>
 					<form class="listora-form-section" id="privacy-form">
-						<h2>Profile and privacy</h2>
-						<p class="listora-helper">Download a file with your reviews, claims and saved listings.</p>
+						<h2>{S.account.profileTitle}</h2>
+						<p class="listora-helper">{S.account.downloadHelp}</p>
 						<div class="listora-actions">
-							<button class="listora-btn" type="submit">Download my data</button>
+							<button class="listora-btn" type="submit">{S.account.download}</button>
 						</div>
 						<p id="export-status" class="listora-status" role="status" hidden></p>
 					</form>
 					<div class="listora-form-section">
-						<h2>Delete my data</h2>
-						<p class="listora-helper">This removes, for good: your reviews, your claims, your saved listings, your replies to reviews, any changes or photos still waiting for approval, and your stored email address.</p>
-						<p class="listora-helper">It keeps: listings you added, which stay in the directory, and photos already approved on a listing. Ask the site to remove those.</p>
+						<h2>{S.account.deleteTitle}</h2>
+						<p class="listora-helper">{S.account.deleteRemoves}</p>
+						<p class="listora-helper">{S.account.deleteKeeps}</p>
 						<div class="listora-actions">
-							<button class="listora-btn listora-btn--secondary" type="button" id="erase-btn">Delete my data</button>
+							<button class="listora-btn listora-btn--secondary" type="button" id="erase-btn">{S.account.delete}</button>
 						</div>
 						<p id="erase-status" class="listora-status" role="status" hidden></p>
 					</div>
@@ -98,6 +99,7 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 
 <script>
 	import { api, day, esc, uploadPhoto } from "../../lib/listora";
+	import { expiresOn, freshCount, outOf5, photoName, photoUsage, renewedUntil, S } from "../../lib/listora-strings";
 
 	const tab = document.getElementById("dash-main")?.getAttribute("data-tab") || "overview";
 	const panels: Record<string, string> = {
@@ -116,13 +118,19 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 		if (node) node.hidden = key !== tab;
 	});
 
-	const LABELS: Record<string, string> = { listings: "Listings", reviews: "Reviews", claims: "Claims", favorites: "Favorites", messages: "Messages" };
+	const LABELS: Record<string, string> = {
+		listings: S.account.listings,
+		reviews: S.account.reviews,
+		claims: S.account.claims,
+		favorites: S.account.favorites,
+		messages: S.account.messages,
+	};
 
 	const STATUS: Record<string, string> = {
-		pending: "Awaiting approval",
-		approved: "Approved",
-		published: "Published",
-		rejected: "Not approved",
+		pending: S.account.pending,
+		approved: S.account.approved,
+		published: S.account.published,
+		rejected: S.account.rejected,
 	};
 
 	// Each row leads with the listing name (a link once the listing is public), then the given fields.
@@ -130,31 +138,27 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 		return items.length
 			? `<ul class="listora-dash-list">${items
 					.map((item) => {
-						const name = esc(item.listing_title || "Listing no longer available");
+						const name = esc(item.listing_title || S.account.gone);
 						const title = item.listing_url ? `<a href="${esc(item.listing_url)}">${name}</a>` : name;
 						const rest = keys
 							.map((key) => (key === "status" ? STATUS[String(item.status)] ?? item.status : item[key]))
 							.filter(Boolean)
 							.map(esc);
 						// Only set on the member's own live listings, and only when the site uses expiry.
-						const when = item.expired
-							? "Expired"
-							: item.expires_at
-								? `Expires ${day(item.expires_at)}`
-								: "";
+						const when = item.expired ? S.account.expired : item.expires_at ? expiresOn(day(item.expires_at)) : "";
 						if (when) rest.push(esc(when));
 						const renew = item.can_renew
-							? ` <button type="button" class="listora-btn listora-btn--secondary" data-renew="${esc(item.listingId || item.id)}">Renew</button>`
+							? ` <button type="button" class="listora-btn listora-btn--secondary" data-renew="${esc(item.listingId || item.id)}">${esc(S.account.renew)}</button>`
 							: "";
 						const id = esc(item.listingId || item.id);
-						const waiting = item.edit_pending ? ' <span class="listora-tag">Changes waiting for approval</span>' : "";
+						const waiting = item.edit_pending ? ` <span class="listora-tag">${esc(S.account.changesWaiting)}</span>` : "";
 						const edit = item.can_edit
-							? ` <a class="listora-btn listora-btn--secondary" href="/listings/submit/?edit=${id}">${item.edit_pending ? "Edit again" : "Edit"}</a>`
+							? ` <a class="listora-btn listora-btn--secondary" href="/listings/submit/?edit=${id}">${esc(item.edit_pending ? S.account.editAgain : S.account.edit)}</a>`
 							: "";
 						return `<li class="listora-review listora-row"><span class="listora-row__text"><strong>${title}</strong>${rest.length ? ` · ${rest.join(" · ")}` : ""}${waiting}</span><span class="listora-row__actions">${edit}${renew}</span>${photosHtml(item)}</li>`;
 					})
 					.join("")}</ul>`
-			: `<div class="listora-empty"><h2>Nothing here yet</h2><p>This tab fills as you use the directory.</p></div>`;
+			: `<div class="listora-empty"><h2>${esc(S.account.emptyTitle)}</h2><p>${esc(S.account.emptyBody)}</p></div>`;
 	}
 
 	// An owner's photos for one listing: what is there, what is waiting, and a way to add one.
@@ -169,15 +173,15 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 				(photo, index) =>
 					// A waiting photo has no address to show: only the site's admin can see it until it is approved.
 					photo.status === "approved" && photo.url
-						? `<li class="listora-photos__item"><img src="${esc(photo.url)}" alt="${esc(photo.label || `Photo ${index + 1}`)}" width="120" height="88" loading="lazy" /><span>On your listing</span></li>`
-						: `<li class="listora-photos__item"><span class="listora-photos__waiting" aria-hidden="true"></span><span class="listora-photos__name">${esc(photo.label || `Photo ${index + 1}`)}</span><span>Waiting for approval</span><button type="button" class="listora-btn listora-btn--secondary" data-photo-remove="${esc(photo.id)}">Remove</button></li>`,
+						? `<li class="listora-photos__item"><img src="${esc(photo.url)}" alt="${esc(photo.label || photoName(index + 1))}" width="120" height="88" loading="lazy" /><span>${esc(S.account.onListing)}</span></li>`
+						: `<li class="listora-photos__item"><span class="listora-photos__waiting" aria-hidden="true"></span><span class="listora-photos__name">${esc(photo.label || photoName(index + 1))}</span><span>${esc(S.account.waiting)}</span><button type="button" class="listora-btn listora-btn--secondary" data-photo-remove="${esc(photo.id)}">${esc(S.account.remove)}</button></li>`,
 			)
 			.join("");
 		const add =
 			photos.length < limit
-				? `<label class="listora-btn listora-btn--secondary listora-photos__add"><input type="file" accept="image/jpeg,image/png,image/webp" data-photo-add="${id}" />Add a photo</label>`
+				? `<label class="listora-btn listora-btn--secondary listora-photos__add"><input type="file" accept="image/jpeg,image/png,image/webp" data-photo-add="${id}" />${esc(S.account.addPhoto)}</label>`
 				: "";
-		return `<div class="listora-photos"><p class="listora-meta">Photos: ${photos.length} of ${limit}. JPEG, PNG or WebP, up to 5 MB each. Each one shows after it is approved.</p>${shown ? `<ul class="listora-photos__list">${shown}</ul>` : ""}<div>${add} <span class="listora-status" role="status" data-photo-status="${id}" hidden></span></div></div>`;
+		return `<div class="listora-photos"><p class="listora-meta">${esc(photoUsage(photos.length, limit))}</p>${shown ? `<ul class="listora-photos__list">${shown}</ul>` : ""}<div>${add} <span class="listora-status" role="status" data-photo-status="${id}" hidden></span></div></div>`;
 	}
 
 	function fill(id: string, html: string) {
@@ -199,17 +203,17 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 			status.textContent = text;
 		};
 		input.disabled = true;
-		say("Adding your photo...", "info");
+		say(S.account.adding, "info");
 		const data = await uploadPhoto(listingId, file);
 		input.disabled = false;
 		input.value = "";
-		if (!data.ok) return say(data.error?.message || "The photo could not be added. Try again.", "error");
+		if (!data.ok) return say(data.error?.message || S.account.photoFailed, "error");
 		await load();
 		const after = document.querySelector<HTMLElement>(`[data-photo-status="${CSS.escape(listingId)}"]`);
 		if (after) {
 			after.hidden = false;
 			after.dataset.tone = "success";
-			after.textContent = "Photo added. It shows on your listing after it is approved.";
+			after.textContent = S.account.photoAdded;
 		}
 	});
 
@@ -222,7 +226,7 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 		button.disabled = false;
 		button.insertAdjacentHTML(
 			"afterend",
-			`<span class="listora-status" data-tone="error" role="alert">${esc(data.error?.message || "Could not remove that photo.")}</span>`,
+			`<span class="listora-status" data-tone="error" role="alert">${esc(data.error?.message || S.account.photoRemoveFailed)}</span>`,
 		);
 	});
 
@@ -238,7 +242,7 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 		button.disabled = false;
 		form.insertAdjacentHTML(
 			"beforeend",
-			`<p class="listora-status" data-tone="error" role="alert">${esc(data.error?.message || "Could not send your reply.")}</p>`,
+			`<p class="listora-status" data-tone="error" role="alert">${esc(data.error?.message || S.account.replyFailed)}</p>`,
 		);
 	});
 
@@ -251,7 +255,7 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 		button.disabled = false;
 		button.insertAdjacentHTML(
 			"afterend",
-			` <span class="listora-status" data-tone="error" role="alert">${esc(data.error?.message || "Could not update that message.")}</span>`,
+			` <span class="listora-status" data-tone="error" role="alert">${esc(data.error?.message || S.account.messageFailed)}</span>`,
 		);
 	});
 
@@ -265,13 +269,13 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 			const until = day(data.expires_at);
 			document
 				.getElementById("dash-listings")
-				?.insertAdjacentHTML("afterbegin", `<p class="listora-status" data-tone="success" role="status">Renewed until ${esc(until)}.</p>`);
+				?.insertAdjacentHTML("afterbegin", `<p class="listora-status" data-tone="success" role="status">${esc(renewedUntil(until))}</p>`);
 			return;
 		}
 		button.disabled = false;
 		button.insertAdjacentHTML(
 			"afterend",
-			` <span class="listora-status" data-tone="error" role="alert">${esc(data.error?.message || "Could not renew.")}</span>`,
+			` <span class="listora-status" data-tone="error" role="alert">${esc(data.error?.message || S.account.renewFailed)}</span>`,
 		);
 	});
 
@@ -279,7 +283,7 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 		if (!document.getElementById("dash-main")) return;
 		const data = await api("dashboard");
 		if (!data.ok) {
-			fill("dash-counts", `<p class="listora-status" data-tone="error">${esc(data.error?.message || "Could not load your dashboard.")}</p>`);
+			fill("dash-counts", `<p class="listora-status" data-tone="error">${esc(data.error?.message || S.account.loadFailed)}</p>`);
 			return;
 		}
 		fill(
@@ -293,7 +297,7 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 		if (badge) {
 			badge.hidden = fresh === 0;
 			badge.textContent = String(fresh);
-			badge.setAttribute("aria-label", `${fresh} new`);
+			badge.setAttribute("aria-label", freshCount(fresh));
 		}
 		type Rows = Array<Record<string, unknown>>;
 		fill("dash-listings", list(data.listings as Rows, ["city", "status"]));
@@ -307,30 +311,30 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 							const stars = Number(item.stars) || 0;
 							const text = [item.title, item.body].filter(Boolean).join(": ");
 							const shown = item.reply
-								? `<div class="listora-reply"><p class="listora-reply__label">Your reply</p><p>${esc(item.reply)}</p></div>`
+								? `<div class="listora-reply"><p class="listora-reply__label">${esc(S.account.yourReply)}</p><p>${esc(item.reply)}</p></div>`
 								: "";
 							const waiting = item.reply_waiting
-								? `<div class="listora-reply"><p class="listora-reply__label"><span class="listora-tag">Waiting for approval</span></p><p>${esc(item.reply_waiting)}</p></div>`
+								? `<div class="listora-reply"><p class="listora-reply__label"><span class="listora-tag">${esc(S.account.waiting)}</span></p><p>${esc(item.reply_waiting)}</p></div>`
 								: "";
 							const id = esc(item.ref);
-							const label = item.reply || item.reply_waiting ? "Change your reply" : "Reply";
+							const label = item.reply || item.reply_waiting ? S.account.changeReply : S.account.reply;
 							return `<li class="listora-review listora-message">
-								<p class="listora-message__head"><strong>${esc(item.listing_title || "Listing")}</strong></p>
-								<p class="listora-meta">${esc(item.author || "A member")} · <span aria-label="${stars} out of 5">${"★".repeat(stars)}</span> · ${esc(day(item.createdAt))}</p>
+								<p class="listora-message__head"><strong>${esc(item.listing_title || S.account.aListing)}</strong></p>
+								<p class="listora-meta">${esc(item.author || S.account.aMember)} · <span aria-label="${esc(outOf5(stars))}">${"★".repeat(stars)}</span> · ${esc(day(item.createdAt))}</p>
 								${text ? `<p class="listora-message__body">${esc(text)}</p>` : ""}
 								${shown}${waiting}
 								<details class="listora-reply-form">
-									<summary class="listora-btn listora-btn--secondary">${label}</summary>
+									<summary class="listora-btn listora-btn--secondary">${esc(label)}</summary>
 									<form data-reply="${id}" data-listing="${esc(item.listingId)}" class="listora-form">
-										<label class="listora-label" for="reply-${id}">Your reply (public, up to 1000 characters)</label>
+										<label class="listora-label" for="reply-${id}">${esc(S.account.replyLabel)}</label>
 										<textarea id="reply-${id}" class="listora-input" name="text" rows="3" maxlength="1000" required>${esc(item.reply_waiting || item.reply || "")}</textarea>
-										<button type="submit" class="listora-btn">Send for approval</button>
+										<button type="submit" class="listora-btn">${esc(S.account.sendReply)}</button>
 									</form>
 								</details>
 							</li>`;
 						})
 						.join("")}</ul>`
-				: `<div class="listora-empty"><h2>No reviews yet</h2><p>Reviews of your listings show here once they are published.</p></div>`,
+				: `<div class="listora-empty"><h2>${esc(S.account.noReviewsTitle)}</h2><p>${esc(S.account.noReviewsBody)}</p></div>`,
 		);
 		fill("dash-claims", list(data.claims as Rows, ["status"]));
 		// Visitors wrote these: every value goes through esc, and the address is only ever a mailto.
@@ -340,20 +344,20 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 			messages.length
 				? `<ul class="listora-dash-list">${messages
 						.map((item) => {
-							const from = esc(item.name || "No name given");
+							const from = esc(item.name || S.account.noName);
 							const mail = item.email ? ` · <a href="mailto:${esc(item.email)}">${esc(item.email)}</a>` : "";
 							// "New" is said in words, not by colour alone.
-							const state = item.done ? "" : '<span class="listora-tag">New</span> ';
-							const button = `<button type="button" class="listora-btn listora-btn--secondary" data-message="${esc(item.id)}" data-done="${item.done ? "0" : "1"}">${item.done ? "Mark as new" : "Mark as done"}</button>`;
+							const state = item.done ? "" : `<span class="listora-tag">${esc(S.account.fresh)}</span> `;
+							const button = `<button type="button" class="listora-btn listora-btn--secondary" data-message="${esc(item.id)}" data-done="${item.done ? "0" : "1"}">${esc(item.done ? S.account.markNew : S.account.markDone)}</button>`;
 							return `<li class="listora-review listora-message${item.done ? " is-done" : ""}">
-								<p class="listora-message__head">${state}<strong>${esc(item.listing_title || "Listing")}</strong></p>
-								<p class="listora-meta">From ${from}${mail} · ${esc(day(item.createdAt))}</p>
+								<p class="listora-message__head">${state}<strong>${esc(item.listing_title || S.account.aListing)}</strong></p>
+								<p class="listora-meta">${esc(S.account.from)} ${from}${mail} · ${esc(day(item.createdAt))}</p>
 								<p class="listora-message__body">${esc(item.message)}</p>
 								${button}
 							</li>`;
 						})
 						.join("")}</ul>`
-				: `<div class="listora-empty"><h2>No messages yet</h2><p>Messages from your listing pages show here.</p></div>`,
+				: `<div class="listora-empty"><h2>${esc(S.account.noMessagesTitle)}</h2><p>${esc(S.account.noMessagesBody)}</p></div>`,
 		);
 		fill("dash-favs", list(data.favorites as Rows, []));
 	}
@@ -371,7 +375,7 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 			status.dataset.tone = tone;
 			status.textContent = text;
 		};
-		if (!data.ok) return say(data.error?.message || "Could not prepare your data. Try again.", "error");
+		if (!data.ok) return say(data.error?.message || S.account.exportFailed, "error");
 		// A real file, not text to copy.
 		const { ok: _ok, erases: _erases, keeps: _keeps, ...mine } = data as Record<string, unknown>;
 		const link = document.createElement("a");
@@ -381,7 +385,7 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 		link.click();
 		link.remove();
 		URL.revokeObjectURL(link.href);
-		say("Your file was downloaded.", "success");
+		say(S.account.exported, "success");
 	});
 
 	// Two clicks instead of a browser confirm box.
@@ -389,19 +393,19 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 	eraseBtn?.addEventListener("click", async () => {
 		if (eraseBtn.dataset.armed !== "1") {
 			eraseBtn.dataset.armed = "1";
-			eraseBtn.textContent = "Click again to delete them for good";
+			eraseBtn.textContent = S.account.deleteAgain;
 			return;
 		}
 		eraseBtn.setAttribute("aria-busy", "true");
 		const result = await api("privacy", { action: "erase" });
 		eraseBtn.removeAttribute("aria-busy");
 		eraseBtn.dataset.armed = "";
-		eraseBtn.textContent = "Delete my data";
+		eraseBtn.textContent = S.account.delete;
 		const status = document.getElementById("erase-status");
 		if (status) {
 			status.hidden = false;
 			status.dataset.tone = result.ok ? "success" : "error";
-			status.textContent = result.ok ? "Your reviews, claims and saved listings were deleted." : result.error?.message || "Could not delete. Try again.";
+			status.textContent = result.ok ? S.account.deleted : result.error?.message || S.account.couldNotDelete;
 		}
 		if (result.ok) load();
 	});

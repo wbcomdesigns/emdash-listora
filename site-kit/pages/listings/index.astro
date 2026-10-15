@@ -6,7 +6,7 @@ import {
 	LISTING_TYPES,
 	placeholderHtml,
 	isOpenNow,
-	listoraFetch,
+	callListoraRoute,
 	siteZone,
 	matchesPlace,
 	parseHours,
@@ -14,6 +14,7 @@ import {
 	sortListings,
 	typeName,
 } from "../../lib/listora";
+import { listingCount, pageOf, resultCount, saveNamed, S } from "../../lib/listora-strings";
 import "../../styles/listora-ui.css";
 
 const type = Astro.url.searchParams.get("type") || "";
@@ -59,12 +60,8 @@ const typeChips = LISTING_TYPES.filter((item) => typesInUse.has(item.slug) || it
 // the list keeps its normal order: the page never breaks over a sort.
 let ratings: Record<string, { average: number }> = {};
 if (sort === "rating") {
-	try {
-		const answer = await listoraFetch("ratings?all=1", {}, Astro.url.origin);
-		ratings = (await answer.json())?.data?.ratings ?? {};
-	} catch {
-		ratings = {};
-	}
+	const answer = await callListoraRoute(Astro.locals, "ratings?all=1").catch(() => null);
+	ratings = (answer?.ratings as Record<string, { average: number }> | undefined) ?? {};
 }
 
 const matching = sortListings(
@@ -127,20 +124,20 @@ function amenityList(value: unknown): string[] {
 }
 ---
 
-<Layout title="Listings" description="Browse the directory. Search by type, place, or name.">
+<Layout title={S.directory.title} description={S.directory.description}>
 	<div class="listora-block">
 		<header class="listora-page-head">
 			<div>
-				<h1>Listings</h1>
-				<p id="listora-count">{filtered.length === 1 ? "1 listing" : `${filtered.length} listings`}</p>
+				<h1>{S.directory.heading}</h1>
+				<p id="listora-count">{listingCount(filtered.length)}</p>
 			</div>
-			<a class="listora-btn" href="/listings/submit/">Add a listing</a>
+			<a class="listora-btn" href="/listings/submit/">{S.directory.add}</a>
 		</header>
 
 		<form class="listora-search" role="search" id="listora-search-form">
 			<div class="listora-search__bar">
 				<div class="listora-search__field listora-search__field--keyword">
-					<label class="listora-sr-only" for="listora-q">Search</label>
+					<label class="listora-sr-only" for="listora-q">{S.directory.searchLabel}</label>
 					<svg class="listora-search__icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
 						<circle cx="11" cy="11" r="8"></circle>
 						<path d="m21 21-4.3-4.3"></path>
@@ -151,10 +148,10 @@ function amenityList(value: unknown): string[] {
 						type="search"
 						name="q"
 						value={q}
-						placeholder="Search listings"
+						placeholder={S.directory.searchPlaceholder}
 						autocomplete="off"
 					/>
-					<button class="listora-search__clear" type="button" id="listora-clear" hidden={q === ""} aria-label="Clear search">
+					<button class="listora-search__clear" type="button" id="listora-clear" hidden={q === ""} aria-label={S.directory.clearSearch}>
 						<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
 							<path d="M18 6 6 18"></path>
 							<path d="m6 6 12 12"></path>
@@ -162,7 +159,7 @@ function amenityList(value: unknown): string[] {
 					</button>
 				</div>
 				<div class="listora-search__field listora-search__field--location">
-					<label class="listora-sr-only" for="listora-location">Location</label>
+					<label class="listora-sr-only" for="listora-location">{S.directory.locationLabel}</label>
 					<svg class="listora-search__icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
 						<path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"></path>
 						<circle cx="12" cy="10" r="3"></circle>
@@ -173,7 +170,7 @@ function amenityList(value: unknown): string[] {
 						type="text"
 						name="location"
 						value={location}
-						placeholder="City or neighborhood"
+						placeholder={S.directory.locationPlaceholder}
 						autocomplete="off"
 					/>
 				</div>
@@ -182,12 +179,12 @@ function amenityList(value: unknown): string[] {
 						<circle cx="11" cy="11" r="8"></circle>
 						<path d="m21 21-4.3-4.3"></path>
 					</svg>
-					<span>Search</span>
+					<span>{S.directory.search}</span>
 				</button>
 			</div>
 			{(typeChips.length > 1 || type) && (
 			<div class="listora-chips" id="listora-types">
-				<a class:list={{ "listora-chip": true, "is-active": !type }} href="/listings/">All</a>
+				<a class:list={{ "listora-chip": true, "is-active": !type }} href="/listings/">{S.directory.all}</a>
 				{
 					typeChips.map((item) => (
 						<a
@@ -206,10 +203,10 @@ function amenityList(value: unknown): string[] {
 
 		{
 			categoryFacets.length > 0 || cityFacets.length > 1 ? (
-				<nav class="listora-facets" aria-label="Browse the directory">
+				<nav class="listora-facets" aria-label={S.directory.browse}>
 					{categoryFacets.length > 0 ? (
 						<div class="listora-facets__row">
-							<h2 class="listora-meta" id="facet-category">Category</h2>
+							<h2 class="listora-meta" id="facet-category">{S.directory.category}</h2>
 							<ul class="listora-chips" aria-labelledby="facet-category">
 								{categoryFacets.map((item) => (
 									<li>
@@ -228,7 +225,7 @@ function amenityList(value: unknown): string[] {
 					) : null}
 					{cityFacets.length > 1 ? (
 						<div class="listora-facets__row">
-							<h2 class="listora-meta" id="facet-city">City</h2>
+							<h2 class="listora-meta" id="facet-city">{S.directory.city}</h2>
 							<ul class="listora-chips" aria-labelledby="facet-city">
 								{cityFacets.map((item) => {
 									const on = location.toLowerCase() === item.label.toLowerCase();
@@ -255,8 +252,8 @@ function amenityList(value: unknown): string[] {
 		<div id="listora-featured-slot">
 		{
 			showFeatured ? (
-				<section class="listora-featured" aria-label="Featured listings">
-					<h2 class="listora-meta">Featured</h2>
+				<section class="listora-featured" aria-label={S.directory.featuredLabel}>
+					<h2 class="listora-meta">{S.common.featured}</h2>
 					<div class="listora-featured__track">
 						{featured.map((listing) => (
 							<article class="listora-card">
@@ -267,7 +264,7 @@ function amenityList(value: unknown): string[] {
 										<Fragment set:html={placeholderHtml(String(listing.data.listing_type || ""))} />
 									)}
 									<span class="listora-badge">{typeName(listing.data.listing_type)}</span>
-									<span class="listora-badge listora-badge--featured">Featured</span>
+									<span class="listora-badge listora-badge--featured">{S.common.featured}</span>
 								</div>
 								<div class="listora-card-body">
 									<h3>
@@ -284,19 +281,19 @@ function amenityList(value: unknown): string[] {
 		</div>
 
 		<div class="listora-toolbar">
-			<div id="listora-toolbar-count">{filtered.length === 1 ? "1 result" : `${filtered.length} results`}</div>
+			<div id="listora-toolbar-count">{resultCount(filtered.length)}</div>
 			<div class="listora-toolbar__actions">
-				<label class="listora-sr-only" for="listora-sort">Sort</label>
+				<label class="listora-sr-only" for="listora-sort">{S.directory.sort}</label>
 				<select class="listora-sort" id="listora-sort" name="sort">
-					<option value="featured" selected={sort === "featured"}>Featured</option>
-					<option value="rating" selected={sort === "rating"}>Rating</option>
-					<option value="title" selected={sort === "title"}>Title</option>
+					<option value="featured" selected={sort === "featured"}>{S.common.featured}</option>
+					<option value="rating" selected={sort === "rating"}>{S.directory.rating}</option>
+					<option value="title" selected={sort === "title"}>{S.directory.titleSort}</option>
 				</select>
 				<div class="listora-view-toggle">
-					<a class:list={{ "is-active": view !== "list" }} href={withQuery("view=grid")}>Grid</a>
-					<a class:list={{ "is-active": view === "list" }} href={withQuery("view=list")}>List</a>
+					<a class:list={{ "is-active": view !== "list" }} href={withQuery("view=grid")}>{S.directory.grid}</a>
+					<a class:list={{ "is-active": view === "list" }} href={withQuery("view=list")}>{S.directory.list}</a>
 				</div>
-				<a class="listora-btn listora-btn--ghost" href="/listings/calendar/">Calendar</a>
+				<a class="listora-btn listora-btn--ghost" href="/listings/calendar/">{S.directory.calendar}</a>
 			</div>
 		</div>
 
@@ -310,9 +307,9 @@ function amenityList(value: unknown): string[] {
 								<path d="m21 21-4.3-4.3"></path>
 							</svg>
 						</div>
-						<h2>No listings match</h2>
-						<p>Try another type or city. You can also add a listing.</p>
-						<a class="listora-btn" href="/listings/submit/">Add a listing</a>
+						<h2>{S.directory.emptyTitle}</h2>
+						<p>{S.directory.emptyBody}</p>
+						<a class="listora-btn" href="/listings/submit/">{S.directory.add}</a>
 					</div>
 				) : (
 					shown.map((listing) => {
@@ -329,9 +326,9 @@ function amenityList(value: unknown): string[] {
 										<Fragment set:html={placeholderHtml(String(listing.data.listing_type || ""))} />
 									)}
 									<span class="listora-badge">{typeName(listing.data.listing_type)}</span>
-									{listing.data.is_featured ? <span class="listora-badge listora-badge--featured">Featured</span> : null}
+									{listing.data.is_featured ? <span class="listora-badge listora-badge--featured">{S.common.featured}</span> : null}
 									<span class="listora-card__rating" data-rating={listing.data.id} hidden></span>
-									<button class="listora-card__favorite" type="button" data-favorite={listing.data.id} aria-pressed="false" aria-label={`Save ${listing.data.title}`}>
+									<button class="listora-card__favorite" type="button" data-favorite={listing.data.id} aria-pressed="false" aria-label={saveNamed(String(listing.data.title || ""))}>
 										<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
 											<path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"></path>
 										</svg>
@@ -343,10 +340,10 @@ function amenityList(value: unknown): string[] {
 									</h2>
 									<p class="listora-meta">
 										<span>{placeOf(listing.data)}</span>
-										{open === true ? <span class="listora-open">Open</span> : null}
-										{open === false ? <span class="listora-closed">Closed</span> : null}
+										{open === true ? <span class="listora-open">{S.common.open}</span> : null}
+										{open === false ? <span class="listora-closed">{S.common.closed}</span> : null}
 									</p>
-									{owner ? <p class="listora-meta">Listed by {owner}</p> : null}
+									{owner ? <p class="listora-meta">{S.directory.listedBy} {owner}</p> : null}
 									{amenities.length ? (
 										<p class="listora-card__features">
 											{amenities.map((item) => <span>{item}</span>)}
@@ -364,10 +361,10 @@ function amenityList(value: unknown): string[] {
 		<div id="listora-pager-slot">
 		{
 			pages > 1 ? (
-				<nav class="listora-pager" id="listora-pager" aria-label="Pages of listings">
-					{page > 1 ? <a class="listora-btn listora-btn--secondary" rel="prev" href={withQuery(`page=${page - 1}`)}>Previous</a> : <span></span>}
-					<span class="listora-pager__status">Page {page} of {pages}</span>
-					{page < pages ? <a class="listora-btn listora-btn--secondary" rel="next" href={withQuery(`page=${page + 1}`)}>Next</a> : <span></span>}
+				<nav class="listora-pager" id="listora-pager" aria-label={S.directory.pages}>
+					{page > 1 ? <a class="listora-btn listora-btn--secondary" rel="prev" href={withQuery(`page=${page - 1}`)}>{S.common.previous}</a> : <span></span>}
+					<span class="listora-pager__status">{pageOf(page, pages)}</span>
+					{page < pages ? <a class="listora-btn listora-btn--secondary" rel="next" href={withQuery(`page=${page + 1}`)}>{S.common.next}</a> : <span></span>}
 				</nav>
 			) : null
 		}
@@ -385,7 +382,8 @@ function amenityList(value: unknown): string[] {
 
 <link rel="stylesheet" href="/vendor/leaflet/leaflet.css" />
 <script>
-	import { api, savedIds, signInUrl } from "../../lib/listora";
+	import { api, esc, savedIds, signInUrl } from "../../lib/listora";
+	import { rated, S } from "../../lib/listora-strings";
 
 	const form = document.getElementById("listora-search-form") as HTMLFormElement | null;
 	const q = document.getElementById("listora-q") as HTMLInputElement | null;
@@ -436,7 +434,7 @@ function amenityList(value: unknown): string[] {
 		if (clearBtn) clearBtn.hidden = !(q?.value || "");
 		if (!next?.getElementById("listora-results")) {
 			results.innerHTML =
-				'<div class="listora-empty" role="alert"><h2>Search is not available right now</h2><p>Check your connection and try again.</p></div>';
+				`<div class="listora-empty" role="alert"><h2>${esc(S.directory.searchDownTitle)}</h2><p>${esc(S.directory.searchDownBody)}</p></div>`;
 			return;
 		}
 		for (const id of LIVE) {
@@ -466,7 +464,7 @@ function amenityList(value: unknown): string[] {
 			if (!rating) return;
 			node.hidden = false;
 			node.textContent = `${"★".repeat(Math.max(1, Math.round(rating.average)))} ${rating.average.toFixed(1)}`;
-			node.setAttribute("aria-label", `Rated ${rating.average.toFixed(1)} out of 5 from ${rating.count} reviews`);
+			node.setAttribute("aria-label", rated(rating.average.toFixed(1), rating.count));
 		});
 	}
 	fillRatings();
@@ -553,7 +551,7 @@ function amenityList(value: unknown): string[] {
 		const place = (L: Leaflet) => {
 			if (!map) {
 				map = L.map(mapEl);
-				L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", { attribution: "&copy; OpenStreetMap" }).addTo(map);
+				L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", { attribution: `&copy; ${esc(S.directory.mapCredit)}` }).addTo(map);
 				markers = L.layerGroup().addTo(map);
 			}
 			markers?.clearLayers();
