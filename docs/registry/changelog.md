@@ -1,3 +1,8 @@
+## 0.6.0
+
+- Security: website links must be a full http or https address; server-side calls run inside EmDash with no web request.
+- Improve: settings in tabs, Find and Load more on every admin list, all visitor wording in one file. Copy the kit again after updating.
+
 ## 0.5.2
 
 - Fix: the directory offers a type filter only for types its listings use, and hides it when there is just one. Copy the kit again after updating.
