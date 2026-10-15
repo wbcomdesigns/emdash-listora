@@ -2,28 +2,26 @@
 
 **Included in Free**
 
-Stored in plugin storage, not as host content. That keeps moderation off the `listings` collection.
+Reviews and claims are written on the listing page. You approve them in the admin. They are not posts.
 
 ## Reviews
 
-- Route: `reviews`
-- Seed: 13 reviews on the NYC pack
-- Detail page lists reviews for the current listing id or slug
-- Admin: `/_emdash/admin/plugins/listora/reviews`
+On a listing, open **Reviews**, then **Write a review**. The visitor picks **Stars**, a **Title**, and a **Review**, then **Submit review**.
+
+With approval on, the review waits under Admin, Listora, Reviews. The page shows Pending, Published, and Rejected, a find box, and the waiting reviews. Open **Review** on a row and choose **Approve** to publish it, or **Reject** to keep it off.
+
+The listing owner can reply from their account. The reply waits on the same Reviews page. **Approve the reply** publishes it under the review as **Reply from the owner**. **Reject the reply** keeps it off.
+
+A visitor cannot review their own listing.
 
 ## Claims
 
-- Route: `claims`
-- Seed: one pending claim
-- Detail page has a claim action
-- Admin: `/_emdash/admin/plugins/listora/claims`
+**Claim** on a listing asks for **Name**, **Email**, and **Proof**. **Claim listing** sends it.
 
-## Favorites and blocking
+Claims wait under Admin, Listora, Claims. Open **Review** on a row and choose **Approve** to mark the listing as claimed and make that member the owner. **Reject** declines it.
 
-- `favorites` keyed by member and listing
-- `blocked` collection for member blocking
-- Lab favorite button passes `data-slug` because host ids are ULIDs
+## Messages
 
-## What is still thin
+**Contact** on a listing is a message to the owner. The form asks for **Name**, **Email**, and **Message**, then **Send message**. Messages wait under Admin, Listora, Messages. Open **Handle** and choose **Mark as handled** to clear one. **Delete** opens the message, and **Delete this message** asks you to confirm.
 
-WordPress reviews have a distribution bar, helpful votes, report, and owner reply. Claims have a fuller owner flow. The engine accepts the writes. The presentation is a first pass on the detail page.
+The owner also sees messages in their account.

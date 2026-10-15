@@ -12,12 +12,12 @@ Use this to list agencies, freelancers, trainers or other partners.
 
 **Pick**
 - Listing types: Business for agencies and consultants. Education for trainers and schools.
-- Settings: leave **Require moderation** on. Set **Default listing type** to Business under Listora, Settings.
+- Settings: leave **Approve listings before they show** on. Set **Default listing type** to Business under Listora, Settings, Submissions.
 - Fill the directory by CSV import. Open `/listings/import/` as a site admin and upload your spreadsheet. A sample file is at `/vendor/listora-sample.csv`.
 
 **What you do**
 1. Import the file. Listora checks it first and lists any bad rows with the reason.
-2. Open Admin, Listora, Listings, and approve the imported drafts. An import never publishes anything.
+2. Open Admin, Listora, Listings queue, and approve the imported drafts. An import never publishes anything.
 
 **What visitors see**
 - `/listings/` with search, a row of type chips, and a card for each partner.
@@ -35,11 +35,11 @@ Use this for a town guide to shops, cafes and services.
 - Settings: keep moderation on if the public can submit. Turn it off only if you add every listing yourself.
 
 **What visitors see**
-- Search by keyword and location, and a Near me button.
-- Chips to filter by type, grid and list views, and a sort by Featured, Rating or Title.
-- Open or Closed badges from the hours you enter. They follow the time zone in Settings, General.
+- Search by keyword and location.
+- Chips to filter by type, **Grid** and **List**, and a sort of **Featured**, **Rating**, or **Title**.
+- **Open** or **Closed** next to the name when hours are set, and **Open now** or **Closed now** on the hours list. Both follow the site's time zone.
 - A map on the directory and on each listing (OpenStreetMap).
-- A featured row. It shows the first three featured listings.
+- A **Featured** row. It shows the first three featured listings.
 
 Visitors who sign in can save listings and leave reviews. You approve reviews under Admin, Listora, Reviews.
 
@@ -65,7 +65,7 @@ Use this when your members add themselves, or take over a listing you made.
 **Pick**
 - Listing types: whichever fit your members. Business is the default.
 - Turn on member sign-up in EmDash. Without it only your own staff can add listings and reviews.
-- Keep **Require moderation** on so you approve each new listing.
+- Keep **Approve listings before they show** on so you approve each new listing.
 
 **What members do**
 1. Sign in and open `/listings/submit/`. The form has five steps: type, basics, type fields, categories, preview.
@@ -74,7 +74,7 @@ Use this when your members add themselves, or take over a listing you made.
 4. Follow their listings, reviews, claims and saved places at `/account/`.
 
 **What you do**
-- Approve listings under Admin, Listora, Listings.
+- Approve listings under Admin, Listora, Listings queue.
 - Decide claims under Admin, Listora, Claims.
 - Moderate reviews under Admin, Listora, Reviews.
 
@@ -83,6 +83,6 @@ A listing marked as claimed shows a Claimed badge instead of the Claim button.
 ## Related
 
 - [Posts and pages](posts-and-pages.md)
-- [Plugin settings](../settings/plugin-settings.md)
-- [Submit a listing](../features/submit.md)
+- [Settings](../settings/plugin-settings.md)
+- [Add a listing](../features/submit.md)
 - [Reviews and claims](../features/reviews-claims.md)

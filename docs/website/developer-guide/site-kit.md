@@ -15,7 +15,7 @@ Copy these into an EmDash site after the plugin is installed.
 | `site-kit/public/vendor/listora-sample.csv` | Sample spreadsheet for import |
 | `site-kit/README.md` | Owner apply commands |
 
-Copy pages to `src/pages/` on the site. They expect `../../layouts/Base.astro`. See [Improve the screens](../how-to/improve-the-screens.md) for chrome still thin after apply.
+Copy pages to `src/pages/` on the site. They expect `../../layouts/Base.astro`. See [Improve the screens](../../dev/improve-the-screens.md) for chrome still thin after apply.
 
 Rules for new CSS:
 

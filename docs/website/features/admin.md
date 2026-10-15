@@ -1,17 +1,17 @@
-# Admin queue
+# Admin screens
 
 **Included in Free**
 
-Block Kit pages, not wp-admin and not React.
+Open them from the admin menu, under Listora.
 
-| Page | Path | Job |
+| Page | Where | Job |
 | --- | --- | --- |
-| Get started | `/_emdash/admin/plugins/listora/setup` | Setup status while something is missing. Once the directory has listings, this page is the queue |
-| Listings | `/_emdash/admin/plugins/listora/queue` | Approve or reject submissions. 25 at a time, with Find and Load more |
-| Reviews | `/_emdash/admin/plugins/listora/reviews` | Moderate reviews |
-| Claims | `/_emdash/admin/plugins/listora/claims` | Moderate claims |
-| Messages | `/_emdash/admin/plugins/listora/messages` | Messages from listing pages. Delete opens the message and asks first |
-| Settings | `/_emdash/admin/plugins/listora/settings` | One tab per group, one Save each |
+| Get started | Admin, Listora, Get started | Setup status while something is missing. Once the directory has listings, this page is the queue |
+| Listings queue | Admin, Listora, Listings queue | Approve or reject submissions. 25 at a time, with Find and Load more |
+| Reviews | Admin, Listora, Reviews | Moderate reviews |
+| Claims | Admin, Listora, Claims | Moderate claims |
+| Messages | Admin, Listora, Messages | Messages from listing pages. Delete, in the Handle menu, opens the message and asks first |
+| Settings | Admin, Listora, Settings | One tab per group, one Save each |
 
 Get started shows whether the listings collection exists, whether sample data is loaded, and a confirm button, until the directory has listings. Then the page is the queue. Health does not create listings. Load sample is safe to click more than once. After it succeeds, copy the site kit so `/listings/` exists.
 
@@ -26,6 +26,4 @@ Import and export live on the site kit page `/listings/import/`, for site admins
 - Analytics
 - Email template editor
 - Audit log
-- PHP-style setup wizard. Get started is a Block Kit checklist plus Load sample. It does not create the collection or copy Astro pages.
-
-Match Listora admin **jobs**. Do not pixel-clone wp-admin.
+- A setup wizard. Get started is a checklist plus **Load sample directory**. It does not create the collection or copy the directory pages.

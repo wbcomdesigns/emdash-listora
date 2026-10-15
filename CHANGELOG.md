@@ -8,6 +8,7 @@ Copy the kit again (`scripts/add-to-site.sh`) after you update. That copy replac
 
 - Improve  - Every phrase a visitor sees lives in `site-kit/lib/listora-strings.ts`, so a site can reword or translate the directory in one file.
 - Improve  - Settings are tabs, one Save each. Each admin list has Find and shows 25 at a time with Load more. Get started becomes the queue once the directory has listings.
+- Improve  - Owner guides describe the screens a site owner uses. Developer notes live in `docs/dev`.
 
 ## [0.5.2] - 2026-10-14
 

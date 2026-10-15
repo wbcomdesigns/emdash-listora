@@ -79,4 +79,4 @@ This part runs as trusted site code, not inside the plugin sandbox, which is why
 
 ## Working on the plugin itself
 
-See [Set up a new machine](new-machine.md) and [Local lab](local-lab.md).
+See [Set up a new machine](../../dev/new-machine.md) and [Local lab](../../dev/local-lab.md).

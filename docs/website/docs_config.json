@@ -11,12 +11,9 @@
     {
       "name": "Getting Started",
       "folder": "getting-started",
-      "description": "Install the plugin, set up a new machine, run the lab, and see what already ships.",
+      "description": "Install Listora, pick a way to use the directory, and add it next to your posts.",
       "pages": [
-        { "slug": "new-machine", "title": "Set up a new machine" },
-        { "slug": "install", "title": "Install the plugin" },
-        { "slug": "local-lab", "title": "Run the local lab" },
-        { "slug": "what-we-built", "title": "What we built in 0.1.0" },
+        { "slug": "install", "title": "Set up Listora on your site" },
         { "slug": "use-cases", "title": "Use cases" },
         { "slug": "posts-and-pages", "title": "Posts and pages" }
       ]
@@ -24,41 +21,13 @@
     {
       "name": "Browse and Submit",
       "folder": "features",
-      "description": "Search the directory, open a listing, submit one, and manage reviews or claims.",
+      "description": "What visitors see, how someone adds a listing, and how you approve it.",
       "pages": [
-        { "slug": "directory", "title": "Browse, search, and maps" },
-        { "slug": "submit", "title": "Submit a listing" },
+        { "slug": "directory", "title": "Browse the directory" },
+        { "slug": "submit", "title": "Add a listing" },
         { "slug": "reviews-claims", "title": "Reviews and claims" },
-        { "slug": "owner-dashboard", "title": "Owner dashboard" },
-        { "slug": "admin", "title": "Admin queue" }
-      ]
-    },
-    {
-      "name": "How-To Guides",
-      "folder": "how-to",
-      "description": "Match WordPress Listora chrome, then rebuild the public screens.",
-      "pages": [
-        { "slug": "match-listora-chrome", "title": "Match Listora chrome" },
-        { "slug": "form-presentation", "title": "Form presentation" },
-        { "slug": "directory-screens", "title": "Directory screens" },
-        { "slug": "improve-the-screens", "title": "Improve the screens" },
-        { "slug": "qa-catalog", "title": "QA catalog" }
-      ]
-    },
-    {
-      "name": "Settings",
-      "folder": "settings",
-      "description": "Moderation, default listing type, and spam keywords.",
-      "pages": [
-        { "slug": "plugin-settings", "title": "Plugin settings" }
-      ]
-    },
-    {
-      "name": "Out of scope",
-      "folder": "pro-features",
-      "description": "Pro catalog rows to skip. No Pro plan in this pass.",
-      "pages": [
-        { "slug": "parked-work", "title": "Not now" }
+        { "slug": "owner-dashboard", "title": "Your account" },
+        { "slug": "admin", "title": "Admin screens" }
       ]
     },
     {
@@ -70,16 +39,21 @@
       ]
     },
     {
+      "name": "Settings",
+      "folder": "settings",
+      "description": "Approval, how long a listing lasts, photos, and messages.",
+      "pages": [
+        { "slug": "plugin-settings", "title": "Settings" }
+      ]
+    },
+    {
       "name": "Developer Guide",
       "folder": "developer-guide",
-      "description": "Plugin versus site kit, routes, and how to publish a version.",
+      "description": "How the plugin, the site kit, and the host fit together.",
       "pages": [
-        { "slug": "handoff", "title": "Session handoff" },
         { "slug": "plugin-and-site-kit", "title": "Plugin, site kit, and host" },
-        { "slug": "wordpress-vs-emdash", "title": "WordPress Listora versus this plugin" },
         { "slug": "routes", "title": "Plugin routes" },
-        { "slug": "site-kit", "title": "Site kit" },
-        { "slug": "release", "title": "Version and publish" }
+        { "slug": "site-kit", "title": "Site kit" }
       ]
     },
     {
@@ -102,7 +76,7 @@
     {
       "name": "FAQ",
       "folder": "faq",
-      "description": "Short answers for install, pages, and the collection listing.",
+      "description": "Short answers for install, pages, and approval.",
       "pages": [
         { "slug": "faqs", "title": "FAQ" }
       ]
@@ -110,9 +84,9 @@
     {
       "name": "Troubleshooting",
       "folder": "troubleshooting",
-      "description": "Empty listings, stale workerd, and publish errors.",
+      "description": "A missing directory, an empty list, and photos that will not turn on.",
       "pages": [
-        { "slug": "lab", "title": "Lab and publish problems" }
+        { "slug": "common", "title": "When something looks wrong" }
       ]
     }
   ]
