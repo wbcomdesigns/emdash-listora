@@ -33,7 +33,7 @@ Checked on EmDash 1.3.1 with the `blog` template on Node. The Cloudflare lines f
 
    (`mktemp -d` makes a fresh folder only you can write to, and `&&` runs the script only when the clone worked. Never clone into a fixed `/tmp/<name>`: on a shared machine someone else can create it first.)
 
-   The script copies the directory pages, styles and scripts, never replaces `src/layouts/ListoraLayout.astro` once it exists, keeps a dated backup (`.bak-YYYYMMDD`) of any kit file you changed yourself, such as the wording file, a page or the styles, and lists them; files you never changed are replaced without a word, writes the seed for the listings collection, and prints the exact commands and menu links. If your site already has its own page at one of the kit's addresses (an `/account/` page, for example), it stops, names the file and copies nothing.
+   The script copies the directory pages, styles and scripts, never replaces `src/layouts/ListoraLayout.astro` once it exists, keeps a dated backup (`.bak-YYYYMMDD`) of any kit file you changed yourself, such as the wording file, a page or the styles, and lists them (next to the file, or in `.listora-backups/` for files under `public/`, which visitors could otherwise download); files you never changed are replaced without a word, writes the seed for the listings collection, and prints the exact commands and menu links. If your site already has its own page at one of the kit's addresses (an `/account/` page, for example), it stops, names the file and copies nothing.
 
 3. Create the listings collection with the command it printed. It needs Node 22.16 or later:
 

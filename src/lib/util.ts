@@ -63,20 +63,23 @@ type QueryFilter = Omit<NonNullable<Parameters<Store["query"]>[0]>, "limit" | "c
 /**
  * Every matching row of a plugin storage collection. EmDash returns at most 100 rows per query
  * and says nothing when it cuts, so anything that needs more pages with the cursor.
- * ponytail: `max` bounds the reads per request (the sandbox has a time limit); 5000 rows is 50 reads.
+ * `max` bounds the reads per request (the sandbox has a time limit; 5000 rows is 50 reads), and
+ * `truncated` says when it stopped there, so a caller never shows a cut list as the whole.
  */
 export async function queryAll(
 	collection: Store,
 	options: QueryFilter = {},
 	max = 5000,
-): Promise<{ items: Array<{ id: string; data: unknown }> }> {
+): Promise<{ items: Array<{ id: string; data: unknown }>; truncated: boolean }> {
 	const items: Array<{ id: string; data: unknown }> = [];
 	let cursor: string | undefined;
+	let more = false;
 	while (items.length < max) {
 		const page = await collection.query({ ...options, limit: Math.min(100, max - items.length), cursor });
 		items.push(...page.items);
-		if (!page.hasMore || !page.cursor) break;
+		more = Boolean(page.hasMore && page.cursor);
+		if (!more) break;
 		cursor = page.cursor;
 	}
-	return { items };
+	return { items, truncated: more };
 }

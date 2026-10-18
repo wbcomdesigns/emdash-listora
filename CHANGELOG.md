@@ -14,6 +14,9 @@ Copy the kit again after you update, with the new tag (see the install guide). A
 - Fix      - Load sample directory creates the two listings it puts in the queue, so both approve, and a queue row whose listing was deleted or moved to Trash can only be removed, after a confirm.
 - Fix      - A second decision on a listing from a stale admin tab is refused with a plain message, so a Reject can no longer undo an Approve.
 - Fix      - Every list read from plugin storage reads all its rows, so ratings, reviews, a member's account and the queues no longer stop at 100 on a large site.
+- Fix      - An approval that fails part way puts the listing back in the queue with a plain message, instead of leaving it out of every list.
+- Improve  - A listing shows its reviews 20 at a time with More reviews, and its total and average always count every review.
+- Improve  - Settings has four short tabs that fit a phone (Listings, Lifetime, Photos, Email), with the import and export link under them.
 - Fix      - An empty directory says it has no listings yet, instead of saying no listings match a search.
 - Fix      - Buttons and selected chips use the theme's brand colour pair in dark mode, so their text passes 4.5:1 on the EmDash blog template.
 - Security - A new listing stores every field cleaned and capped the same way an owner's edit does.

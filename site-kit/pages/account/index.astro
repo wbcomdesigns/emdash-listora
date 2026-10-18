@@ -128,6 +128,8 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 
 	const STATUS: Record<string, string> = {
 		pending: S.account.pending,
+		// Held for a moment while an admin's approval runs.
+		approving: S.account.pending,
 		approved: S.account.approved,
 		published: S.account.published,
 		rejected: S.account.rejected,
@@ -141,7 +143,7 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 						const name = esc(item.listing_title || S.account.gone);
 						const title = item.listing_url ? `<a href="${esc(item.listing_url)}">${name}</a>` : name;
 						const rest = keys
-							.map((key) => (key === "status" ? STATUS[String(item.status)] ?? item.status : item[key]))
+							.map((key) => (key === "status" ? STATUS[String(item.status)] ?? S.account.pending : item[key]))
 							.filter(Boolean)
 							.map(esc);
 						// Only set on the member's own live listings, and only when the site uses expiry.
@@ -290,7 +292,7 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 			"dash-counts",
 			Object.entries((data.counts ?? {}) as Record<string, number>)
 				.map(([key, value]) => `<a class="listora-chip" href="/account/?tab=${esc(key)}">${esc(LABELS[key] ?? key)}: ${esc(value)}</a>`)
-				.join(""),
+				.join("") + (data.partial ? `<p class="listora-meta">${esc(S.account.partial)}</p>` : ""),
 		);
 		const fresh = Number((data.counts as Record<string, number> | undefined)?.messages) || 0;
 		const badge = document.getElementById("dash-messages-count");

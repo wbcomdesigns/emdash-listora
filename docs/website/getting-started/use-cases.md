@@ -12,7 +12,7 @@ Use this to list agencies, freelancers, trainers or other partners.
 
 **Pick**
 - Listing types: Business for agencies and consultants. Education for trainers and schools.
-- Settings: leave **Approve listings before they show** on. Set **Default listing type** to Business under Listora, Settings, Submissions.
+- Settings: leave **Approve listings before they show** on. Set **Default listing type** to Business under Listora, Settings, Listings.
 - Fill the directory by CSV import. Open `/listings/import/` as a site admin and upload your spreadsheet. A sample file is at `/vendor/listora-sample.csv`.
 
 **What you do**

@@ -143,6 +143,7 @@ const RATE_MAX = 8;
 // Short enough that the moderation table can show every character an admin approves.
 const REVIEW_TITLE_MAX = 120;
 const REVIEW_BODY_MAX = 1000;
+const REVIEWS_PER_PAGE = 20;
 // One import: a file of up to 100 listings. Each row is two writes to the site, and a plugin
 // has a time limit per request, so a larger file is split by the admin, not risked half done.
 const IMPORT_MAX_ROWS = 100;
@@ -648,26 +649,34 @@ const plugin: SandboxedPlugin = {
 				const raw = asRecord(routeCtx.input);
 				const listingId = asString(raw.listingId || raw.listing_id);
 				if (!listingId) return { ok: true, items: [], average: 0, count: 0 };
-				const found = await queryAll(ctx.storage.reviews, { where: { listingId }, orderBy: { createdAt: "desc" } });
+				// 20 published reviews per request, newest first, with a cursor for the next 20. The
+				// total and the average come from the listing's stored rating, so they cover them all.
+				const page = await ctx.storage.reviews.query({
+					where: { listingId, status: "published" },
+					orderBy: { createdAt: "desc" },
+					limit: REVIEWS_PER_PAGE,
+					cursor: asString(raw.cursor) || undefined,
+				});
 				// Named fields only. A review row also holds the member's id (its own id is built
 				// from it) and email, version tokens and an owner reply still waiting for approval:
 				// none of that is public.
-				const items = rows(found)
-					.filter((row) => row.status === "published")
-					.map((row) => ({
-						author: asString(row.author),
-						stars: asNumber(row.stars) ?? 0,
-						title: asString(row.title),
-						body: asString(row.body),
-						createdAt: asString(row.createdAt),
-						owner_reply: asString(row.owner_reply),
-						owner_reply_at: asString(row.owner_reply_at),
-					}));
-				const avg =
-					items.length === 0
-						? 0
-						: items.reduce((sum, row) => sum + (asNumber(row.stars) ?? 0), 0) / items.length;
-				return { ok: true, items, average: Math.round(avg * 10) / 10, count: items.length };
+				const items = rows(page).map((row) => ({
+					author: asString(row.author),
+					stars: asNumber(row.stars) ?? 0,
+					title: asString(row.title),
+					body: asString(row.body),
+					createdAt: asString(row.createdAt),
+					owner_reply: asString(row.owner_reply),
+					owner_reply_at: asString(row.owner_reply_at),
+				}));
+				const rating = asRecord(await ctx.storage.ratings.get(listingId));
+				return {
+					ok: true,
+					items,
+					average: asNumber(rating.average) ?? 0,
+					count: asNumber(rating.count) ?? 0,
+					cursor: page.hasMore && page.cursor ? page.cursor : null,
+				};
 			},
 		},
 		review: {
@@ -799,12 +808,10 @@ const plugin: SandboxedPlugin = {
 					items: (
 						await Promise.all(
 							owned.map((listingId) =>
-								ctx.storage.reviews.query({ where: { listingId }, orderBy: { createdAt: "desc" }, limit: 10 }),
+								ctx.storage.reviews.query({ where: { listingId, status: "published" }, orderBy: { createdAt: "desc" }, limit: 10 }),
 							),
 						)
-					)
-						.flatMap((found) => found.items)
-						.filter((item) => asRecord(item.data).status === "published"),
+					).flatMap((found) => found.items),
 				};
 				// Names and links for every row, so the member never sees a bare id.
 				const all = [listings, reviews, claims, favorites, inbox, received].map(rows);
@@ -849,6 +856,8 @@ const plugin: SandboxedPlugin = {
 				return {
 					ok: true,
 					member: { id: user.id, name: user.name },
+					// True when a list stopped at the read bound (5000 rows): the page says so.
+					partial: [reviews, claims, favorites, listings].some((found) => found.truncated),
 					counts: {
 						listings: listings.items.length,
 						reviews: reviews.items.length,

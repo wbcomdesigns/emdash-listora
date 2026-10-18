@@ -24,7 +24,7 @@ In `src/lib/listora-strings.ts`, the file the setup command copies. [Reword the 
 
 ## Where is import and export?
 
-On the site, at `/listings/import/`, for a site admin. Settings, Import and export links to it. An import adds drafts. Nothing goes live until you approve it in the Listings queue.
+On the site, at `/listings/import/`, for a site admin. The Open import and export link under Settings goes there. An import adds drafts. Nothing goes live until you approve it in the Listings queue.
 
 ## Can I use the WordPress plugin on EmDash?
 

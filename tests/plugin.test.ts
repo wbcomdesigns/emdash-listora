@@ -49,9 +49,11 @@ const member = (id: string, role = 10) => ({
 const ana = member("ana");
 const ben = member("ben");
 
+// Clear the handle first, so a slow or failing dispose cannot leave the next test on this site.
 afterEach(async () => {
-	await host?.dispose();
+	const done = host;
 	host = undefined;
+	await done?.dispose().catch(() => undefined);
 });
 
 describe("health route", () => {
@@ -897,7 +899,7 @@ describe("settings page and dashboard card", () => {
 		const page = JSON.stringify(await rt.admin.loadPage("/settings"));
 		expect(page).toContain('"type":"tab"');
 		expect(page).not.toContain("Each group saves");
-		for (const label of ["Submissions", "Listing lifetime", "Photos", "Messages", "Import and export"]) {
+		for (const label of ["Listings", "Lifetime", "Photos", "Email", "Import and export"]) {
 			expect(page).toContain(label);
 		}
 		for (const action of ["save_submissions", "save_lifetime", "save_photos", "save_messages"]) {
@@ -1367,6 +1369,31 @@ describe("more than 100 stored rows", () => {
 		expect(page).toContain("Waiting 000");
 	});
 
+	it("pages a listing's 120 reviews 20 at a time, with the full count and average", async () => {
+		const site = await directory();
+		for (let i = 0; i < 120; i += 1) {
+			const n = String(i).padStart(3, "0");
+			await site.rt.fixtures.plugin.storage("reviews", `rev-${n}`, { listingId: site.a, member_id: `m${n}`, author: `Reader ${n}`, stars: i % 2 ? 5 : 3, title: "", body: `Review ${n}`, status: "published", createdAt: `2026-01-01T00:00:00.${n}Z` });
+		}
+		await site.rt.fixtures.plugin.storage("reviews", "rev-hidden", { listingId: site.a, member_id: "x", stars: 1, body: "Waiting", status: "pending", createdAt: "2026-02-01T00:00:00.000Z" });
+		// A decision recalculates the stored rating from every published review.
+		const pending = (await site.storage<{ rev?: string; createdAt: string }>("reviews").get("rev-hidden"))!;
+		await site.invokeRoute("admin", { type: "block_action", action_id: "review_mod", value: `reject|${pending.rev || pending.createdAt}|rev-hidden`, page: "/reviews" });
+		type Page = { items: Array<{ body: string }>; count: number; average: number; cursor: string | null };
+		let page = (await site.invokeRoute("reviews", { listingId: site.a }, { method: "GET" })) as Page;
+		expect(page.items).toHaveLength(20);
+		expect(page.items[0].body).toBe("Review 119");
+		expect(page).toMatchObject({ count: 120, average: 4 });
+		const seen = [...page.items];
+		while (page.cursor) {
+			page = (await site.invokeRoute("reviews", { listingId: site.a, cursor: page.cursor }, { method: "GET" })) as Page;
+			seen.push(...page.items);
+		}
+		expect(seen).toHaveLength(120);
+		expect(new Set(seen.map((item) => item.body)).size).toBe(120);
+		expect(seen.some((item) => item.body === "Waiting")).toBe(false);
+	});
+
 	it("rates every listing on a directory of 150 rated listings", async () => {
 		const rt = await createPluginRuntimeTestHost();
 		await rt.fixtures.collection(listingsCollection as never);
@@ -1382,5 +1409,44 @@ describe("more than 100 stored rows", () => {
 		const cards = (await rt.transport.invokeRoute("listings", { per_page: 60, page: 3 })) as { items: Array<{ rating_count: number }>; total: number };
 		expect(cards.total).toBe(150);
 		expect(cards.items.every((item) => item.rating_count === 1)).toBe(true);
+	});
+});
+
+describe("an approval that fails part way", () => {
+	async function waitingOn(fields: (all: Array<Record<string, unknown>>) => Array<Record<string, unknown>>) {
+		const rt = await createPluginRuntimeTestHost();
+		await rt.fixtures.collection({ ...(listingsCollection as object), fields: fields((listingsCollection as { fields: Array<Record<string, unknown>> }).fields) } as never);
+		host = { dispose: () => rt.dispose() } as unknown as PluginTestHost;
+		const made = await rt.fixtures.content("listings", { data: { title: "Fragile Cafe" }, slug: "fragile", status: "draft" } as never);
+		await rt.fixtures.plugin.storage("submissions", made.id, { listingId: made.id, title: "Fragile Cafe", status: "pending", createdAt: "2026-01-01T00:00:00.000Z" });
+		const route = rt.transport.invokeRoute.bind(rt.transport);
+		const approve = () => route("admin", { type: "block_action", action_id: "review", value: `approve:${made.id}`, page: "/queue" }).then((r) => JSON.stringify(r));
+		return { rt, id: made.id, route, approve };
+	}
+
+	it("puts the row back in the queue when saving the expiry date throws", async () => {
+		// A site whose listings collection has no expires_at field: the update on approval throws.
+		const { rt, id, route, approve } = await waitingOn((all) => all.filter((field) => field.slug !== "expires_at"));
+		await rt.fixtures.plugin.setting("expiry_days", 30);
+		expect(await approve()).toContain("It is waiting in the queue again");
+		expect(await rt.inspect.storage.get("submissions", id)).toMatchObject({ status: "pending" });
+		const queue = JSON.stringify(await route("admin", { type: "page_load", page: "/queue" }));
+		expect(queue).toContain(`approve:${id}`);
+		expect(queue).toContain('{"label":"Pending","value":1}');
+		expect(((await rt.inspect.content.get("listings", id)) as { status: string }).status).toBe("draft");
+	});
+
+	it("puts the row back when the listing cannot be published", async () => {
+		const { rt, id, approve } = await waitingOn((all) => all);
+		// Gone before the click: moved to Trash in another tab.
+		await (rt.actions.content.trash as (c: string, id: string) => Promise<unknown>)("listings", id);
+		expect(await approve()).toMatch(/Could not publish/);
+		expect(await rt.inspect.storage.get("submissions", id)).toMatchObject({ status: "pending" });
+	});
+
+	it("answers a click on a listing being approved right now", async () => {
+		const { rt, id, route } = await waitingOn((all) => all);
+		await rt.fixtures.plugin.storage("submissions", id, { listingId: id, title: "Fragile Cafe", status: "approving", createdAt: "2026-01-01T00:00:00.000Z" });
+		expect(JSON.stringify(await route("admin", { type: "block_action", action_id: "review", value: `reject:${id}`, page: "/queue" }))).toContain("Someone else is deciding this listing right now.");
 	});
 });

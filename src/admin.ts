@@ -318,11 +318,13 @@ async function reviewListing(
 		const status = asString(row.status);
 		const message = !row.listingId
 			? "That item is no longer in the queue."
-			: status === "approved" || status === "approving"
-				? "This listing was already approved."
-				: status === "rejected"
-					? "This listing was already rejected."
-					: "Someone else is deciding on this listing. Try again in a moment.";
+			: status === "approving"
+				? "Someone else is deciding this listing right now."
+				: status === "approved"
+					? "This listing was already approved."
+					: status === "rejected"
+						? "This listing was already rejected."
+						: "Someone else is deciding this listing right now.";
 		return renderQueue(ctx, { toast: { message, type: "error" } });
 	};
 
@@ -351,21 +353,25 @@ async function reviewListing(
 
 	const claim = await ctx.storage.submissions.updateIf(listingId, { where: { status: "pending" }, set: { status: "approving" } });
 	if (!claim.applied) return handled();
-	// If the listing cannot be published, the row goes back to waiting.
+	// From here on, any failure puts the row back to waiting: a row left "approving" would drop
+	// out of the queue and every count while its listing is still a draft.
 	const release = async (message: string) => {
 		await ctx.storage.submissions.updateIf(listingId, { where: { status: "approving" }, set: { status: "pending" } });
 		return renderQueue(ctx, { toast: { message, type: "error" } });
 	};
-
-	// A new listing gets its date at the moment it is approved.
-	const days = await expiryDays(ctx);
-	const draft = days ? await ctx.content?.get?.("listings", listingId).catch(() => null) : null;
-	if (draft && ctx.content?.update && !asString(asRecord(draft.data).expires_at)) {
-		await ctx.content.update("listings", listingId, { ...draft.data, expires_at: expiryFrom(days) });
-	}
-
-	if (!(await publishNow(ctx, listingId))) {
-		return release("Could not publish. Open the listing in admin and publish it there.");
+	try {
+		// A new listing gets its date at the moment it is approved.
+		const days = await expiryDays(ctx);
+		const draft = days ? await ctx.content?.get?.("listings", listingId).catch(() => null) : null;
+		if (draft && ctx.content?.update && !asString(asRecord(draft.data).expires_at)) {
+			await ctx.content.update("listings", listingId, { ...draft.data, expires_at: expiryFrom(days) });
+		}
+		if (!(await publishNow(ctx, listingId))) {
+			return release("Could not publish. Open the listing in admin and publish it there.");
+		}
+	} catch (error) {
+		ctx.log.warn("Listora approval failed", { listingId, error: String(error) });
+		return release("Could not publish that listing. It is waiting in the queue again. Try once more, or publish it from Content, Listings.");
 	}
 	await ctx.storage.submissions.updateIf(listingId, { where: { status: "approving" }, set: { status: "approved" } });
 	ctx.log.info("Listora listing approved", { listingId });
@@ -646,7 +652,7 @@ export async function renderSettings(
 				type: "tab",
 				panels: [
 					{
-						label: "Submissions",
+						label: "Listings",
 						blocks: [
 							{ type: "context", text: "New listings wait in the queue until you approve them, unless you turn that off." },
 							{
@@ -678,7 +684,7 @@ export async function renderSettings(
 						],
 					},
 					{
-						label: "Listing lifetime",
+						label: "Lifetime",
 						blocks: [
 							{ type: "context", text: "0 means a listing never expires. Above 0, it leaves the directory after that many days and its owner can renew it." },
 							{
@@ -736,7 +742,7 @@ export async function renderSettings(
 						],
 					},
 					{
-						label: "Messages",
+						label: "Email",
 						blocks: [
 							{ type: "context", text: "One short notice an hour to the owner's account email. The message itself stays on the site." },
 							{
@@ -754,17 +760,12 @@ export async function renderSettings(
 							},
 						],
 					},
-					{
-						label: "Import and export",
-						blocks: [
-							{ type: "context", text: "Download published listings, or add drafts from a spreadsheet. Nothing goes live until you approve it." },
-							...(importUrl
-								? [{ type: "actions", elements: [{ type: "link", label: "Open import and export", target: { kind: "external", url: importUrl } }] }]
-								: []),
-						],
-					},
 				],
 			},
+			// Not a tab: it is one link, and a fifth tab did not fit the tab row at 768 and 390.
+			{ type: "divider" },
+			{ type: "context", text: "Import and export: download published listings, or add drafts from a spreadsheet. Nothing goes live until you approve it." },
+			...(importUrl ? [{ type: "actions", elements: [{ type: "link", label: "Open import and export", target: { kind: "external", url: importUrl } }] }] : []),
 		],
 		toast: extra?.toast,
 	};

@@ -21,7 +21,7 @@ Status words: Pass, Thin, Lab only, Missing, Skip.
 | Favorites | `favorites` | Pass |
 | Contact | `contact` + honeypot | Pass |
 | Dashboard | `dashboard` | Thin. Demo member, not proven host auth |
-| Import / export | `import` | Site page `/listings/import/`. Settings, Import and export links to it. Not an admin screen |
+| Import / export | `import` | Site page `/listings/import/`. The link under the Settings tabs goes there. Not an admin screen |
 | Privacy | `privacy` | Thin. Route exists. Account UI is first pass |
 | Renew | `renew` | Thin. No credits (correct). Account UI is first pass |
 | Admin queues | `admin` `/queue` `/reviews` `/claims` | Pass |

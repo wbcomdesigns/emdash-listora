@@ -620,16 +620,32 @@ const schema = {
 		lightbox.addEventListener("close", () => opener?.focus());
 	}
 
-	// A date a person reads, in the visitor's own language: "13 Oct 2026".
-	async function loadReviews() {
+	// Reviews come 20 at a time, newest first. "More reviews" asks for the next 20.
+	const reviewHtml = (item: Record<string, unknown>) =>
+		`<article class="listora-review"><strong>${esc(item.author || S.listing.member)}</strong> <span class="listora-stars" aria-label="${esc(outOf5(Number(item.stars) || 0))}">${"★".repeat(Number(item.stars) || 0)}</span><h3>${esc(item.title)}</h3><p>${esc(item.body)}</p>${item.owner_reply ? `<div class="listora-reply"><p class="listora-reply__label">${esc(S.listing.ownerReply)}${item.owner_reply_at ? ` · ${esc(day(item.owner_reply_at))}` : ""}</p><p>${esc(item.owner_reply)}</p></div>` : ""}</article>`;
+	async function loadReviews(cursor = "") {
 		const box = document.getElementById("listora-reviews");
 		if (!box) return;
-		const data = await api(`reviews?listingId=${encodeURIComponent(listingId)}`);
+		const more = box.querySelector<HTMLButtonElement>("[data-more-reviews]");
+		if (more) more.disabled = true;
+		const data = await api(`reviews?listingId=${encodeURIComponent(listingId)}${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""}`);
 		if (!data.ok) {
+			if (more) {
+				more.disabled = false;
+				more.insertAdjacentHTML("afterend", ` <span class="listora-status" data-tone="error" role="alert">${esc(data.error?.message || S.listing.tryAgain)}</span>`);
+				return;
+			}
 			box.innerHTML = `<div class="listora-empty" role="alert"><h2>${esc(S.listing.reviewsDown)}</h2><p>${esc(data.error?.message || S.listing.tryAgain)}</p></div>`;
 			return;
 		}
 		const items = (data.items ?? []) as Array<Record<string, unknown>>;
+		const next = typeof data.cursor === "string" ? data.cursor : "";
+		const button = next ? `<p><button type="button" class="listora-btn listora-btn--secondary" data-more-reviews="${esc(next)}">${esc(S.listing.moreReviews)}</button></p>` : "";
+		if (cursor) {
+			more?.parentElement?.remove();
+			box.insertAdjacentHTML("beforeend", items.map(reviewHtml).join("") + button);
+			return;
+		}
 		const summary = document.getElementById("listora-rating");
 		const count = Number(data.count) || 0;
 		if (summary && count) {
@@ -640,13 +656,12 @@ const schema = {
 		box.innerHTML =
 			items.length === 0
 				? `<div class="listora-empty"><h2>${esc(S.listing.noReviews)}</h2><p>${esc(S.listing.firstReview)}</p></div>`
-				: items
-						.map(
-							(item) =>
-								`<article class="listora-review"><strong>${esc(item.author || S.listing.member)}</strong> <span class="listora-stars" aria-label="${esc(outOf5(Number(item.stars) || 0))}">${"★".repeat(Number(item.stars) || 0)}</span><h3>${esc(item.title)}</h3><p>${esc(item.body)}</p>${item.owner_reply ? `<div class="listora-reply"><p class="listora-reply__label">${esc(S.listing.ownerReply)}${item.owner_reply_at ? ` · ${esc(day(item.owner_reply_at))}` : ""}</p><p>${esc(item.owner_reply)}</p></div>` : ""}</article>`,
-						)
-						.join("");
+				: items.map(reviewHtml).join("") + button;
 	}
+	document.getElementById("listora-reviews")?.addEventListener("click", (event) => {
+		const more = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-more-reviews]");
+		if (more) loadReviews(more.dataset.moreReviews || "");
+	});
 
 	document.getElementById("listora-review-form")?.addEventListener("submit", async (event) => {
 		event.preventDefault();

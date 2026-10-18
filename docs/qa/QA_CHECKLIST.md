@@ -4,13 +4,11 @@
 
 One living list of flow-level cases for Listora on EmDash. Walk all of it before every release. When you add or fix behaviour, add or change its case in the same pull request. There are no per-release QA files.
 
-Last walk: 2026-10-14, version 0.5.0, as guest, subscriber and admin.
+Last walk: 2026-10-19, version 0.6.2, on EmDash 1.3.1 (blog template, Node), as guest and admin, with the 0.6.1 engine and kit mixed both ways.
 
-How it was walked: an independent pass (not the person who built it) ran the cases in a browser on the starter-template lab and the portfolio-template lab and looked at a screenshot of every screen, at 1440, 768 and 390 in light and dark, plus keyboard, right-to-left and the accessibility tree. It found 22 points. Each real one was fixed and re-checked in the browser, and the cases it did not reach were then walked by the builder: G-23, M-6, A-16, A-41, A-49, A-52, A-53, and the new cases G-35 to G-37, M-40 to M-43.
+How it was walked: the builder walked the cases 0.6.2 changed in a browser on a fresh 1.3.1 blog site and a 1.3.1 lab, at 1440, 768 and 390 in light and dark, measuring contrast and widths with DOM queries, and two independent checks read the pull request and walked it. Covered by automated tests only: A-62 to A-64 (rows past 100, a failed approval), A-12, A-17, A-20, A-29, A-13, A-14, A-32, A-33, A-36 and A-37.
 
-Covered by an automated test only, because the lab cannot produce the state by hand: A-12 (no collection), A-17, A-20 and A-29 (scheduled tasks and mail), A-13, A-14, A-32, A-33, A-36 and A-37 (stale or rejected items). A-42 was walked when photos were built and not again in this pass.
-
-Not done: a pass with a real screen reader, swipe on a real phone, a measured contrast figure for every text and background pair (judged by eye in both themes), and a preview on a live site (see Known gaps).
+Not done in 0.6.2: a registry install on 1.3.1 (done on 1.3.0), Cloudflare hosting, a full subscriber walk of every case, a real screen reader, and a live site.
 
 ## Setup
 
@@ -142,14 +140,14 @@ Three roles, always in this order: **guest**, **member** (subscriber role), **ad
 | A-18 | Turn off "Email the listing owner when a message arrives" and save | Stays off after reload. New messages are stored and marked Owner not notified |
 | A-19 | Set "Listings expire after this many days" to 10, save, reload | Shows 10. A listing approved after that carries a date 10 days ahead | dates a listing on approval |
 | A-20 | A listing past its date, after the daily check | Gone from the directory and search. Its page says it has expired | marks a listing past its date as expired |
-| A-21 | Open Settings | Three groups (Submissions, Listing lifetime, Messages), a line under each heading saying what each option does, a Save button per group | settings page and dashboard card |
+| A-21 | Open Settings | Four tabs (Listings, Lifetime, Photos, Email) that fit the row at 1440, 768 and 390, a line under each heading saying what each option does, a Save button per group | settings page and dashboard card |
 | A-22 | Change one option in each group, save, reload | Each stays as saved | same test |
 | A-23 | Enter a negative number or text for the days and save | Refused with a message. The saved value is unchanged | same test |
 | A-24 | Open the Listings queue | Only counts and the waiting list. No settings form | same test |
 | A-25 | Open the EmDash dashboard | A "Listora: waiting for you" card with the four counts and a link to each list. "Nothing is waiting." when all are zero | same test |
 | A-26 | With more than 25 listings waiting, open the Listings queue | 25 rows, "Showing 25 of N", Load more adds 25. Approve or reject one further down: the list stays where it was | long admin lists |
 | A-27 | Type part of a listing name in "Find in this list" and press Find | Only matching rows, with a line saying how many. Text that matches nothing says "Nothing matches". Reopening the page clears the search | same test |
-| A-28 | Settings, Listing lifetime: turn "Email the owner 7 days before" off and save, reload | Stays off. Turn it back on the same way |
+| A-28 | Settings, Lifetime: turn "Email the owner 7 days before" off and save, reload | Stays off. Turn it back on the same way |
 | A-29 | A listing expiring within 7 days, after the daily check | Its owner gets one email, to their account address, with no listing name and no link. A second run sends nothing. After a renewal the next date is warned once. Nothing is sent when the switch is off | warns the owner once per expiry date |
 | A-30 | Listings queue with an owner's change waiting | A "Changes to live listings" block: the listing name, one line per changed field with before and after, a long change written out in full, Approve and publish, Reject. The dashboard card counts it under Listings (new listings, changes and photos share one tile) |
 | A-31 | Approve a change | "Change published." The public page shows the new values. The block goes |
@@ -164,7 +162,7 @@ Three roles, always in this order: **guest**, **member** (subscriber role), **ad
 | A-40 | Reject a photo | "Photo rejected and deleted." The file is gone from the media library |
 | A-41 | Settings, Photos: set the number to 0, then back | 0 turns Add a photo off everywhere. A site with no Photos field shows a notice saying how to add it |
 | A-42 | Edit a listing in EmDash and add rows to its Photos field | They show in the listing's gallery like owner photos |
-| A-43 | Settings, Import and export: follow the link | `/listings/import/` opens with Export and Import panels |
+| A-43 | Settings: follow Open import and export under the tabs | `/listings/import/` opens with Export and Import panels |
 | A-44 | Download listings | A file `listings-<date>.csv` downloads with the column names first and one row per published listing |
 | A-45 | Choose a CSV with good rows, a row with no title, an unknown type and a bad latitude, then Check file | "N of M rows are ready", each bad row listed with its row number and reason. Nothing is created yet |
 | A-46 | Import N listings as drafts | "N listings added as drafts". They are in the Listings queue, not on the site |
@@ -182,6 +180,9 @@ Three roles, always in this order: **guest**, **member** (subscriber role), **ad
 | A-59 | Open the Listings queue in two tabs. Approve a listing in one, then Reject it in the other (and the other way round) | The stale tab says "This listing was already approved." (or rejected). The listing stays as the first decision left it | two admin tabs deciding on one listing |
 | A-60 | A member listing with a 200-letter title with no spaces | The queue table wraps the title; at 1440 the Decision column stays on screen. At 768 and 390 the table scrolls sideways inside its own box (EmDash table) | |
 | A-61 | As a guest, call the `health` route | Plugin id, version and whether the listings collection exists. No waiting count. Nothing is written | writes nothing |
+| A-62 | A directory with more than 100 rated listings, a listing with more than 100 reviews, a member with more than 100 saved listings | Every card has its rating; the listing shows 20 reviews with More reviews and the full count and average; the account counts every row. Past 5000 rows the account says "Showing the first 5000 of each list." | more than 100 stored rows |
+| A-63 | More than 100 listings waiting | The queue says "Showing 25 of N" with the real N and pages through all of them; the CSV check knows every waiting listing | more than 100 stored rows |
+| A-64 | An approval that fails part way (the listing cannot be saved or published) | "Could not publish that listing. It is waiting in the queue again." The row is still in the queue and counted; a click on a listing being approved right now says "Someone else is deciding this listing right now."; the member's account shows "Awaiting approval", never a raw word | an approval that fails part way |
 | A-48 | A file over 100 rows, an empty file, a file with no title column | A plain message, nothing imported |
 | A-12 | Get started on a site with no listings collection | Clear "create the collection first" message, no crash | tells the owner to create the listings collection first |
 

@@ -52,8 +52,13 @@ while read -r from to; do
 	sum="$(sha "$target")"
 	[[ "$sum" == "$(sha "$PLUGIN/$from")" ]] && continue
 	grep -qxF "$sum  $to" "$PLUGIN/site-kit/kit.sums" && continue
-	copy="$target.bak-$(date +%Y%m%d)"
-	[[ -e "$copy" ]] && copy="$target.bak-$(date +%Y%m%d-%H%M%S)"
+	# Next to the file, except under public/: everything there is served to visitors, so those
+	# copies go to .listora-backups/ in the site root instead.
+	base="$target"
+	[[ "$to" == public/* ]] && base="$SITE/.listora-backups/$to"
+	mkdir -p "$(dirname "$base")"
+	copy="$base.bak-$(date +%Y%m%d)"
+	[[ -e "$copy" ]] && copy="$base.bak-$(date +%Y%m%d-%H%M%S)"
 	cp "$target" "$copy"
 	backups+="    ${copy#"$SITE/"}"$'\n'
 done < <("$PLUGIN/scripts/kit-files.sh" "$PLUGIN")
