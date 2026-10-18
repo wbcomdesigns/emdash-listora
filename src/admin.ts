@@ -572,7 +572,7 @@ async function renderClaimQueue(
 function renderOnboardBlocks(onboard: Awaited<ReturnType<typeof getOnboardState>>): BlockMap[] {
 	const missing = onboard.hasCollection
 		? "The listings collection is ready. Load sample data so the first visit shows real NYC cards, reviews, and a claim."
-		: "This site has no listings collection yet. The two lines above print the command that creates it. Then load sample data here.";
+		: "This site has no listings collection yet. The command above prints the step that creates it. Then load sample data here.";
 
 	return [
 		{
@@ -817,11 +817,11 @@ export async function kitBlocks(ctx: PluginContext): Promise<BlockMap[]> {
 				"Installing Listora adds this admin, not pages on your site. The visitor pages come from the Listora site kit. Until you copy it, the addresses below show your site's 404 page.",
 			variant: "default",
 		},
-		{ type: "context", text: `From your site's root folder, run these two lines. They copy the kit for the version you have installed (${tag}).` },
+		{ type: "context", text: `From your site's root folder, run this command. It copies the kit for the version you have installed (${tag}) into a fresh folder only you can write to.` },
 		{
 			type: "code",
 			language: "bash",
-			code: `git clone --branch ${tag} --depth 1 ${REPO_URL} /tmp/emdash-listora\n/tmp/emdash-listora/scripts/add-to-site.sh .`,
+			code: `kit="$(mktemp -d)" && git clone --branch ${tag} --depth 1 ${REPO_URL} "$kit/emdash-listora" && "$kit/emdash-listora/scripts/add-to-site.sh" .`,
 		},
 		{
 			type: "fields",

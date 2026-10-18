@@ -19,8 +19,7 @@ Checked on EmDash 1.3.0 with the `blog` template, Node and Cloudflare.
 2. From your site's root folder:
 
    ```bash
-   git clone --branch v0.6.2 --depth 1 https://github.com/wbcomdesigns/emdash-listora /tmp/emdash-listora
-   /tmp/emdash-listora/scripts/add-to-site.sh .
+   kit="$(mktemp -d)" && git clone --branch v0.6.2 --depth 1 https://github.com/wbcomdesigns/emdash-listora "$kit/emdash-listora" && "$kit/emdash-listora/scripts/add-to-site.sh" .
    ```
 
 3. Run the seed command it printed (Node 22.16 or later). Restart the dev server.

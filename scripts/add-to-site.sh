@@ -2,8 +2,7 @@
 # Adds Listora's visitor pages (the site kit) to an EmDash site. Run it from a checkout of the
 # release tag that matches the plugin version installed on the site:
 #
-#   git clone --branch v<version> --depth 1 https://github.com/wbcomdesigns/emdash-listora /tmp/emdash-listora
-#   /tmp/emdash-listora/scripts/add-to-site.sh .
+#   kit="$(mktemp -d)" && git clone --branch v<version> --depth 1 https://github.com/wbcomdesigns/emdash-listora "$kit/emdash-listora" && "$kit/emdash-listora/scripts/add-to-site.sh" .
 #
 # Safe to run again after every plugin update: it replaces Listora's own files, never touches
 # src/layouts/ListoraLayout.astro once it exists, and backs up a wording file you changed.
@@ -23,7 +22,7 @@ fi
 tag="$(git -C "$PLUGIN" describe --tags --exact-match 2>/dev/null || true)"
 if [[ "$tag" != "v$VERSION" ]]; then
 	echo "Note: this checkout is not the release tag v$VERSION. Use the tag of the version installed on your site:" >&2
-	echo "  git clone --branch v<version> --depth 1 https://github.com/wbcomdesigns/emdash-listora /tmp/emdash-listora" >&2
+	echo '  kit="$(mktemp -d)" && git clone --branch v<version> --depth 1 https://github.com/wbcomdesigns/emdash-listora "$kit/emdash-listora" && "$kit/emdash-listora/scripts/add-to-site.sh" .' >&2
 fi
 
 first_run=1

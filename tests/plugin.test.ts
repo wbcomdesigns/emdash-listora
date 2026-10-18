@@ -198,7 +198,8 @@ describe("admin route", () => {
 		const version = (await rt.transport.invokeRoute("health")) as { version: string };
 		const before = JSON.stringify(await rt.transport.invokeRoute("admin", { type: "page_load", page: "/setup" }));
 		expect(before).toContain("Set up visitor pages");
-		expect(before).toContain(`git clone --branch v${version.version} --depth 1 https://github.com/wbcomdesigns/emdash-listora`);
+		expect(before).toContain(`kit=\\"$(mktemp -d)\\" && git clone --branch v${version.version} --depth 1 https://github.com/wbcomdesigns/emdash-listora \\"$kit/emdash-listora\\" && \\"$kit/emdash-listora/scripts/add-to-site.sh\\" .`);
+		expect(before).not.toContain("/tmp/");
 		expect(before).toContain(`blob/v${version.version}/docs/website/getting-started/install.md`);
 		expect(before).toContain("/listings/submit/");
 		expect(before).not.toContain("blob/main");

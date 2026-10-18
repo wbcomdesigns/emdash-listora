@@ -6,7 +6,7 @@ Versions match `package.json`, the git tag, and the EmDash registry release. New
 
 Copy the kit again after you update, with the new tag (see the install guide). A wording file you changed is now kept as a dated backup.
 
-- New      - Get started opens with a Set up visitor pages card: the two-line command for the installed version, the addresses it adds and the install guide, until you press Visitor pages are set up.
+- New      - Get started opens with a Set up visitor pages card: the kit command for the installed version, the addresses it adds and the install guide, until you press Visitor pages are set up.
 - Improve  - The admin group is named Listora and its reviews page is Listing reviews, so a site that also runs WB Reviews can tell them apart.
 - Improve  - The dashboard card shows four counts that fit its width, one per list it links to.
 - Improve  - The setup command copies the kit of the tagged release, keeps a dated backup of a changed wording file, and prints the seed command, the menu links and the restart step.

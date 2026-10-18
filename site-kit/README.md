@@ -9,8 +9,7 @@ Install `@vapvarun.bsky.social/listora` first (or the local package). Then apply
 From your site's root folder, with the tag of the Listora version installed on the site:
 
 ```bash
-git clone --branch v0.6.2 --depth 1 https://github.com/wbcomdesigns/emdash-listora /tmp/emdash-listora
-/tmp/emdash-listora/scripts/add-to-site.sh .
+kit="$(mktemp -d)" && git clone --branch v0.6.2 --depth 1 https://github.com/wbcomdesigns/emdash-listora "$kit/emdash-listora" && "$kit/emdash-listora/scripts/add-to-site.sh" .
 ```
 
 It copies everything in this folder to the right place, writes a seed for the listings collection, keeps a dated backup of a wording file you changed, and prints the seed command (Node 22.16 or later), the menu links to add in Admin, Menus, and the restart step. Run it again with the new tag after each plugin update: it never replaces `src/layouts/ListoraLayout.astro` once it exists. The full steps, starting with what the site needs before you install, are in [Set up Listora on your site](../docs/website/getting-started/install.md).
