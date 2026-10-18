@@ -26,8 +26,19 @@ const MAX_PAGES = 5;
  * ponytail: filters and sorts in memory. Move the filters into the content query once a
  * directory outgrows 500 listings.
  */
+export async function hasListingsCollection(ctx: PluginContext): Promise<boolean> {
+	try {
+		const collections = (await ctx.schema?.listCollections()) ?? [];
+		return collections.some((item) => item.slug === LISTINGS);
+	} catch {
+		return false;
+	}
+}
+
 export async function listPublished(ctx: PluginContext): Promise<ListingCard[]> {
-	if (!ctx.content) return [];
+	// A site that has not run the seed yet has no listings table: asking for its rows makes the
+	// host log a database error, so check first.
+	if (!ctx.content || !(await hasListingsCollection(ctx))) return [];
 	try {
 		const ratings = await ratingsMap(ctx);
 		const cards: ListingCard[] = [];

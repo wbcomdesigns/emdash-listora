@@ -15,7 +15,7 @@ Stop the dev server and start it again. **Registry** now shows in the admin menu
 
 **3. You need Node 22.16 or later** for the `npx emdash seed` step.
 
-Checked on EmDash 1.3.0 with the `blog` template on Node. The Cloudflare lines follow EmDash's own guide; we have not run them on a Cloudflare site yet.
+Checked on EmDash 1.3.1 with the `blog` template on Node. The Cloudflare lines follow EmDash's own guide; we have not run them on a Cloudflare site yet.
 
 ## Install
 
@@ -23,12 +23,17 @@ Checked on EmDash 1.3.0 with the `blog` template on Node. The Cloudflare lines f
 2. From your site's root folder, get the kit for the version you just installed and copy it in:
 
    ```bash
-   kit="$(mktemp -d)" && git clone --branch v0.6.2 --depth 1 https://github.com/wbcomdesigns/emdash-listora "$kit/emdash-listora" && "$kit/emdash-listora/scripts/add-to-site.sh" .
+   kit="$(mktemp -d)" &&
+     git clone --depth 1 \
+       --branch v0.6.2 \
+       https://github.com/wbcomdesigns/emdash-listora \
+       "$kit/emdash-listora" &&
+     "$kit/emdash-listora/scripts/add-to-site.sh" .
    ```
 
    (`mktemp -d` makes a fresh folder only you can write to, and `&&` runs the script only when the clone worked. Never clone into a fixed `/tmp/<name>`: on a shared machine someone else can create it first.)
 
-   The script copies the directory pages, styles and scripts, never replaces `src/layouts/ListoraLayout.astro` once it exists, keeps a dated backup of `src/lib/listora-strings.ts` if you changed it (`listora-strings.ts.bak-YYYYMMDD`), writes the seed for the listings collection, and prints the exact commands and menu links. If your site already has its own page at one of the kit's addresses (an `/account/` page, for example), it stops, names the file and copies nothing.
+   The script copies the directory pages, styles and scripts, never replaces `src/layouts/ListoraLayout.astro` once it exists, keeps a dated backup of `src/lib/listora-strings.ts` only if you changed it yourself (`listora-strings.ts.bak-YYYYMMDD`), writes the seed for the listings collection, and prints the exact commands and menu links. If your site already has its own page at one of the kit's addresses (an `/account/` page, for example), it stops, names the file and copies nothing.
 
 3. Create the listings collection with the command it printed. It needs Node 22.16 or later:
 

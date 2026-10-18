@@ -2,7 +2,10 @@ import type { PluginContext } from "emdash/plugin";
 
 import { seedRelatedStorage } from "./demo-seed";
 import { SAMPLE_LISTINGS } from "./sample-listings";
+import { hasListingsCollection } from "./listings-query";
 import { LISTINGS } from "./types";
+
+export { hasListingsCollection };
 import { asRecord, asString, nowIso } from "./util";
 
 const SAMPLE_FLAG = "sample_directory_v1";
@@ -13,15 +16,6 @@ export type OnboardState = {
 	sampleLoaded: boolean;
 	ready: boolean;
 };
-
-export async function hasListingsCollection(ctx: PluginContext): Promise<boolean> {
-	try {
-		const collections = (await ctx.schema?.listCollections()) ?? [];
-		return collections.some((item) => item.slug === LISTINGS);
-	} catch {
-		return false;
-	}
-}
 
 export async function getOnboardState(ctx: PluginContext): Promise<OnboardState> {
 	const hasCollection = await hasListingsCollection(ctx);
@@ -81,7 +75,7 @@ export async function loadSampleDirectory(
 		const data: Record<string, unknown> = {
 			title: row.title,
 			excerpt: row.excerpt,
-			description: `${row.excerpt} Seeded so the directory looks finished on first open.`,
+			description: row.excerpt,
 			listing_type: row.listing_type,
 			city: row.city,
 			state: "NY",

@@ -4,14 +4,15 @@ Versions match `package.json`, the git tag, and the EmDash registry release. New
 
 ## [0.6.2] - 2026-10-19
 
-Copy the kit again after you update, with the new tag (see the install guide). A wording file you changed is now kept as a dated backup.
+Copy the kit again after you update, with the new tag (see the install guide). A wording file you changed is now kept as a dated backup; an untouched one is simply replaced.
 
-- New      - Get started opens with a Set up visitor pages card: the kit command for the installed version, the addresses it adds and the install guide, until you press Visitor pages are set up.
+- New      - Get started opens with a Set up visitor pages card: the kit command for the installed version, the addresses it adds and the install guide, until you press Visitor pages are set up; Show the setup steps again reopens it.
 - Improve  - The admin group is named Listora and its reviews page is Listing reviews, so a site that also runs WB Reviews can tell them apart.
 - Improve  - The dashboard card shows four counts that fit its width, one per list it links to.
-- Improve  - The setup command copies the kit of the tagged release, keeps a dated backup of a changed wording file, and prints the seed command, the menu links and the restart step.
+- Improve  - The setup command copies the kit of the tagged release, backs up the wording file only when you changed it, and prints the seed command, the menu links and the restart step.
 - Improve  - The install guide and Installation tab start with what the site needs first: a sandbox runner, the site kit and Node 22.16 or later.
-- Fix      - Load sample directory creates the two listings it puts in the queue, so both approve, and a queue row whose listing was deleted can only be removed.
+- Fix      - Load sample directory creates the two listings it puts in the queue, so both approve, and a queue row whose listing was deleted or moved to Trash can only be removed, after a confirm.
+- Fix      - A second decision on a listing from a stale admin tab is refused with a plain message, so a Reject can no longer undo an Approve.
 - Fix      - An empty directory says it has no listings yet, instead of saying no listings match a search.
 - Fix      - Buttons and selected chips use the theme's brand colour pair in dark mode, so their text passes 4.5:1 on the EmDash blog template.
 - Security - A new listing stores every field cleaned and capped the same way an owner's edit does.

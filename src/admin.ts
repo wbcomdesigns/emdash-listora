@@ -169,6 +169,15 @@ async function editBlocks(ctx: PluginContext): Promise<BlockMap[]> {
 	return blocks;
 }
 
+/**
+ * Member-typed text for a table cell. A Block Kit table cannot be told to wrap, so a 200-letter
+ * word pushed the Decision column off the screen. A zero-width space after every 24 letters of an
+ * unbroken run lets the cell wrap; the letters shown are the same, and nothing stored changes.
+ */
+export function wrappable(text: string): string {
+	return text.replace(/(\S{24})(?=\S)/g, "$1\u200B");
+}
+
 export async function renderQueue(
 	ctx: PluginContext,
 	extra?: Pick<BlockResponse, "toast">,
@@ -187,26 +196,39 @@ export async function renderQueue(
 	const view = await viewOf(ctx, "queue");
 	const listed = page(pending.items, (row) => lowerText(asRecord(row.data).title, asRecord(row.data).city, asRecord(row.data).listing_type), view);
 
-	// One read per row on this page (25 at most). A row whose listing was deleted gets no decision,
+	// One read per row on this page (25 at most). A row whose listing is gone gets no decision,
 	// only a way to clear it, so Approve never fails on an entry that is not there.
 	const refs = await listingRefs(ctx, listed.items.map((row) => asString(asRecord(row.data).listingId) || row.id));
 	const rows = listed.items.map((row) => {
 		const data = asRecord(row.data) as SubmissionRow;
 		const listingId = asString(data.listingId) || row.id;
 		if (!refs.has(listingId)) {
+			// Telling Trash from deleted needs the content:restore permission, which Listora does
+			// not ask for, so the row says both.
 			return {
-				title: `${asString(data.title) || listingId} (listing deleted)`,
+				title: wrappable(`${asString(data.title) || listingId} (deleted or in Trash)`),
 				type: typeName(data.listing_type),
-				city: asString(data.city) || "-",
+				city: wrappable(asString(data.city)) || "-",
 				submitted: day(ctx, data.createdAt),
 				open: null,
-				action: { type: "button", label: "Remove from the queue", action_id: "review", value: `forget:${listingId}` },
+				action: {
+					type: "button",
+					label: "Remove from the queue",
+					action_id: "review",
+					value: `forget:${listingId}`,
+					confirm: {
+						title: "Remove this row from the queue?",
+						text: "Its listing was deleted or moved to Trash. To approve it, restore it from Trash in Content, Listings first. Removing the row does not touch the listing.",
+						confirm: "Remove",
+						deny: "Cancel",
+					},
+				},
 			};
 		}
 		return {
-			title: asString(data.title) || listingId,
+			title: wrappable(asString(data.title) || listingId),
 			type: typeName(data.listing_type),
-			city: asString(data.city) || "-",
+			city: wrappable(asString(data.city)) || "-",
 			submitted: day(ctx, data.createdAt),
 			open: {
 				type: "link",
@@ -293,27 +315,36 @@ async function reviewListing(
 		return renderQueue(ctx, { toast: { message: "Missing listing id.", type: "error" } });
 	}
 
-	const existing = (await ctx.storage.submissions.get(listingId)) as SubmissionRow | null;
-	const next: SubmissionRow = {
-		...existing,
-		listingId,
-		title: existing?.title ?? listingId,
-		listing_type: existing?.listing_type,
-		city: existing?.city,
-		createdAt: existing?.createdAt,
+	// Claim the queue row while it is still pending, so a second tab's stale click is refused
+	// instead of undoing the first decision. Only one of two parallel decisions can apply.
+	const handled = async () => {
+		const row = asRecord(await ctx.storage.submissions.get(listingId));
+		const status = asString(row.status);
+		const message = !row.listingId
+			? "That item is no longer in the queue."
+			: status === "approved" || status === "approving"
+				? "This listing was already approved."
+				: status === "rejected"
+					? "This listing was already rejected."
+					: "Someone else is deciding on this listing. Try again in a moment.";
+		return renderQueue(ctx, { toast: { message, type: "error" } });
 	};
 
 	if (action === "forget") {
 		// Only a row whose listing is gone. A real listing is approved or rejected instead.
+		if (!(await ctx.storage.submissions.get(listingId))) {
+			return renderQueue(ctx, { toast: { message: "That row was already removed from the queue.", type: "info" } });
+		}
 		if ((await listingRefs(ctx, [listingId])).has(listingId)) {
 			return renderQueue(ctx, { toast: { message: "This listing exists. Approve or reject it instead.", type: "error" } });
 		}
 		await ctx.storage.submissions.delete(listingId);
-		return renderQueue(ctx, { toast: { message: "Removed. Its listing had been deleted.", type: "info" } });
+		return renderQueue(ctx, { toast: { message: "Removed from the queue.", type: "info" } });
 	}
 
 	if (action === "reject") {
-		await ctx.storage.submissions.put(listingId, { ...next, status: "rejected" });
+		const claim = await ctx.storage.submissions.updateIf(listingId, { where: { status: "pending" }, set: { status: "rejected" } });
+		if (!claim.applied) return handled();
 		ctx.log.info("Listora listing rejected", { listingId });
 		return renderQueue(ctx, { toast: { message: "Listing rejected.", type: "info" } });
 	}
@@ -321,6 +352,14 @@ async function reviewListing(
 	if (action !== "approve") {
 		return renderQueue(ctx, { toast: { message: "Unknown review action.", type: "error" } });
 	}
+
+	const claim = await ctx.storage.submissions.updateIf(listingId, { where: { status: "pending" }, set: { status: "approving" } });
+	if (!claim.applied) return handled();
+	// If the listing cannot be published, the row goes back to waiting.
+	const release = async (message: string) => {
+		await ctx.storage.submissions.updateIf(listingId, { where: { status: "approving" }, set: { status: "pending" } });
+		return renderQueue(ctx, { toast: { message, type: "error" } });
+	};
 
 	// A new listing gets its date at the moment it is approved.
 	const days = await expiryDays(ctx);
@@ -330,14 +369,9 @@ async function reviewListing(
 	}
 
 	if (!(await publishNow(ctx, listingId))) {
-		return renderQueue(ctx, {
-			toast: {
-				message: "Could not publish. Open the listing in admin and publish it there.",
-				type: "error",
-			},
-		});
+		return release("Could not publish. Open the listing in admin and publish it there.");
 	}
-	await ctx.storage.submissions.put(listingId, { ...next, status: "approved" });
+	await ctx.storage.submissions.updateIf(listingId, { where: { status: "approving" }, set: { status: "approved" } });
 	ctx.log.info("Listora listing approved", { listingId });
 	return renderQueue(ctx, { toast: { message: "Listing published.", type: "success" } });
 }
@@ -806,7 +840,7 @@ export async function kitBlocks(ctx: PluginContext): Promise<BlockMap[]> {
 	if ((await ctx.kv.get<string>(KIT_DONE)) === "1") {
 		return [
 			{ type: "context", text: `Visitor pages come from the Listora site kit. After each plugin update, copy the kit for ${tag} again.` },
-			{ type: "actions", elements: [guide] },
+			{ type: "actions", elements: [guide, { type: "button", action_id: "kit_show", label: "Show the setup steps again" }] },
 		];
 	}
 	return [
@@ -821,8 +855,18 @@ export async function kitBlocks(ctx: PluginContext): Promise<BlockMap[]> {
 		{
 			type: "code",
 			language: "bash",
-			code: `kit="$(mktemp -d)" && git clone --branch ${tag} --depth 1 ${REPO_URL} "$kit/emdash-listora" && "$kit/emdash-listora/scripts/add-to-site.sh" .`,
+			// Six lines of 52 characters or fewer: a code block neither wraps nor scrolls, and this
+			// fits it at 768 and wider. On a phone the guide link below has the same command.
+			code: [
+				`kit="$(mktemp -d)" &&`,
+				`  git clone --depth 1 \\`,
+				`    --branch ${tag} \\`,
+				`    ${REPO_URL} \\`,
+				`    "$kit/emdash-listora" &&`,
+				`  "$kit/emdash-listora/scripts/add-to-site.sh" .`,
+			].join("\n"),
 		},
+		{ type: "actions", elements: [{ ...guide, label: "Copy it from the install guide on a phone" }] },
 		{
 			type: "fields",
 			fields: [
@@ -836,10 +880,7 @@ export async function kitBlocks(ctx: PluginContext): Promise<BlockMap[]> {
 		},
 		{
 			type: "actions",
-			elements: [
-				guide,
-				{ type: "button", action_id: "kit_done", label: "Visitor pages are set up", style: "primary" },
-			],
+			elements: [{ type: "button", action_id: "kit_done", label: "Visitor pages are set up", style: "primary" }],
 		},
 	];
 }
@@ -1035,6 +1076,11 @@ export async function handleAdmin(
 			if (list === "claims") return renderClaimQueue(ctx);
 			return renderQueue(ctx);
 		}
+	}
+
+	if (type === "block_action" && asString(raw.action_id) === "kit_show") {
+		await ctx.kv.delete(KIT_DONE);
+		return renderSetup(ctx);
 	}
 
 	if (type === "block_action" && asString(raw.action_id) === "kit_done") {

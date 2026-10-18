@@ -8,6 +8,8 @@ import listing from "../site-kit/pages/listings/[slug].astro?raw";
 import submit from "../site-kit/pages/listings/submit.astro?raw";
 import block from "../site-kit/blocks/ListingsBlock.astro?raw";
 import kitLib from "../site-kit/lib/listora.ts?raw";
+import stringsFile from "../site-kit/lib/listora-strings.ts?raw";
+import sums from "../site-kit/lib/listora-strings.sums?raw";
 import {
 	eventCount,
 	listingCount,
@@ -64,5 +66,15 @@ describe("visitor wording", () => {
 		expect(resultCount(0)).toBe("0 results");
 		expect(eventCount(1)).toBe("1 upcoming event");
 		expect(eventCount(3)).toBe("3 upcoming events");
+	});
+});
+
+describe("wording backup list", () => {
+	it("ends with the hash of the wording file this release ships", async () => {
+		const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(stringsFile));
+		const hex = [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+		const lines = sums.trim().split("\n");
+		expect(lines.every((line) => /^[0-9a-f]{64}$/.test(line))).toBe(true);
+		expect(lines.at(-1)).toBe(hex);
 	});
 });

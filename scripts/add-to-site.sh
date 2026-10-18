@@ -2,7 +2,12 @@
 # Adds Listora's visitor pages (the site kit) to an EmDash site. Run it from a checkout of the
 # release tag that matches the plugin version installed on the site:
 #
-#   kit="$(mktemp -d)" && git clone --branch v<version> --depth 1 https://github.com/wbcomdesigns/emdash-listora "$kit/emdash-listora" && "$kit/emdash-listora/scripts/add-to-site.sh" .
+#   kit="$(mktemp -d)" &&
+#     git clone --depth 1 \
+#       --branch v<version> \
+#       https://github.com/wbcomdesigns/emdash-listora \
+#       "$kit/emdash-listora" &&
+#     "$kit/emdash-listora/scripts/add-to-site.sh" .
 #
 # Safe to run again after every plugin update: it replaces Listora's own files, never touches
 # src/layouts/ListoraLayout.astro once it exists, and backs up a wording file you changed.
@@ -22,16 +27,30 @@ fi
 tag="$(git -C "$PLUGIN" describe --tags --exact-match 2>/dev/null || true)"
 if [[ "$tag" != "v$VERSION" ]]; then
 	echo "Note: this checkout is not the release tag v$VERSION. Use the tag of the version installed on your site:" >&2
-	echo '  kit="$(mktemp -d)" && git clone --branch v<version> --depth 1 https://github.com/wbcomdesigns/emdash-listora "$kit/emdash-listora" && "$kit/emdash-listora/scripts/add-to-site.sh" .' >&2
+	cat >&2 <<'CMD'
+  kit="$(mktemp -d)" &&
+    git clone --depth 1 \
+      --branch v<version> \
+      https://github.com/wbcomdesigns/emdash-listora \
+      "$kit/emdash-listora" &&
+    "$kit/emdash-listora/scripts/add-to-site.sh" .
+CMD
 fi
 
 first_run=1
 [[ -f "$SITE/src/layouts/ListoraLayout.astro" ]] && first_run=0
 
 # A wording file the owner changed is kept as a dated copy before the new one replaces it.
+# listora-strings.sums lists the SHA-256 of the file at every release: a file whose hash is in
+# that list is one we shipped, untouched, so it is replaced without a backup or a word.
 strings="$SITE/src/lib/listora-strings.ts"
 backup=""
-if [[ -f "$strings" ]] && ! cmp -s "$strings" "$PLUGIN/site-kit/lib/listora-strings.ts"; then
+shipped() {
+	local sum
+	sum="$(node -e 'process.stdout.write(require("crypto").createHash("sha256").update(require("fs").readFileSync(process.argv[1])).digest("hex"))' "$1")"
+	grep -qx "$sum" "$PLUGIN/site-kit/lib/listora-strings.sums"
+}
+if [[ -f "$strings" ]] && ! shipped "$strings"; then
 	backup="$strings.bak-$(date +%Y%m%d)"
 	[[ -e "$backup" ]] && backup="$strings.bak-$(date +%Y%m%d-%H%M%S)"
 	cp "$strings" "$backup"
@@ -75,4 +94,14 @@ Left for you:
   5. Open /listings/, /listings/submit/, /listings/calendar/ and /account/.
 
 Install guide: https://github.com/wbcomdesigns/emdash-listora/blob/v$VERSION/docs/website/getting-started/install.md
+
+After every plugin update, run this again from your site's root folder with the new tag:
 DONE
+cat <<'CMD'
+  kit="$(mktemp -d)" &&
+    git clone --depth 1 \
+      --branch v<version> \
+      https://github.com/wbcomdesigns/emdash-listora \
+      "$kit/emdash-listora" &&
+    "$kit/emdash-listora/scripts/add-to-site.sh" .
+CMD

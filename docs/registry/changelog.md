@@ -1,9 +1,20 @@
 ## 0.6.2
 
+Copy the kit again after you update, from your site's root folder:
+
+```bash
+kit="$(mktemp -d)" &&
+  git clone --depth 1 \
+    --branch v0.6.2 \
+    https://github.com/wbcomdesigns/emdash-listora \
+    "$kit/emdash-listora" &&
+  "$kit/emdash-listora/scripts/add-to-site.sh" .
+```
+
 - New: Get started gives the kit command for the installed version and the visitor addresses it adds.
-- Fix: sample listings in the queue approve; an empty directory says so; dark mode buttons pass 4.5:1.
+- Fix: sample listings in the queue approve; a stale second decision is refused; an empty directory says so; dark mode buttons pass 4.5:1.
 - Security: a new listing stores each field capped; the public health check writes nothing.
-- Improve: admin group named Listora, reviews page named Listing reviews. Copy the kit again with the new tag.
+- Improve: admin group named Listora, reviews page named Listing reviews.
 
 ## 0.6.1
 

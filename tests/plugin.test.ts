@@ -198,7 +198,20 @@ describe("admin route", () => {
 		const version = (await rt.transport.invokeRoute("health")) as { version: string };
 		const before = JSON.stringify(await rt.transport.invokeRoute("admin", { type: "page_load", page: "/setup" }));
 		expect(before).toContain("Set up visitor pages");
-		expect(before).toContain(`kit=\\"$(mktemp -d)\\" && git clone --branch v${version.version} --depth 1 https://github.com/wbcomdesigns/emdash-listora \\"$kit/emdash-listora\\" && \\"$kit/emdash-listora/scripts/add-to-site.sh\\" .`);
+		const card = (await rt.transport.invokeRoute("admin", { type: "page_load", page: "/setup" })) as { blocks: Array<{ type: string; code?: string }> };
+		const code = card.blocks.find((block) => block.type === "code")!.code!;
+		expect(code).toBe(
+			[
+				'kit="$(mktemp -d)" &&',
+				"  git clone --depth 1 \\",
+				`    --branch v${version.version} \\`,
+				"    https://github.com/wbcomdesigns/emdash-listora \\",
+				'    "$kit/emdash-listora" &&',
+				'  "$kit/emdash-listora/scripts/add-to-site.sh" .',
+			].join("\n"),
+		);
+		expect(code.split("\n").every((line) => line.length <= 52)).toBe(true);
+		expect(before).toContain("Copy it from the install guide on a phone");
 		expect(before).not.toContain("/tmp/");
 		expect(before).toContain(`blob/v${version.version}/docs/website/getting-started/install.md`);
 		expect(before).toContain("/listings/submit/");
@@ -207,6 +220,10 @@ describe("admin route", () => {
 		expect(after).not.toContain("Set up visitor pages");
 		expect(after).not.toContain("git clone");
 		expect(after).toContain(`blob/v${version.version}/docs/website/getting-started/install.md`);
+		expect(after).toContain('"action_id":"kit_show"');
+		const again = JSON.stringify(await rt.transport.invokeRoute("admin", { type: "block_action", action_id: "kit_show", page: "/setup" }));
+		expect(again).toContain("Set up visitor pages");
+		expect(again).toContain("git clone --depth 1");
 	});
 
 	it("tells the owner to create the listings collection first", async () => {
@@ -246,7 +263,7 @@ describe("sample directory queue", () => {
 		const queue = JSON.stringify(await route("admin", { type: "page_load", page: "/queue" }));
 		const [owl, dock] = ["Night Owl Locksmith", "Little Dock Dumplings"].map((title) => pending.find((row) => row.data.title === title)!.data.listingId);
 		expect(queue).toContain(`approve:${owl}`);
-		expect(queue).toContain("Gone Shop (listing deleted)");
+		expect(queue).toContain("Gone Shop (deleted or in Trash)");
 		expect(queue).toContain("forget:listing-gone");
 		expect(queue).not.toContain("approve:listing-gone");
 		// The admin host validates Block Kit: the deleted row and the visitor pages card render.
@@ -258,10 +275,60 @@ describe("sample directory queue", () => {
 		expect(published).toContain("Listing published.");
 		expect(((await rt.inspect.content.get("listings", owl)) as { status: string }).status).toBe("published");
 		expect(JSON.stringify(await route("admin", { type: "block_action", action_id: "review", value: `forget:${dock}`, page: "/queue" }))).toContain("This listing exists");
-		expect(JSON.stringify(await route("admin", { type: "block_action", action_id: "review", value: "forget:listing-gone", page: "/queue" }))).toContain("Removed.");
+		expect(JSON.stringify(await route("admin", { type: "block_action", action_id: "review", value: "forget:listing-gone", page: "/queue" }))).toContain("Removed from the queue.");
 		expect(await rt.inspect.storage.get("submissions", "listing-gone")).toBeNull();
-		// Fourteen content writes and publishes: slower than the 5 s default on a busy machine.
-	}, 30_000);
+		// A second remove from a stale page says it is already done.
+		expect(JSON.stringify(await route("admin", { type: "block_action", action_id: "review", value: "forget:listing-gone", page: "/queue" }))).toContain("already removed");
+	});
+
+	it("offers only a confirmed Remove for a listing in Trash", async () => {
+		const rt = await createPluginRuntimeTestHost();
+		await rt.fixtures.collection(listingsCollection as never);
+		host = { dispose: () => rt.dispose() } as unknown as PluginTestHost;
+		const made = await rt.fixtures.content("listings", { data: { title: "Binned Bakery" }, slug: "binned", status: "draft" } as never);
+		await rt.fixtures.plugin.storage("submissions", made.id, { listingId: made.id, title: "Binned Bakery", status: "pending", createdAt: "2026-01-01T00:00:00.000Z" });
+		await (rt.actions.content.trash as (c: string, id: string) => Promise<unknown>)("listings", made.id);
+		const queue = (await rt.transport.invokeRoute("admin", { type: "page_load", page: "/queue" })) as { blocks: Array<{ type: string; rows?: Array<Record<string, unknown>> }> };
+		const row = queue.blocks.find((block) => block.type === "table")!.rows![0];
+		expect(row.title).toBe("Binned Bakery (deleted or in Trash)");
+		expect(row.action).toMatchObject({ type: "button", value: `forget:${made.id}`, confirm: { confirm: "Remove" } });
+	});
+});
+
+describe("two admin tabs deciding on one listing", () => {
+	async function waiting() {
+		const site = await directory();
+		await site.invokeRoute("submit", { title: "Race Cafe", listing_type: "restaurant", agree_terms: true }, { method: "POST", user: ana });
+		const id = (await site.storage<{ title: string }>("submissions").list()).find((row) => row.data.title === "Race Cafe")!.id;
+		const decide = (verb: string) => site.invokeRoute("admin", { type: "block_action", action_id: "review", value: `${verb}:${id}`, page: "/queue" }).then((r) => JSON.stringify(r));
+		return { site, id, decide };
+	}
+
+	it("refuses a stale Reject after an Approve and keeps the listing published", async () => {
+		const { site, id, decide } = await waiting();
+		expect(await decide("approve")).toContain("Listing published.");
+		expect(await decide("reject")).toContain("This listing was already approved.");
+		expect(await site.storage("submissions").get(id)).toMatchObject({ status: "approved" });
+		expect(((await site.rt.inspect.content.get("listings", id)) as { status: string }).status).toBe("published");
+	});
+
+	it("refuses a stale Approve after a Reject and publishes nothing", async () => {
+		const { site, id, decide } = await waiting();
+		expect(await decide("reject")).toContain("Listing rejected.");
+		expect(await decide("approve")).toContain("This listing was already rejected.");
+		expect(await site.storage("submissions").get(id)).toMatchObject({ status: "rejected" });
+		expect(((await site.rt.inspect.content.get("listings", id)) as { status: string }).status).not.toBe("published");
+	});
+
+	it("lets only one of two decisions sent together apply", async () => {
+		const { site, id, decide } = await waiting();
+		const [first, second] = await Promise.all([decide("approve"), decide("reject")]);
+		const applied = [first, second].filter((text) => text.includes("Listing published.") || text.includes("Listing rejected."));
+		expect(applied).toHaveLength(1);
+		const status = ((await site.storage<{ status: string }>("submissions").get(id)) as { status: string }).status;
+		const published = ((await site.rt.inspect.content.get("listings", id)) as { status: string }).status === "published";
+		expect(status === "approved" ? published : !published).toBe(true);
+	});
 });
 
 describe("types and spam", () => {
