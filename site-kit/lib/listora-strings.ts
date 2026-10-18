@@ -69,6 +69,8 @@ export const S = {
 		calendar: "Calendar",
 		emptyTitle: "No listings match",
 		emptyBody: "Try another type or city. You can also add a listing.",
+		noneYetTitle: "No listings yet",
+		noneYetBody: "This directory is empty. Add the first listing. A site admin can load sample listings in the admin, under Listora, Get started.",
 		pages: "Pages of listings",
 		searchDownTitle: "Search is not available right now",
 		searchDownBody: "Check your connection and try again.",

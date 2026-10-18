@@ -2,7 +2,7 @@ import { pluginResponse } from "emdash/plugin";
 import type { SandboxedPlugin } from "emdash/plugin";
 
 import { handleAdmin } from "./admin";
-import { maybeSeedDemo } from "./lib/onboard";
+import { hasListingsCollection } from "./lib/onboard";
 import {
 	filterListings,
 	expireDue,
@@ -18,7 +18,8 @@ import {
 	publishNow,
 } from "./lib/listings-query";
 import { CSV_COLUMNS, parseCsv, toCsv, unguard } from "./lib/csv";
-import { clean, EDITABLE, editPatch, filled, webAddress } from "./lib/edits";
+import { clean, EDITABLE, editPatch, fieldValue, filled, webAddress } from "./lib/edits";
+import { parseHours } from "./lib/hours";
 import { galleryReady, imageType, PHOTO_MAX_BYTES, photoLimit } from "./lib/photos";
 export { imageType } from "./lib/photos";
 import { LISTING_TYPES, LISTINGS, NOTIFY_CRON, listingTypeBySlug } from "./lib/types";
@@ -63,7 +64,7 @@ type SubmitInput = {
 
 function parseSubmit(input: unknown): { ok: true; data: SubmitInput } | { ok: false; error: string } {
 	const raw = asRecord(input);
-	const title = asString(raw.title);
+	const title = clean(raw.title, 10_000);
 	if (!title) return { ok: false, error: "Title is required." };
 	if (title.length > 200) return { ok: false, error: "Title must be 200 characters or fewer." };
 	if (asString(raw.company_website) || asString(raw.honeypot)) {
@@ -75,36 +76,55 @@ function parseSubmit(input: unknown): { ok: true; data: SubmitInput } | { ok: fa
 	const site = asString(raw.website);
 	if (site && !/^https?:\/\/\S+\.\S+/i.test(site)) return { ok: false, error: "Website must be a full address starting with http:// or https://." };
 
+	// Every stored field is cleaned and capped exactly as an owner's edit is (fieldValue), so a
+	// request that skips the form cannot store a field of any size.
+	const text = (key: string) => fieldValue(key, raw[key]);
 	return {
 		ok: true,
 		data: {
-			title,
-			excerpt: asString(raw.excerpt),
-			description: asString(raw.description),
-			listing_type: asString(raw.listing_type) || "business",
-			phone: asString(raw.phone),
-			website: asString(raw.website),
+			title: text("title"),
+			excerpt: text("excerpt"),
+			description: text("description"),
+			listing_type: wantedType || "business",
+			phone: text("phone"),
+			website: webAddress(raw.website),
 			email: plainEmail(raw.email),
-			address: asString(raw.address),
-			city: asString(raw.city),
-			state: asString(raw.state),
-			country: asString(raw.country),
-			postal_code: asString(raw.postal_code),
-			lat: asNumber(raw.lat),
-			lng: asNumber(raw.lng),
+			address: text("address"),
+			city: text("city"),
+			state: text("state"),
+			country: text("country"),
+			postal_code: clean(raw.postal_code, 20),
+			lat: coordinate(raw.lat, 90),
+			lng: coordinate(raw.lng, 180),
 			agree_terms: asBoolean(raw.agree_terms),
-			owner_name: asString(raw.owner_name),
-			hours: typeof raw.hours === "string" ? raw.hours : JSON.stringify(raw.hours ?? []),
-			services: typeof raw.services === "string" ? raw.services : JSON.stringify(raw.services ?? []),
-			amenities: asStringArray(raw.amenities).join(", "),
-			price_range: asString(raw.price_range),
-			cuisine: asString(raw.cuisine),
-			event_start: asString(raw.event_start),
-			event_end: asString(raw.event_end),
-			type_fields: parseJson<Record<string, unknown>>(raw.type_fields, asRecord(raw.type_fields)),
+			owner_name: text("owner_name"),
+			hours: JSON.stringify(
+				parseHours(typeof raw.hours === "string" ? raw.hours : JSON.stringify(raw.hours ?? []))
+					.slice(0, 14)
+					.map((row) => ({ day: row.day, open: clean(row.open, 5), close: clean(row.close, 5) })),
+			),
+			services: JSON.stringify(
+				parseJson<unknown[]>(raw.services, Array.isArray(raw.services) ? raw.services : [])
+					.slice(0, 20)
+					.map((item) => asRecord(item))
+					.filter((item) => clean(item.name, 120))
+					.map((item) => ({ name: clean(item.name, 120), price: asNumber(item.price), duration: asNumber(item.duration) })),
+			),
+			amenities: fieldValue("amenities", asStringArray(raw.amenities).join(", ")),
+			price_range: text("price_range"),
+			cuisine: text("cuisine"),
+			event_start: text("event_start"),
+			event_end: text("event_end"),
+			type_fields: filled(raw.type_fields),
 			honeypot: asString(raw.company_website),
 		},
 	};
+}
+
+/** A map coordinate inside its range, or none. */
+function coordinate(value: unknown, limit: number): number | null {
+	const n = asNumber(value);
+	return n !== null && Number.isFinite(n) && Math.abs(n) <= limit ? n : null;
 }
 
 function spamBlocked(title: string, description: string, keywords: string[]): boolean {
@@ -422,23 +442,15 @@ const plugin: SandboxedPlugin = {
 		},
 	},
 	routes: {
+		// Public and read only: it writes nothing and tells a visitor nothing an admin screen keeps.
 		health: {
 			public: true,
-			handler: async (_routeCtx, ctx) => {
-				const seed = await maybeSeedDemo(ctx);
-				const collections = (await ctx.schema?.listCollections()) ?? [];
-				const hasListings = collections.some((item) => item.slug === LISTINGS);
-				const pending = await ctx.storage.submissions.count({ status: "pending" });
-				return {
-					ok: true,
-					plugin: ctx.plugin.id,
-					version: ctx.plugin.version,
-					listingsCollection: hasListings,
-					pendingSubmissions: pending,
-					demoSeeded: seed.seeded || (await ctx.kv.get<string>("demo_seeded_v2")) === "1",
-					drops: ["ui", "types", "search", "trust", "owner", "contact"],
-				};
-			},
+			handler: async (_routeCtx, ctx) => ({
+				ok: true,
+				plugin: ctx.plugin.id,
+				version: ctx.plugin.version,
+				listingsCollection: await hasListingsCollection(ctx),
+			}),
 		},
 		types: {
 			public: true,

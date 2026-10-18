@@ -6,7 +6,7 @@ Base: `/_emdash/api/plugins/listora/<name>`. Public routes are internet-facing. 
 
 | Route | Who | Job |
 | --- | --- | --- |
-| `health` | public | Version, collection present, pending count. Demo storage seeds only if Golden Fork already exists |
+| `health` | public | Plugin id, version and whether the listings collection exists. Read only: it writes nothing |
 | `types` | public | 10 listing types |
 | `listings` | public | Published listings, filters. Takes `page` and `per_page` (24 default, 60 max), returns `total`, `page`, `pages` |
 | `search` | public | Query, type, geo, suggest. Paged like `listings` |

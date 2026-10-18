@@ -41,7 +41,7 @@ Use this for a town guide to shops, cafes and services.
 - A map on the directory and on each listing (OpenStreetMap).
 - A **Featured** row. It shows the first three featured listings.
 
-Visitors who sign in can save listings and leave reviews. You approve reviews under Admin, Listora, Reviews.
+Visitors who sign in can save listings and leave reviews. You approve reviews under Admin, Listora, Listing reviews.
 
 ## An events or venues list
 
@@ -76,7 +76,7 @@ Use this when your members add themselves, or take over a listing you made.
 **What you do**
 - Approve listings under Admin, Listora, Listings queue.
 - Decide claims under Admin, Listora, Claims.
-- Moderate reviews under Admin, Listora, Reviews.
+- Moderate reviews under Admin, Listora, Listing reviews.
 
 A listing marked as claimed shows a Claimed badge instead of the Claim button.
 

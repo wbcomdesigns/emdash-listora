@@ -6,14 +6,14 @@ Open them from the admin menu, under Listora.
 
 | Page | Where | Job |
 | --- | --- | --- |
-| Get started | Admin, Listora, Get started | Setup status while something is missing. Once the directory has listings, this page is the queue |
+| Get started | Admin, Listora, Get started | The command that adds the visitor pages, for the installed version, then setup status while something is missing. Once the directory has listings, this page is the queue |
 | Listings queue | Admin, Listora, Listings queue | Approve or reject submissions. 25 at a time, with Find and Load more |
-| Reviews | Admin, Listora, Reviews | Moderate reviews |
+| Listing reviews | Admin, Listora, Listing reviews | Moderate reviews |
 | Claims | Admin, Listora, Claims | Moderate claims |
 | Messages | Admin, Listora, Messages | Messages from listing pages. Delete, in the Handle menu, opens the message and asks first |
 | Settings | Admin, Listora, Settings | One tab per group, one Save each |
 
-Get started shows whether the listings collection exists, whether sample data is loaded, and a confirm button, until the directory has listings. Then the page is the queue. Health does not create listings. Load sample is safe to click more than once. After it succeeds, copy the site kit so `/listings/` exists.
+Get started opens with **Set up visitor pages**: the two-line command that copies the site kit for the installed version, the visitor addresses it adds, and a link to the install guide at that version. Press **Visitor pages are set up** once they work; after that the card is one line with the guide link. Below it, Get started shows whether the listings collection exists, whether sample data is loaded, and a confirm button, until the directory has listings. Then the page is the queue, with the same card on top. Load sample is safe to click more than once: it adds 12 published listings and two drafts waiting in the Listings queue. A queue row whose listing was deleted offers only **Remove from the queue**.
 
 Settings are their own page, in tabs: Submissions, Listing lifetime, Photos, Messages, and Import and export. Each tab that saves has one Save.
 

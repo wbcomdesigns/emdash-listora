@@ -2,6 +2,21 @@
 
 Versions match `package.json`, the git tag, and the EmDash registry release. Newest first. Never publish a version that is not on `origin/main`.
 
+## [0.6.2] - 2026-10-19
+
+Copy the kit again after you update, with the new tag (see the install guide). A wording file you changed is now kept as a dated backup.
+
+- New      - Get started opens with a Set up visitor pages card: the two-line command for the installed version, the addresses it adds and the install guide, until you press Visitor pages are set up.
+- Improve  - The admin group is named Listora and its reviews page is Listing reviews, so a site that also runs WB Reviews can tell them apart.
+- Improve  - The dashboard card shows four counts that fit its width, one per list it links to.
+- Improve  - The setup command copies the kit of the tagged release, keeps a dated backup of a changed wording file, and prints the seed command, the menu links and the restart step.
+- Improve  - The install guide and Installation tab start with what the site needs first: a sandbox runner, the site kit and Node 22.16 or later.
+- Fix      - Load sample directory creates the two listings it puts in the queue, so both approve, and a queue row whose listing was deleted can only be removed.
+- Fix      - An empty directory says it has no listings yet, instead of saying no listings match a search.
+- Fix      - Buttons and selected chips use the theme's brand colour pair in dark mode, so their text passes 4.5:1 on the EmDash blog template.
+- Security - A new listing stores every field cleaned and capped the same way an owner's edit does.
+- Security - The public health check writes nothing and no longer reports how many submissions are waiting.
+
 ## [0.6.1] - 2026-10-16
 
 Copy the kit again (`scripts/add-to-site.sh`) after you update. Keep a copy of any wording you changed in `listora-strings.ts` and put it back.

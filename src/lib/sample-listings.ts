@@ -17,6 +17,8 @@ export type SampleListing = {
 	hours?: string;
 	event_start?: string;
 	type_fields?: Record<string, string | number>;
+	/** Loaded as a draft waiting in the Listings queue, so the owner can try an approval. */
+	pending?: boolean;
 };
 
 const week = (open = "11:00", close = "22:00") =>
@@ -173,5 +175,27 @@ export const SAMPLE_LISTINGS: SampleListing[] = [
 		city: "Brooklyn",
 		lat: 40.678,
 		lng: -73.944,
+	},
+	{
+		key: "listing-night-owl",
+		title: "Night Owl Locksmith",
+		excerpt: "Lockouts, rekeys and new locks, any hour of the night.",
+		listing_type: "business",
+		city: "Manhattan",
+		lat: 40.73,
+		lng: -73.99,
+		pending: true,
+	},
+	{
+		key: "listing-little-dock",
+		title: "Little Dock Dumplings",
+		excerpt: "Pork and chive dumplings by the pier, cash or card.",
+		listing_type: "restaurant",
+		city: "Brooklyn",
+		lat: 40.703,
+		lng: -73.996,
+		cuisine: "chinese",
+		price_range: "$",
+		pending: true,
 	},
 ];

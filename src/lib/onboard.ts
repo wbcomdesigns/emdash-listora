@@ -1,6 +1,6 @@
 import type { PluginContext } from "emdash/plugin";
 
-import { ensureDemoSeed, seedRelatedStorage } from "./demo-seed";
+import { seedRelatedStorage } from "./demo-seed";
 import { SAMPLE_LISTINGS } from "./sample-listings";
 import { LISTINGS } from "./types";
 import { asRecord, asString, nowIso } from "./util";
@@ -103,7 +103,8 @@ export async function loadSampleDirectory(
 		};
 		try {
 			const item = await ctx.content.create(LISTINGS, data);
-			if (ctx.content.getVersioned && ctx.content.publish) {
+			// A waiting sample stays a draft with a pending queue row that points at it.
+			if (!row.pending && ctx.content.getVersioned && ctx.content.publish) {
 				const versioned = await ctx.content.getVersioned(LISTINGS, item.id);
 				if (versioned) {
 					await ctx.content.publish(LISTINGS, item.id, { _rev: versioned._rev });
@@ -114,7 +115,7 @@ export async function loadSampleDirectory(
 				title: row.title,
 				listing_type: row.listing_type,
 				city: row.city,
-				status: "approved",
+				status: row.pending ? "pending" : "approved",
 				createdAt: nowIso(),
 			});
 			existing[row.key] = item.id;
@@ -139,10 +140,4 @@ export async function loadSampleDirectory(
 				? `Loaded ${created} sample listings. Open /listings/ after you copy the site kit pages.`
 				: "Sample listings were already on the site. Reviews and a claim are ready.",
 	};
-}
-
-export async function maybeSeedDemo(ctx: PluginContext): Promise<{ seeded: boolean }> {
-	const ids = await resolveSampleIds(ctx);
-	if (!ids["listing-golden-fork"]) return { seeded: false };
-	return ensureDemoSeed(ctx, ids);
 }

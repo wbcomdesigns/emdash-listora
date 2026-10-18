@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
+import { validateBlockResponse } from "@emdash-cms/blocks/server";
 
 import {
 	createPluginRuntimeTestHost,
@@ -64,7 +65,75 @@ describe("health route", () => {
 	});
 });
 
+describe("health is public and read only", () => {
+	it("writes nothing and does not tell a visitor how many submissions wait", async () => {
+		const site = await directory();
+		await site.invokeRoute("submit", { title: "Waiting Shop", agree_terms: true }, { method: "POST", user: ana });
+		const before = JSON.stringify(await Promise.all(["submissions", "reviews", "claims", "favorites", "blocked"].map((c) => site.storage(c).list())));
+		const result = await site.invokeRoute("health");
+		expect(result).toEqual({ ok: true, plugin: "listora", version: expect.any(String), listingsCollection: true });
+		expect(JSON.stringify(result)).not.toMatch(/pending/i);
+		const after = JSON.stringify(await Promise.all(["submissions", "reviews", "claims", "favorites", "blocked"].map((c) => site.storage(c).list())));
+		expect(after).toBe(before);
+	});
+});
+
 describe("submit route", () => {
+	it("cleans and caps every field of an oversized listing the same way an edit does", async () => {
+		const site = await directory();
+		const huge = "x".repeat(6_000);
+		const result = (await site.invokeRoute(
+			"submit",
+			{
+				title: "Big\u200b Shop\u0007",
+				agree_terms: true,
+				excerpt: huge,
+				description: huge,
+				phone: huge,
+				address: huge,
+				city: huge,
+				postal_code: huge,
+				owner_name: huge,
+				cuisine: huge,
+				amenities: [huge, huge],
+				lat: 9999,
+				lng: "abc",
+				hours: Array.from({ length: 40 }, (_, i) => ({ day: i % 7, open: "09:00" + huge, close: "17:00" })),
+				services: Array.from({ length: 40 }, () => ({ name: huge, price: 5, extra: huge })),
+				type_fields: { year_founded: huge, not_a_field: huge },
+			},
+			{ method: "POST", user: ana },
+		)) as { ok: boolean; listing: { id: string } };
+		expect(result.ok).toBe(true);
+		const stored = (await site.rt.inspect.content.get("listings", result.listing.id)) as { data: Record<string, unknown> };
+		const data = stored.data;
+		const json = (value: unknown) => (typeof value === "string" ? JSON.parse(value) : value);
+		expect(data.title).toBe("Big Shop");
+		expect(String(data.excerpt)).toHaveLength(280);
+		expect(String(data.description)).toHaveLength(5000);
+		for (const key of ["phone", "address", "city", "owner_name", "cuisine", "amenities"]) expect(String(data[key]).length).toBeLessThanOrEqual(200);
+		expect(String(data.postal_code).length).toBeLessThanOrEqual(20);
+		expect(data.lat ?? null).toBeNull();
+		expect(data.lng ?? null).toBeNull();
+		const hours = json(data.hours) as Array<{ open: string }>;
+		expect(hours).toHaveLength(14);
+		expect(hours[0].open).toBe("09:00");
+		const services = json(data.services) as Array<Record<string, unknown>>;
+		expect(services).toHaveLength(20);
+		expect(Object.keys(services[0]).sort()).toEqual(["duration", "name", "price"]);
+		expect(String(services[0].name)).toHaveLength(120);
+		const details = json(data.type_fields) as Record<string, string>;
+		expect(Object.keys(details)).toEqual(["year_founded"]);
+		expect(details.year_founded).toHaveLength(200);
+		expect(JSON.stringify(data).length).toBeLessThan(15_000);
+	});
+
+	it("refuses a website that is not http or https", async () => {
+		const site = await directory();
+		const result = await site.invokeRoute("submit", { title: "Bad Link", agree_terms: true, website: "javascript:alert(1)" }, { method: "POST", user: ana });
+		expect(result).toMatchObject({ ok: false, error: { code: "VALIDATION_ERROR" } });
+	});
+
 	it("rejects a missing title", async () => {
 		host = await createPluginTestHost();
 		const result = await host.invokeRoute("submit", { excerpt: "No title" }, { method: "POST", user: ana });
@@ -98,7 +167,7 @@ describe("admin route", () => {
 		const { rt } = await directory();
 		for (const [path, header] of [
 			["/queue", "Listings queue"],
-			["/reviews", "Reviews"],
+			["/reviews", "Listing reviews"],
 			["/claims", "Claims"],
 			["/messages", "Messages"],
 		] as const) {
@@ -118,10 +187,25 @@ describe("admin route", () => {
 		expect(result).toMatchObject({
 			blocks: expect.arrayContaining([
 				expect.objectContaining({ type: "header", text: "Get started" }),
+				expect.objectContaining({ type: "banner", title: "Set up visitor pages" }),
 				expect.objectContaining({ type: "banner", title: "Get a finished first look" }),
-				expect.objectContaining({ type: "empty", title: "Then copy the site kit" }),
 			]),
 		});
+	});
+
+	it("gives the kit command for the installed version until the owner says the pages are set up", async () => {
+		const { rt } = await directory();
+		const version = (await rt.transport.invokeRoute("health")) as { version: string };
+		const before = JSON.stringify(await rt.transport.invokeRoute("admin", { type: "page_load", page: "/setup" }));
+		expect(before).toContain("Set up visitor pages");
+		expect(before).toContain(`git clone --branch v${version.version} --depth 1 https://github.com/wbcomdesigns/emdash-listora`);
+		expect(before).toContain(`blob/v${version.version}/docs/website/getting-started/install.md`);
+		expect(before).toContain("/listings/submit/");
+		expect(before).not.toContain("blob/main");
+		const after = JSON.stringify(await rt.transport.invokeRoute("admin", { type: "block_action", action_id: "kit_done", page: "/setup" }));
+		expect(after).not.toContain("Set up visitor pages");
+		expect(after).not.toContain("git clone");
+		expect(after).toContain(`blob/v${version.version}/docs/website/getting-started/install.md`);
 	});
 
 	it("tells the owner to create the listings collection first", async () => {
@@ -140,6 +224,41 @@ describe("admin route", () => {
 				expect.objectContaining({ type: "header", text: "Get started" }),
 			]),
 		});
+	});
+});
+
+describe("sample directory queue", () => {
+	it("loads waiting samples as real drafts that approve, and an orphan row can only be removed", async () => {
+		const rt = await createPluginRuntimeTestHost();
+		await rt.fixtures.collection(listingsCollection as never);
+		host = { dispose: () => rt.dispose() } as unknown as PluginTestHost;
+		const route = rt.transport.invokeRoute.bind(rt.transport);
+		await route("admin", { type: "block_action", action_id: "load_sample", page: "/setup" });
+		const pending = (await rt.inspect.storage.list<{ status: string; title: string; listingId: string }>("submissions")).filter((row) => row.data.status === "pending");
+		expect(pending.map((row) => row.data.title).sort()).toEqual(["Little Dock Dumplings", "Night Owl Locksmith"]);
+		for (const row of pending) {
+			const entry = (await rt.inspect.content.get("listings", row.data.listingId)) as { status: string } | null;
+			expect(entry?.status).toBe("draft");
+		}
+		// A row left by an earlier release points at an entry that does not exist.
+		await rt.fixtures.plugin.storage("submissions", "listing-gone", { listingId: "listing-gone", title: "Gone Shop", status: "pending", createdAt: "2026-01-01T00:00:00.000Z" });
+		const queue = JSON.stringify(await route("admin", { type: "page_load", page: "/queue" }));
+		const [owl, dock] = ["Night Owl Locksmith", "Little Dock Dumplings"].map((title) => pending.find((row) => row.data.title === title)!.data.listingId);
+		expect(queue).toContain(`approve:${owl}`);
+		expect(queue).toContain("Gone Shop (listing deleted)");
+		expect(queue).toContain("forget:listing-gone");
+		expect(queue).not.toContain("approve:listing-gone");
+		// The admin host validates Block Kit: the deleted row and the visitor pages card render.
+		for (const path of ["/queue", "/setup"]) {
+			const response = await route("admin", { type: "page_load", page: path });
+			expect(validateBlockResponse(response, { pluginPagePaths: ["/setup", "/queue", "/reviews", "/claims", "/messages", "/settings"] }), path).toMatchObject({ valid: true, errors: [] });
+		}
+		const published = JSON.stringify(await route("admin", { type: "block_action", action_id: "review", value: `approve:${owl}`, page: "/queue" }));
+		expect(published).toContain("Listing published.");
+		expect(((await rt.inspect.content.get("listings", owl)) as { status: string }).status).toBe("published");
+		expect(JSON.stringify(await route("admin", { type: "block_action", action_id: "review", value: `forget:${dock}`, page: "/queue" }))).toContain("This listing exists");
+		expect(JSON.stringify(await route("admin", { type: "block_action", action_id: "review", value: "forget:listing-gone", page: "/queue" }))).toContain("Removed.");
+		expect(await rt.inspect.storage.get("submissions", "listing-gone")).toBeNull();
 	});
 });
 
@@ -174,7 +293,7 @@ describe("search and reviews", () => {
 	it("does not auto-create reviews when the directory is empty", async () => {
 		host = await createPluginTestHost();
 		const health = await host.invokeRoute("health");
-		expect(health).toMatchObject({ ok: true, demoSeeded: false });
+		expect(health).toMatchObject({ ok: true, listingsCollection: false });
 		const result = await host.invokeRoute("reviews", { listingId: "listing-golden-fork" });
 		expect(result).toMatchObject({ ok: true, items: [] });
 	});

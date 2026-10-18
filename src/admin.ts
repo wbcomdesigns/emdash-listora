@@ -187,9 +187,22 @@ export async function renderQueue(
 	const view = await viewOf(ctx, "queue");
 	const listed = page(pending.items, (row) => lowerText(asRecord(row.data).title, asRecord(row.data).city, asRecord(row.data).listing_type), view);
 
+	// One read per row on this page (25 at most). A row whose listing was deleted gets no decision,
+	// only a way to clear it, so Approve never fails on an entry that is not there.
+	const refs = await listingRefs(ctx, listed.items.map((row) => asString(asRecord(row.data).listingId) || row.id));
 	const rows = listed.items.map((row) => {
 		const data = asRecord(row.data) as SubmissionRow;
 		const listingId = asString(data.listingId) || row.id;
+		if (!refs.has(listingId)) {
+			return {
+				title: `${asString(data.title) || listingId} (listing deleted)`,
+				type: typeName(data.listing_type),
+				city: asString(data.city) || "-",
+				submitted: day(ctx, data.createdAt),
+				open: null,
+				action: { type: "button", label: "Remove from the queue", action_id: "review", value: `forget:${listingId}` },
+			};
+		}
 		return {
 			title: asString(data.title) || listingId,
 			type: typeName(data.listing_type),
@@ -289,6 +302,15 @@ async function reviewListing(
 		city: existing?.city,
 		createdAt: existing?.createdAt,
 	};
+
+	if (action === "forget") {
+		// Only a row whose listing is gone. A real listing is approved or rejected instead.
+		if ((await listingRefs(ctx, [listingId])).has(listingId)) {
+			return renderQueue(ctx, { toast: { message: "This listing exists. Approve or reject it instead.", type: "error" } });
+		}
+		await ctx.storage.submissions.delete(listingId);
+		return renderQueue(ctx, { toast: { message: "Removed. Its listing had been deleted.", type: "info" } });
+	}
 
 	if (action === "reject") {
 		await ctx.storage.submissions.put(listingId, { ...next, status: "rejected" });
@@ -445,7 +467,7 @@ async function renderReviewQueue(
 	});
 	return {
 		blocks: [
-			{ type: "header", text: "Reviews" },
+			{ type: "header", text: "Listing reviews" },
 			{
 				type: "stats",
 				items: [
@@ -548,18 +570,9 @@ async function renderClaimQueue(
 }
 
 function renderOnboardBlocks(onboard: Awaited<ReturnType<typeof getOnboardState>>): BlockMap[] {
-	if (onboard.ready) {
-		return [
-			{
-				type: "context",
-				text: "Sample directory is ready. If /listings/ is not found, run the setup command from the install guide: it adds the directory pages to your site.",
-			},
-		];
-	}
-
 	const missing = onboard.hasCollection
 		? "The listings collection is ready. Load sample data so the first visit shows real NYC cards, reviews, and a claim."
-		: "This site has no listings collection yet. Run the setup command from the install guide: it creates the collection and adds the directory pages. Then load sample data here.";
+		: "This site has no listings collection yet. The two lines above print the command that creates it. Then load sample data here.";
 
 	return [
 		{
@@ -586,16 +599,12 @@ function renderOnboardBlocks(onboard: Awaited<ReturnType<typeof getOnboardState>
 					style: "primary",
 					confirm: {
 						title: "Load sample listings?",
-						text: "Adds 12 NYC listings, reviews, favorites, and a pending claim. Safe to run more than once.",
+						text: "Adds 12 NYC listings with reviews, favorites and a pending claim, plus two listings waiting for your approval. Safe to run more than once.",
 						confirm: "Load sample data",
 						deny: "Cancel",
 					},
 				},
 			],
-		},
-		{
-			type: "context",
-			text: "The directory pages come from the setup command in the install guide. After that, open /listings/.",
 		},
 	];
 }
@@ -610,7 +619,7 @@ export async function renderSettings(
 		: "";
 	return {
 		blocks: [
-			{ type: "header", text: "Settings" },
+			{ type: "header", text: "Listora settings" },
 			{
 				type: "tab",
 				panels: [
@@ -761,13 +770,11 @@ export async function renderWaiting(ctx: PluginContext): Promise<BlockResponse> 
 			total === 0
 				? { type: "section", text: "Nothing is waiting." }
 				: {
+						// Four tiles, one per list below: seven did not fit a half-width card at 1440.
 						type: "stats",
 						items: [
-							{ label: "Listings", value: listings },
-							{ label: "Changes", value: edits },
-							{ label: "Photos", value: photos },
-							{ label: "Reviews", value: reviews },
-							{ label: "Replies", value: replies },
+							{ label: "Listings", value: listings + edits + photos },
+							{ label: "Reviews", value: reviews + replies },
 							{ label: "Claims", value: claims },
 							{ label: "Messages", value: messages },
 						],
@@ -776,7 +783,7 @@ export async function renderWaiting(ctx: PluginContext): Promise<BlockResponse> 
 				type: "actions",
 				elements: [
 					link("Listings queue", "/queue"),
-					link("Reviews", "/reviews"),
+					link("Listing reviews", "/reviews"),
 					link("Claims", "/claims"),
 					link("Messages", "/messages"),
 				],
@@ -785,27 +792,80 @@ export async function renderWaiting(ctx: PluginContext): Promise<BlockResponse> 
 	};
 }
 
+const KIT_DONE = "kit_pages_done";
+const REPO_URL = "https://github.com/wbcomdesigns/emdash-listora";
+
+/**
+ * The "Set up visitor pages" card. A registry plugin cannot add pages, so until the site kit is
+ * copied every Listora address is the site's 404. The card gives the command for the version that
+ * is installed (never main), until the owner says the pages are set up; then one line to the guide.
+ */
+export async function kitBlocks(ctx: PluginContext): Promise<BlockMap[]> {
+	const tag = `v${ctx.plugin.version}`;
+	const guide = { type: "link", label: "Install guide", target: { kind: "external", url: `${REPO_URL}/blob/${tag}/docs/website/getting-started/install.md` } };
+	if ((await ctx.kv.get<string>(KIT_DONE)) === "1") {
+		return [
+			{ type: "context", text: `Visitor pages come from the Listora site kit. After each plugin update, copy the kit for ${tag} again.` },
+			{ type: "actions", elements: [guide] },
+		];
+	}
+	return [
+		{
+			type: "banner",
+			title: "Set up visitor pages",
+			description:
+				"Installing Listora adds this admin, not pages on your site. The visitor pages come from the Listora site kit. Until you copy it, the addresses below show your site's 404 page.",
+			variant: "default",
+		},
+		{ type: "context", text: `From your site's root folder, run these two lines. They copy the kit for the version you have installed (${tag}).` },
+		{
+			type: "code",
+			language: "bash",
+			code: `git clone --branch ${tag} --depth 1 ${REPO_URL} /tmp/emdash-listora\n/tmp/emdash-listora/scripts/add-to-site.sh .`,
+		},
+		{
+			type: "fields",
+			fields: [
+				{ label: "Directory", value: "/listings/" },
+				{ label: "One listing", value: "/listings/<listing>/" },
+				{ label: "Add a listing", value: "/listings/submit/" },
+				{ label: "Calendar", value: "/listings/calendar/" },
+				{ label: "Import and export", value: "/listings/import/" },
+				{ label: "Owner dashboard", value: "/account/" },
+			],
+		},
+		{
+			type: "actions",
+			elements: [
+				guide,
+				{ type: "button", action_id: "kit_done", label: "Visitor pages are set up", style: "primary" },
+			],
+		},
+	];
+}
+
 export async function renderSetup(
 	ctx: PluginContext,
 	extra?: Pick<BlockResponse, "toast">,
 ): Promise<BlockResponse> {
 	const onboard = await getOnboardState(ctx);
-	// Once the directory exists, this page is the queue. Status lines are only for what is still missing.
-	if (onboard.ready) return renderQueue(ctx, extra);
+	const kit = await kitBlocks(ctx);
+	// Once the directory exists, this page is the queue, with the visitor pages card on top.
+	if (onboard.ready) {
+		const queue = await renderQueue(ctx, extra);
+		const [header, ...rest] = queue.blocks;
+		return { ...queue, blocks: [header, ...kit, ...rest] };
+	}
 	return {
 		blocks: [
 			{ type: "header", text: "Get started" },
+			...kit,
+			{ type: "divider" },
 			{
 				type: "section",
-				text: "Listora is the engine. Sample data fills the directory so the first visit looks finished.",
+				text: "Sample data fills the directory so the first visit looks finished.",
 			},
 			...renderOnboardBlocks(onboard),
-			{
-				type: "empty",
-				title: "Then copy the site kit",
-				description:
-					"Installing the plugin does not add the /listings/ pages. Run the setup command from the install guide to add them, then add menu links for Listings, Add a listing, Calendar and Account.",
-			},
 		],
 		toast: extra?.toast,
 	};
@@ -975,6 +1035,11 @@ export async function handleAdmin(
 			if (list === "claims") return renderClaimQueue(ctx);
 			return renderQueue(ctx);
 		}
+	}
+
+	if (type === "block_action" && asString(raw.action_id) === "kit_done") {
+		await ctx.kv.set(KIT_DONE, "1");
+		return renderSetup(ctx, { toast: { message: "Noted. The install guide link stays on this page.", type: "success" } });
 	}
 
 	if (type === "block_action" && asString(raw.action_id) === "load_sample") {

@@ -6,11 +6,14 @@ Install `@vapvarun.bsky.social/listora` first (or the local package). Then apply
 
 ## Apply on a site
 
+From your site's root folder, with the tag of the Listora version installed on the site:
+
 ```bash
-path/to/emdash-listora/scripts/add-to-site.sh /path/to/your/site
+git clone --branch v0.6.2 --depth 1 https://github.com/wbcomdesigns/emdash-listora /tmp/emdash-listora
+/tmp/emdash-listora/scripts/add-to-site.sh .
 ```
 
-It copies everything in this folder to the right place, writes a seed for the listings collection, and prints what is left to do. Run it again after each plugin update: it never replaces `src/layouts/ListoraLayout.astro` once it exists. The full steps are in [Set up Listora on your site](../docs/website/getting-started/install.md).
+It copies everything in this folder to the right place, writes a seed for the listings collection, keeps a dated backup of a wording file you changed, and prints the seed command (Node 22.16 or later), the menu links to add in Admin, Menus, and the restart step. Run it again with the new tag after each plugin update: it never replaces `src/layouts/ListoraLayout.astro` once it exists. The full steps, starting with what the site needs before you install, are in [Set up Listora on your site](../docs/website/getting-started/install.md).
 
 ## Connect it to your design
 
@@ -18,15 +21,15 @@ Every Listora page is wrapped in `src/layouts/ListoraLayout.astro`, and that fil
 
 Colours and fonts come from your site: the kit reads `--color-bg`, `--color-text`, `--color-surface`, `--color-border`, `--color-brand`, `--color-on-brand` and `--font-body` when they exist, and falls back to its own neutral set when they do not.
 
-Every phrase a visitor sees is in `site-kit/lib/listora-strings.ts` (copied to `src/lib/listora-strings.ts`). Change it there, then rebuild. Running the setup command again replaces that file, so keep a copy of your wording and put it back. The steps are in [Reword the directory](../docs/website/customize/wording.md).
+Every phrase a visitor sees is in `site-kit/lib/listora-strings.ts` (copied to `src/lib/listora-strings.ts`). Change it there, then rebuild. Running the setup command again replaces that file and saves your changed copy next to it as `listora-strings.ts.bak-YYYYMMDD`. The steps are in [Reword the directory](../docs/website/customize/wording.md).
 
-Proven on two sites: the EmDash `starter` template and a clean `portfolio` template site, as guest, member and admin, in light and dark, at 1440 and 390.
+Checked on EmDash 1.3.0 with the `blog` template.
 
-Collection: `npx emdash seed .emdash/listora-seed.json --no-content` in your site, after the setup command.
+Collection: `npx emdash seed .emdash/listora-seed.json --no-content` in your site (Node 22.16 or later), after the setup command.
 
-Demo rows: Admin → Get started → **Load sample directory** (12 NYC listings, reviews, a claim). The lab seed still loads the larger 33-listing pack.
+Sample rows: Admin, Listora, Get started, **Load sample directory** (12 NYC listings with reviews and a claim, plus two waiting for approval).
 
-Add four menu links: `/listings/`, `/listings/submit/`, `/listings/calendar/`, `/account/`.
+In Admin, Menus, add four links: `/listings/`, `/listings/submit/`, `/listings/calendar/`, `/account/`.
 
 Import and export: `/listings/import/` is for site admins only (everyone else sees a short notice), so it needs no menu link. Settings in the admin links to it. A sample spreadsheet is at `/vendor/listora-sample.csv`.
 
@@ -34,7 +37,7 @@ Import and export: `/listings/import/` is for site admins only (everyone else se
 
 ## Before you add it to a live site
 
-- **EmDash version.** Built and tested on EmDash 1.2. Update the site first.
+- **EmDash version.** Checked on EmDash 1.3.0. Update the site first.
 - **Maps.** Leaflet ships in `site-kit/public/vendor/leaflet/`, so a site that only allows its own scripts and styles needs no change. Map tiles are images from `tile.openstreetmap.org`.
 - **Caching.** `/account/` and `/listings/submit/` differ per visitor and send `Cache-Control: private, no-store`. If your site's Worker adds its own cache rules, make sure these two paths stay uncached.
 - **Slugs.** A page with the slug `listings` or `account` would be hidden by the kit pages. Rename it first.
@@ -54,9 +57,13 @@ Guests browse, search and message a listing. Adding a listing, reviewing, saving
 - `/listings/submit/` five-step wizard
 - `/listings/calendar/` events
 - `/account/` owner dashboard (no Credits tab)
-- Admin → Get started, then Listora queue, reviews, claims
+- Admin, Listora: Get started, Listings queue, Listing reviews, Claims, Messages, Settings
 
-## Lab prove
+A guest's first visit to `/listings/` or a listing logs one `401` from the `favorites` check in the browser console. That is expected.
+
+## Working on this plugin
+
+Lab only, never on a real site:
 
 ```bash
 ./scripts/reset-lab.sh

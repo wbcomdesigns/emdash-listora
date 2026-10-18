@@ -8,7 +8,7 @@ Reviews and claims are written on the listing page. You approve them in the admi
 
 On a listing, open **Reviews**, then **Write a review**. The visitor picks **Stars**, a **Title**, and a **Review**, then **Submit review**.
 
-With approval on, the review waits under Admin, Listora, Reviews. The page shows Pending, Published, and Rejected, a find box, and the waiting reviews. Open **Review** on a row and choose **Approve** to publish it, or **Reject** to keep it off.
+With approval on, the review waits under Admin, Listora, Listing reviews. The page shows Pending, Published, and Rejected, a find box, and the waiting reviews. Open **Review** on a row and choose **Approve** to publish it, or **Reject** to keep it off.
 
 The listing owner can reply from their account. The reply waits on the same Reviews page. **Approve the reply** publishes it under the review as **Reply from the owner**. **Reject the reply** keeps it off.
 
