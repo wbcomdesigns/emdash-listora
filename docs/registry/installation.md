@@ -11,7 +11,7 @@ Stop the dev server and start it again. **Registry** now shows in the admin menu
 
 **3. You need Node 22.16 or later** for the `npx emdash seed` step.
 
-Checked on EmDash 1.3.0 with the `blog` template, Node and Cloudflare.
+Checked on EmDash 1.3.0 with the `blog` template on Node. The Cloudflare lines follow EmDash's own guide; we have not run them on a Cloudflare site yet.
 
 ## Install
 
@@ -24,7 +24,7 @@ Checked on EmDash 1.3.0 with the `blog` template, Node and Cloudflare.
 
 3. Run the seed command it printed (Node 22.16 or later). Restart the dev server.
 4. Add the menu links it printed in Admin, Menus.
-5. Open Listora, Get started in the admin.
+5. Open Listora, Get started.
 
 After every update, run step 2 with the new tag.
 

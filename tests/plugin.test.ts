@@ -260,7 +260,8 @@ describe("sample directory queue", () => {
 		expect(JSON.stringify(await route("admin", { type: "block_action", action_id: "review", value: `forget:${dock}`, page: "/queue" }))).toContain("This listing exists");
 		expect(JSON.stringify(await route("admin", { type: "block_action", action_id: "review", value: "forget:listing-gone", page: "/queue" }))).toContain("Removed.");
 		expect(await rt.inspect.storage.get("submissions", "listing-gone")).toBeNull();
-	});
+		// Fourteen content writes and publishes: slower than the 5 s default on a busy machine.
+	}, 30_000);
 });
 
 describe("types and spam", () => {

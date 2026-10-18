@@ -22,7 +22,7 @@ Colours and fonts come from your site: the kit reads `--color-bg`, `--color-text
 
 Every phrase a visitor sees is in `site-kit/lib/listora-strings.ts` (copied to `src/lib/listora-strings.ts`). Change it there, then rebuild. Running the setup command again replaces that file and saves your changed copy next to it as `listora-strings.ts.bak-YYYYMMDD`. The steps are in [Reword the directory](../docs/website/customize/wording.md).
 
-Checked on EmDash 1.3.0 with the `blog` template.
+Checked on EmDash 1.3.0 with the `blog` template on Node. The Cloudflare lines follow EmDash's own guide; we have not run them on a Cloudflare site yet.
 
 Collection: `npx emdash seed .emdash/listora-seed.json --no-content` in your site (Node 22.16 or later), after the setup command.
 
