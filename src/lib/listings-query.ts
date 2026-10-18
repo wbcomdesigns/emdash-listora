@@ -2,14 +2,14 @@ import type { PluginContext } from "emdash/plugin";
 
 import { haversineKm, listingFromContent, matchesQuery, type ListingCard } from "./catalog";
 import { LISTINGS, listingTypeBySlug } from "./types";
-import { asNumber, asRecord, asString, rows } from "./util";
+import { asNumber, asRecord, asString, queryAll, rows } from "./util";
 
 export type Rating = { average: number; count: number };
 
 /** Every listing's rating, from plugin storage. One read for a whole page of cards. */
 export async function ratingsMap(ctx: PluginContext): Promise<Map<string, Rating>> {
-	// ponytail: reads up to 500 rating rows. Query by the page's ids once directories outgrow that.
-	const found = await ctx.storage.ratings.query({ limit: 500 });
+	// Every rating row, 100 per read. One row per rated listing, so this follows the directory size.
+	const found = await queryAll(ctx.storage.ratings);
 	return new Map(
 		rows(found).map((row) => [row.id, { average: asNumber(row.average) ?? 0, count: asNumber(row.count) ?? 0 }]),
 	);
@@ -175,9 +175,7 @@ export async function expireDue(ctx: PluginContext, now = Date.now()): Promise<n
  */
 export async function syncRating(ctx: PluginContext, listingId: string): Promise<void> {
 	if (!listingId) return;
-	// ponytail: reads up to 500 reviews per listing. Keep running totals on the rating row
-	// if one listing ever collects more than that.
-	const found = await ctx.storage.reviews.query({ where: { listingId }, limit: 500 });
+	const found = await queryAll(ctx.storage.reviews, { where: { listingId } });
 	const stars = rows(found)
 		.filter((row) => row.status === "published")
 		.map((row) => asNumber(row.stars) ?? 0);
@@ -198,7 +196,7 @@ export async function syncRating(ctx: PluginContext, listingId: string): Promise
 export async function backfillRatings(ctx: PluginContext): Promise<void> {
 	if ((await ctx.kv.get<string>("ratings_v2")) === "1") return;
 	try {
-		const found = await ctx.storage.reviews.query({ where: { status: "published" }, limit: 500 });
+		const found = await queryAll(ctx.storage.reviews, { where: { status: "published" } });
 		for (const id of new Set(rows(found).map((row) => asString(row.listingId)))) await syncRating(ctx, id);
 		await ctx.kv.set("ratings_v2", "1");
 	} catch {

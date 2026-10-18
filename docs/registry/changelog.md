@@ -12,7 +12,7 @@ kit="$(mktemp -d)" &&
 ```
 
 - New: Get started gives the kit command for the installed version and the visitor addresses it adds.
-- Fix: sample listings in the queue approve; a stale second decision is refused; an empty directory says so; dark mode buttons pass 4.5:1.
+- Fix: lists no longer stop at 100 rows on a large site; sample listings in the queue approve; a stale second decision is refused; an empty directory says so; dark mode buttons pass 4.5:1.
 - Security: a new listing stores each field capped; the public health check writes nothing.
 - Improve: admin group named Listora, reviews page named Listing reviews.
 

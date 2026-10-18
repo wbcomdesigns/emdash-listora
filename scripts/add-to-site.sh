@@ -40,21 +40,23 @@ fi
 first_run=1
 [[ -f "$SITE/src/layouts/ListoraLayout.astro" ]] && first_run=0
 
-# A wording file the owner changed is kept as a dated copy before the new one replaces it.
-# listora-strings.sums lists the SHA-256 of the file at every release: a file whose hash is in
-# that list is one we shipped, untouched, so it is replaced without a backup or a word.
-strings="$SITE/src/lib/listora-strings.ts"
-backup=""
-shipped() {
-	local sum
-	sum="$(node -e 'process.stdout.write(require("crypto").createHash("sha256").update(require("fs").readFileSync(process.argv[1])).digest("hex"))' "$1")"
-	grep -qx "$sum" "$PLUGIN/site-kit/lib/listora-strings.sums"
-}
-if [[ -f "$strings" ]] && ! shipped "$strings"; then
-	backup="$strings.bak-$(date +%Y%m%d)"
-	[[ -e "$backup" ]] && backup="$strings.bak-$(date +%Y%m%d-%H%M%S)"
-	cp "$strings" "$backup"
-fi
+# A kit file the owner changed is kept as a dated copy before the new one replaces it.
+# site-kit/kit.sums lists the SHA-256 of every kit file at every release: a site file whose hash
+# is listed for its path is one we shipped, untouched, so it is replaced without a word.
+# (src/layouts/ListoraLayout.astro is never replaced, so it is never backed up.)
+sha() { node -e 'process.stdout.write(require("crypto").createHash("sha256").update(require("fs").readFileSync(process.argv[1])).digest("hex"))' "$1"; }
+backups=""
+while read -r from to; do
+	target="$SITE/$to"
+	[[ -f "$target" ]] || continue
+	sum="$(sha "$target")"
+	[[ "$sum" == "$(sha "$PLUGIN/$from")" ]] && continue
+	grep -qxF "$sum  $to" "$PLUGIN/site-kit/kit.sums" && continue
+	copy="$target.bak-$(date +%Y%m%d)"
+	[[ -e "$copy" ]] && copy="$target.bak-$(date +%Y%m%d-%H%M%S)"
+	cp "$target" "$copy"
+	backups+="    ${copy#"$SITE/"}"$'\n'
+done < <("$PLUGIN/scripts/kit-files.sh" "$PLUGIN")
 
 "$PLUGIN/scripts/apply-kit.sh" "$SITE" "${2:-}" >/dev/null
 seed="$(node "$PLUGIN/scripts/site-seed.mjs" "$SITE")"
@@ -70,9 +72,10 @@ Copied the Listora $VERSION site kit into $SITE
   Block    src/listora-block/ (optional Listings block for post text, off until you add it to astro.config.mjs)
   Seed     $seed
 DONE
-if [[ -n "$backup" ]]; then
+if [[ -n "$backups" ]]; then
 	echo
-	echo "  Your changed wording was saved as ${backup#"$SITE/"}. Copy your phrases back into src/lib/listora-strings.ts."
+	echo "  You had changed these kit files. Your copies were saved next to them; copy your changes back:"
+	printf '%s' "$backups"
 fi
 cat <<DONE
 

@@ -1346,3 +1346,41 @@ describe("spreadsheet import and export", () => {
 		expect(await route("import", {}, { method: "POST" })).toMatchObject({ ok: false, error: { code: "VALIDATION_ERROR" } });
 	});
 });
+
+describe("more than 100 stored rows", () => {
+	// EmDash returns at most 100 rows per storage query, with no error. These read every row.
+	it("finds a pending listing past the first 100 rows, and the queue lists more than 100", async () => {
+		const rt = await createPluginRuntimeTestHost();
+		await rt.fixtures.collection(listingsCollection as never);
+		host = { dispose: () => rt.dispose() } as unknown as PluginTestHost;
+		for (let i = 0; i < 150; i += 1) {
+			const n = String(i).padStart(3, "0");
+			await rt.fixtures.plugin.storage("submissions", `row-${n}`, { listingId: `row-${n}`, title: `Waiting ${n}`, city: `Town ${n}`, status: "pending", createdAt: `2026-01-01T00:00:00.${n}Z` });
+		}
+		// The CSV check knows every waiting listing, so the oldest (row 0, read last) is a duplicate.
+		const checked = (await rt.transport.invokeRoute("import", { csv: "title,city\nWaiting 000,Town 000\nWaiting 149,Town 149", mode: "check" }, { method: "POST" })) as { duplicates: unknown[] };
+		expect(checked.duplicates).toHaveLength(2);
+		// The queue shows 25 at a time and pages through all 150.
+		let page = JSON.stringify(await rt.transport.invokeRoute("admin", { type: "page_load", page: "/queue" }));
+		expect(page).toContain("Showing 25 of 150.");
+		for (let cursor = 25; cursor < 150; cursor += 25) page = JSON.stringify(await rt.transport.invokeRoute("admin", { type: "block_action", action_id: "queue_page", value: { cursor: cursor + 25 }, page: "/queue" }));
+		expect(page).toContain("Waiting 000");
+	});
+
+	it("rates every listing on a directory of 150 rated listings", async () => {
+		const rt = await createPluginRuntimeTestHost();
+		await rt.fixtures.collection(listingsCollection as never);
+		host = { dispose: () => rt.dispose() } as unknown as PluginTestHost;
+		const ids: string[] = [];
+		for (let i = 0; i < 150; i += 1) {
+			const made = await rt.fixtures.content("listings", { data: { title: `Rated ${i}`, listing_type: "restaurant" }, slug: `rated-${i}`, status: "published" } as never);
+			ids.push(made.id);
+			await rt.fixtures.plugin.storage("ratings", made.id, { average: 4, count: 1, schema: "Restaurant" });
+		}
+		const all = (await rt.transport.invokeRoute("ratings", { all: "1" }, { method: "GET" })) as { ratings: Record<string, unknown> };
+		expect(Object.keys(all.ratings)).toHaveLength(150);
+		const cards = (await rt.transport.invokeRoute("listings", { per_page: 60, page: 3 })) as { items: Array<{ rating_count: number }>; total: number };
+		expect(cards.total).toBe(150);
+		expect(cards.items.every((item) => item.rating_count === 1)).toBe(true);
+	});
+});

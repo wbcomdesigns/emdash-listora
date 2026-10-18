@@ -14,7 +14,7 @@ import { getOnboardState, loadSampleDirectory } from "./lib/onboard";
 import { editPatch } from "./lib/edits";
 import { galleryReady, photoLimit } from "./lib/photos";
 import { LISTING_TYPES, LISTINGS, NOTIFY_CRON } from "./lib/types";
-import { asBoolean, asRecord, asString } from "./lib/util";
+import { asBoolean, asRecord, asString, queryAll } from "./lib/util";
 
 export type BlockMap = Record<string, unknown> & { type: string };
 
@@ -187,11 +187,7 @@ export async function renderQueue(
 		ctx.storage.submissions.count({ status: "pending" }),
 		ctx.storage.submissions.count({ status: "approved" }),
 		ctx.storage.submissions.count({ status: "rejected" }),
-		ctx.storage.submissions.query({
-			where: { status: "pending" },
-			orderBy: { createdAt: "desc" },
-			limit: LIST_CAP,
-		}),
+		queryAll(ctx.storage.submissions, { where: { status: "pending" }, orderBy: { createdAt: "desc" } }, LIST_CAP),
 	]);
 	const view = await viewOf(ctx, "queue");
 	const listed = page(pending.items, (row) => lowerText(asRecord(row.data).title, asRecord(row.data).city, asRecord(row.data).listing_type), view);
@@ -471,11 +467,7 @@ async function renderReviewQueue(
 		ctx.storage.reviews.count({ status: "pending" }),
 		ctx.storage.reviews.count({ status: "published" }),
 		ctx.storage.reviews.count({ status: "rejected" }),
-		ctx.storage.reviews.query({
-			where: { status: "pending" },
-			orderBy: { createdAt: "desc" },
-			limit: LIST_CAP,
-		}),
+		queryAll(ctx.storage.reviews, { where: { status: "pending" }, orderBy: { createdAt: "desc" } }, LIST_CAP),
 	]);
 	const titles = await listingTitles(ctx, pending.items);
 	const view = await viewOf(ctx, "reviews");
@@ -542,11 +534,7 @@ async function renderClaimQueue(
 		ctx.storage.claims.count({ status: "pending" }),
 		ctx.storage.claims.count({ status: "approved" }),
 		ctx.storage.claims.count({ status: "rejected" }),
-		ctx.storage.claims.query({
-			where: { status: "pending" },
-			orderBy: { createdAt: "desc" },
-			limit: LIST_CAP,
-		}),
+		queryAll(ctx.storage.claims, { where: { status: "pending" }, orderBy: { createdAt: "desc" } }, LIST_CAP),
 	]);
 	const titles = await listingTitles(ctx, pending.items);
 	const view = await viewOf(ctx, "claims");
@@ -952,11 +940,7 @@ async function renderMessages(ctx: PluginContext, extra?: Pick<BlockResponse, "t
 	const [freshCount, handledCount, found] = await Promise.all([
 		ctx.storage.contacts.count({ status: "new" }),
 		ctx.storage.contacts.count({ status: "handled" }),
-		ctx.storage.contacts.query({
-			where: { status: "new" },
-			orderBy: { createdAt: "desc" },
-			limit: LIST_CAP,
-		}),
+		queryAll(ctx.storage.contacts, { where: { status: "new" }, orderBy: { createdAt: "desc" } }, LIST_CAP),
 	]);
 	const titles = await listingTitles(ctx, found.items);
 	const view = await viewOf(ctx, "messages");

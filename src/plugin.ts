@@ -31,6 +31,7 @@ import {
 	asStringArray,
 	nowIso,
 	parseJson,
+	queryAll,
 	rows,
 } from "./lib/util";
 
@@ -289,9 +290,9 @@ async function eraseMember(ctx: Ctx, memberId: string): Promise<void> {
 		return ctx.storage.photos.delete(row.id);
 	});
 	// Replies this member wrote as a listing owner, public or still waiting, and their done marks.
-	for (const listing of rows(await ctx.storage.submissions.query({ where: { member_id: memberId }, limit: 200 }))) {
+	for (const listing of rows(await queryAll(ctx.storage.submissions, { where: { member_id: memberId } }))) {
 		const listingId = asString(listing.listingId) || listing.id;
-		for (const review of rows(await ctx.storage.reviews.query({ where: { listingId }, limit: 200 }))) {
+		for (const review of rows(await queryAll(ctx.storage.reviews, { where: { listingId } }))) {
 			if (review.reply_by !== memberId) continue;
 			await ctx.storage.reviews.updateIf(review.id, {
 				where: {},
@@ -647,11 +648,7 @@ const plugin: SandboxedPlugin = {
 				const raw = asRecord(routeCtx.input);
 				const listingId = asString(raw.listingId || raw.listing_id);
 				if (!listingId) return { ok: true, items: [], average: 0, count: 0 };
-				const found = await ctx.storage.reviews.query({
-					where: { listingId },
-					orderBy: { createdAt: "desc" },
-					limit: 100,
-				});
+				const found = await queryAll(ctx.storage.reviews, { where: { listingId }, orderBy: { createdAt: "desc" } });
 				// Named fields only. A review row also holds the member's id (its own id is built
 				// from it) and email, version tokens and an owner reply still waiting for approval:
 				// none of that is public.
@@ -761,7 +758,7 @@ const plugin: SandboxedPlugin = {
 					await ctx.storage.favorites.delete(id);
 					return { ok: true, favorited: false };
 				}
-				const found = await ctx.storage.favorites.query({ where: { member_id: user.id }, limit: 100 });
+				const found = await queryAll(ctx.storage.favorites, { where: { member_id: user.id } });
 				return { ok: true, items: rows(found) };
 			},
 		},
@@ -770,12 +767,12 @@ const plugin: SandboxedPlugin = {
 			handler: async (routeCtx, ctx) => {
 				const user = routeCtx.user as Member | undefined;
 				if (!user) return SIGN_IN;
-				const mine = { where: { member_id: user.id }, limit: 100 };
+				const mine = { where: { member_id: user.id } };
 				const [reviews, claims, favorites, listings] = await Promise.all([
-					ctx.storage.reviews.query(mine),
-					ctx.storage.claims.query(mine),
-					ctx.storage.favorites.query(mine),
-					ctx.storage.submissions.query(mine),
+					queryAll(ctx.storage.reviews, mine),
+					queryAll(ctx.storage.claims, mine),
+					queryAll(ctx.storage.favorites, mine),
+					queryAll(ctx.storage.submissions, mine),
 				]);
 				await rememberEmail(ctx, user);
 				// Messages for listings this member answers for right now. listingOwner decides,
@@ -815,14 +812,14 @@ const plugin: SandboxedPlugin = {
 				const days = await expiryDays(ctx);
 				// Which of this member's listings have a change waiting.
 				const editing = new Set(
-					rows(await ctx.storage.edits.query({ where: { member_id: user.id }, limit: 100 }))
+					rows(await queryAll(ctx.storage.edits, { where: { member_id: user.id } }))
 						.filter((row) => row.status === "pending")
 						.map((row) => asString(row.listingId)),
 				);
 				// Photos this member added, by listing, and whether the site has photos turned on.
 				const limit = (await galleryReady(ctx)) ? await photoLimit(ctx) : 0;
 				const photosBy = new Map<string, Array<{ id: string; url: string; status: string; label: string }>>();
-				for (const row of rows(await ctx.storage.photos.query({ where: { member_id: user.id }, orderBy: { createdAt: "asc" }, limit: 200 }))) {
+				for (const row of rows(await queryAll(ctx.storage.photos, { where: { member_id: user.id }, orderBy: { createdAt: "asc" } }))) {
 					if (row.status === "rejected") continue;
 					const key = asString(row.listingId);
 					// An approved photo is public on the listing. A waiting one has no address here.
@@ -1008,7 +1005,7 @@ const plugin: SandboxedPlugin = {
 				if (!listingId || (await listingOwner(ctx, listingId)) !== user.id) return NOT_YOURS;
 				// The owner is given a handle for each review, never its stored id.
 				let id = "";
-				for (const row of rows(await ctx.storage.reviews.query({ where: { listingId }, limit: 100 }))) {
+				for (const row of rows(await queryAll(ctx.storage.reviews, { where: { listingId } }))) {
 					if (row.status === "published" && (await refOf(ctx, row.id)) === asString(raw.ref)) id = row.id;
 				}
 				if (!id) return NOT_YOURS;
@@ -1176,7 +1173,7 @@ const plugin: SandboxedPlugin = {
 				// What is already in the directory, live or waiting: same name and same city is a duplicate.
 				const key = (title: string, city: string) => `${title.trim().toLowerCase()}|${city.trim().toLowerCase()}`;
 				const known = new Set((await listPublished(ctx)).map((item) => key(item.title, item.city)));
-				for (const row of rows(await ctx.storage.submissions.query({ where: { status: "pending" }, limit: 500 }))) {
+				for (const row of rows(await queryAll(ctx.storage.submissions, { where: { status: "pending" } }))) {
 					known.add(key(asString(row.title), asString(row.city)));
 				}
 				const good: Array<{ line: number; data: Record<string, string>; type: string }> = [];
@@ -1242,11 +1239,11 @@ const plugin: SandboxedPlugin = {
 			handler: async (routeCtx, ctx) => {
 				const user = routeCtx.user as Member | undefined;
 				if (!user) return SIGN_IN;
-				const mine = { where: { member_id: user.id }, limit: 200 };
+				const mine = { where: { member_id: user.id } };
 				const [reviews, claims, favorites] = await Promise.all([
-					ctx.storage.reviews.query(mine),
-					ctx.storage.claims.query(mine),
-					ctx.storage.favorites.query(mine),
+					queryAll(ctx.storage.reviews, mine),
+					queryAll(ctx.storage.claims, mine),
+					queryAll(ctx.storage.favorites, mine),
 				]);
 				if (asString(asRecord(routeCtx.input).action) === "erase") {
 					await eraseMember(ctx, user.id);

@@ -9,7 +9,7 @@ import submit from "../site-kit/pages/listings/submit.astro?raw";
 import block from "../site-kit/blocks/ListingsBlock.astro?raw";
 import kitLib from "../site-kit/lib/listora.ts?raw";
 import stringsFile from "../site-kit/lib/listora-strings.ts?raw";
-import sums from "../site-kit/lib/listora-strings.sums?raw";
+import sums from "../site-kit/kit.sums?raw";
 import {
 	eventCount,
 	listingCount,
@@ -69,12 +69,12 @@ describe("visitor wording", () => {
 	});
 });
 
-describe("wording backup list", () => {
-	it("ends with the hash of the wording file this release ships", async () => {
+describe("kit backup list", () => {
+	it("lists the wording file this release ships under its site path", async () => {
 		const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(stringsFile));
 		const hex = [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
 		const lines = sums.trim().split("\n");
-		expect(lines.every((line) => /^[0-9a-f]{64}$/.test(line))).toBe(true);
-		expect(lines.at(-1)).toBe(hex);
+		expect(lines.every((line) => /^[0-9a-f]{64}  \S/.test(line))).toBe(true);
+		expect(lines).toContain(`${hex}  src/lib/listora-strings.ts`);
 	});
 });

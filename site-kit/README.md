@@ -17,7 +17,7 @@ kit="$(mktemp -d)" &&
   "$kit/emdash-listora/scripts/add-to-site.sh" .
 ```
 
-It copies everything in this folder to the right place, writes a seed for the listings collection, keeps a dated backup of the wording file only if you changed it, and prints the seed command (Node 22.16 or later), the menu links to add in Admin, Menus, and the restart step. Run it again with the new tag after each plugin update: it never replaces `src/layouts/ListoraLayout.astro` once it exists. The full steps, starting with what the site needs before you install, are in [Set up Listora on your site](../docs/website/getting-started/install.md).
+It copies everything in this folder to the right place, writes a seed for the listings collection, keeps a dated backup of any kit file you changed (and lists them), and prints the seed command (Node 22.16 or later), the menu links to add in Admin, Menus, and the restart step. Run it again with the new tag after each plugin update: it never replaces `src/layouts/ListoraLayout.astro` once it exists. The full steps, starting with what the site needs before you install, are in [Set up Listora on your site](../docs/website/getting-started/install.md).
 
 ## Connect it to your design
 
@@ -25,7 +25,7 @@ Every Listora page is wrapped in `src/layouts/ListoraLayout.astro`, and that fil
 
 Colours and fonts come from your site: the kit reads `--color-bg`, `--color-text`, `--color-surface`, `--color-border`, `--color-brand`, `--color-on-brand` and `--font-body` when they exist, and falls back to its own neutral set when they do not.
 
-Every phrase a visitor sees is in `site-kit/lib/listora-strings.ts` (copied to `src/lib/listora-strings.ts`). Change it there, then rebuild. Running the setup command again replaces that file. If you changed it, your copy is saved next to it as `listora-strings.ts.bak-YYYYMMDD` first; an untouched file is replaced without a backup. The steps are in [Reword the directory](../docs/website/customize/wording.md).
+Every phrase a visitor sees is in `site-kit/lib/listora-strings.ts` (copied to `src/lib/listora-strings.ts`). Change it there, then rebuild. Running the setup command again replaces that file. If you changed it, your copy is saved next to it as `listora-strings.ts.bak-YYYYMMDD` first; the same goes for any other kit file you edited. An untouched file is replaced without a backup. `site-kit/kit.sums` lists every released version of each kit file; `scripts/kit-sums.sh` rewrites it at each release. The steps are in [Reword the directory](../docs/website/customize/wording.md).
 
 Checked on EmDash 1.3.1 with the `blog` template on Node. The Cloudflare lines follow EmDash's own guide; we have not run them on a Cloudflare site yet.
 

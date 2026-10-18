@@ -16,7 +16,7 @@ Error messages are in the same file. When the directory engine sends a reason, t
 
 The admin screens (the queue, reviews, claims, and Settings) stay in English and are not in this file.
 
-Running the setup command again replaces `src/lib/listora-strings.ts`. If you changed that file, the command first saves your copy next to it as `listora-strings.ts.bak-YYYYMMDD` and says so: copy your phrases back into the new file. A file you never changed is replaced without a backup.
+Running the setup command again replaces `src/lib/listora-strings.ts`. If you changed that file, the command first saves your copy next to it as `listora-strings.ts.bak-YYYYMMDD` and says so: copy your phrases back into the new file. A file you never changed is replaced without a backup. The same applies to the pages and styles the kit copies.
 
 ## Match your theme
 

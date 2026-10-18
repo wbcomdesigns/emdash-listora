@@ -1,3 +1,5 @@
+import type { PluginContext } from "emdash/plugin";
+
 export function asRecord(input: unknown): Record<string, unknown> {
 	return input !== null && typeof input === "object" && !Array.isArray(input)
 		? (input as Record<string, unknown>)
@@ -53,4 +55,28 @@ export type Row = Record<string, unknown> & { id: string };
 /** Flatten a storage query result into plain rows carrying their id. */
 export function rows(result: { items: Array<{ id: string; data: unknown }> }): Row[] {
 	return result.items.map((item) => ({ ...asRecord(item.data), id: item.id }));
+}
+
+type Store = PluginContext["storage"][string];
+type QueryFilter = Omit<NonNullable<Parameters<Store["query"]>[0]>, "limit" | "cursor">;
+
+/**
+ * Every matching row of a plugin storage collection. EmDash returns at most 100 rows per query
+ * and says nothing when it cuts, so anything that needs more pages with the cursor.
+ * ponytail: `max` bounds the reads per request (the sandbox has a time limit); 5000 rows is 50 reads.
+ */
+export async function queryAll(
+	collection: Store,
+	options: QueryFilter = {},
+	max = 5000,
+): Promise<{ items: Array<{ id: string; data: unknown }> }> {
+	const items: Array<{ id: string; data: unknown }> = [];
+	let cursor: string | undefined;
+	while (items.length < max) {
+		const page = await collection.query({ ...options, limit: Math.min(100, max - items.length), cursor });
+		items.push(...page.items);
+		if (!page.hasMore || !page.cursor) break;
+		cursor = page.cursor;
+	}
+	return { items };
 }
