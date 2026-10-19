@@ -230,44 +230,19 @@ export async function seedRelatedStorage(
 		createdAt,
 	});
 
-	await ctx.storage.submissions.put("listing-night-owl", {
-		listingId: "listing-night-owl",
-		title: "Night Owl Locksmith",
-		listing_type: "business",
-		city: "Manhattan",
-		status: "pending",
-		createdAt,
-	});
-	await ctx.storage.submissions.put("listing-little-dock", {
-		listingId: "listing-little-dock",
-		title: "Little Dock Dumplings",
-		listing_type: "restaurant",
-		city: "Brooklyn",
-		status: "pending",
-		createdAt,
-	});
-	await ctx.storage.submissions.put("listing-spam-van", {
-		listingId: "listing-spam-van",
-		title: "Spam Moving Van",
-		listing_type: "classified",
-		city: "Queens",
-		status: "rejected",
-		createdAt,
-	});
+	// Waiting rows only for sample entries that exist on this site, so the queue never offers a
+	// decision on a listing that is not there. The sample loader writes its own rows.
+	for (const [key, title, listing_type, city] of [
+		["listing-night-owl", "Night Owl Locksmith", "business", "Manhattan"],
+		["listing-little-dock", "Little Dock Dumplings", "restaurant", "Brooklyn"],
+	] as const) {
+		const id = ids?.[key];
+		if (!id || (await ctx.storage.submissions.get(id))) continue;
+		await ctx.storage.submissions.put(id, { listingId: id, title, listing_type, city, status: "pending", createdAt });
+	}
 
 	for (const id of Object.values(ids ?? {})) await syncRating(ctx, id);
-	await ctx.kv.set("demo_seeded_v2", "1");
 	ctx.log.info("Listora demo storage seeded", { reviews: REVIEWS.length });
-}
-
-export async function ensureDemoSeed(
-	ctx: PluginContext,
-	ids?: Record<string, string>,
-): Promise<{ seeded: boolean }> {
-	const already = await ctx.kv.get<string>("demo_seeded_v2");
-	if (already === "1") return { seeded: false };
-	await seedRelatedStorage(ctx, ids);
-	return { seeded: true };
 }
 
 export { REVIEWS };

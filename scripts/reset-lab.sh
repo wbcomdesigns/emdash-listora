@@ -44,7 +44,14 @@ mkdir -p data
 npx astro dev start --host 127.0.0.1 --port "$PORT" >/tmp/listora-lab.log 2>&1 &
 for _ in $(seq 1 40); do
 	if curl -sf http://127.0.0.1:$PORT/_emdash/api/plugins/listora/health >/dev/null; then
-		curl -sf "http://127.0.0.1:$PORT/_emdash/api/setup/dev-bypass?redirect=/_emdash/admin" >/dev/null
+		# health is read only, so the demo storage (reviews, a claim, two waiting listings) is
+		# loaded the way an owner does it: Get started, Load sample directory, as the lab admin.
+		jar="$(mktemp)"
+		curl -sf -c "$jar" "http://127.0.0.1:$PORT/_emdash/api/setup/dev-bypass?redirect=/_emdash/admin" >/dev/null
+		curl -sf -b "$jar" -H "X-EmDash-Request: 1" -H "Origin: http://127.0.0.1:$PORT" -H "Content-Type: application/json" \
+			-d '{"type":"block_action","action_id":"load_sample","page":"/setup"}' \
+			"http://127.0.0.1:$PORT/_emdash/api/plugins/listora/admin" >/dev/null || { echo "Could not load the sample directory" >&2; rm -f "$jar"; exit 1; }
+		rm -f "$jar"
 		echo "Lab is up and seeded"
 		exit 0
 	fi

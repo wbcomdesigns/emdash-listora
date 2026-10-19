@@ -1,8 +1,11 @@
 import type { PluginContext } from "emdash/plugin";
 
-import { ensureDemoSeed, seedRelatedStorage } from "./demo-seed";
+import { seedRelatedStorage } from "./demo-seed";
 import { SAMPLE_LISTINGS } from "./sample-listings";
+import { hasListingsCollection, knownFields } from "./listings-query";
 import { LISTINGS } from "./types";
+
+export { hasListingsCollection };
 import { asRecord, asString, nowIso } from "./util";
 
 const SAMPLE_FLAG = "sample_directory_v1";
@@ -13,15 +16,6 @@ export type OnboardState = {
 	sampleLoaded: boolean;
 	ready: boolean;
 };
-
-export async function hasListingsCollection(ctx: PluginContext): Promise<boolean> {
-	try {
-		const collections = (await ctx.schema?.listCollections()) ?? [];
-		return collections.some((item) => item.slug === LISTINGS);
-	} catch {
-		return false;
-	}
-}
 
 export async function getOnboardState(ctx: PluginContext): Promise<OnboardState> {
 	const hasCollection = await hasListingsCollection(ctx);
@@ -81,7 +75,7 @@ export async function loadSampleDirectory(
 		const data: Record<string, unknown> = {
 			title: row.title,
 			excerpt: row.excerpt,
-			description: `${row.excerpt} Seeded so the directory looks finished on first open.`,
+			description: row.excerpt,
 			listing_type: row.listing_type,
 			city: row.city,
 			state: "NY",
@@ -102,8 +96,9 @@ export async function loadSampleDirectory(
 			listing_status: "live",
 		};
 		try {
-			const item = await ctx.content.create(LISTINGS, data);
-			if (ctx.content.getVersioned && ctx.content.publish) {
+			const item = await ctx.content.create(LISTINGS, await knownFields(ctx, data));
+			// A waiting sample stays a draft with a pending queue row that points at it.
+			if (!row.pending && ctx.content.getVersioned && ctx.content.publish) {
 				const versioned = await ctx.content.getVersioned(LISTINGS, item.id);
 				if (versioned) {
 					await ctx.content.publish(LISTINGS, item.id, { _rev: versioned._rev });
@@ -114,7 +109,7 @@ export async function loadSampleDirectory(
 				title: row.title,
 				listing_type: row.listing_type,
 				city: row.city,
-				status: "approved",
+				status: row.pending ? "pending" : "approved",
 				createdAt: nowIso(),
 			});
 			existing[row.key] = item.id;
@@ -139,10 +134,4 @@ export async function loadSampleDirectory(
 				? `Loaded ${created} sample listings. Open /listings/ after you copy the site kit pages.`
 				: "Sample listings were already on the site. Reviews and a claim are ready.",
 	};
-}
-
-export async function maybeSeedDemo(ctx: PluginContext): Promise<{ seeded: boolean }> {
-	const ids = await resolveSampleIds(ctx);
-	if (!ids["listing-golden-fork"]) return { seeded: false };
-	return ensureDemoSeed(ctx, ids);
 }

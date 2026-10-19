@@ -2,17 +2,21 @@ import type { PluginContext } from "emdash/plugin";
 
 import { haversineKm, listingFromContent, matchesQuery, type ListingCard } from "./catalog";
 import { LISTINGS, listingTypeBySlug } from "./types";
-import { asNumber, asRecord, asString, rows } from "./util";
+import { asNumber, asRecord, asString, queryAll, rows } from "./util";
 
 export type Rating = { average: number; count: number };
 
-/** Every listing's rating, from plugin storage. One read for a whole page of cards. */
-export async function ratingsMap(ctx: PluginContext): Promise<Map<string, Rating>> {
-	// ponytail: reads up to 500 rating rows. Query by the page's ids once directories outgrow that.
-	const found = await ctx.storage.ratings.query({ limit: 500 });
-	return new Map(
-		rows(found).map((row) => [row.id, { average: asNumber(row.average) ?? 0, count: asNumber(row.count) ?? 0 }]),
-	);
+/** The rating of each listing asked for, from plugin storage: exact, whatever the directory size. */
+export async function ratingsMap(ctx: PluginContext, ids: string[]): Promise<Map<string, Rating>> {
+	const map = new Map<string, Rating>();
+	for (let start = 0; start < ids.length; start += 100) {
+		const found = await ctx.storage.ratings.getMany(ids.slice(start, start + 100));
+		for (const [id, row] of found) {
+			const data = asRecord(row);
+			map.set(id, { average: asNumber(data.average) ?? 0, count: asNumber(data.count) ?? 0 });
+		}
+	}
+	return map;
 }
 
 const PAGE_SIZE = 100;
@@ -26,19 +30,54 @@ const MAX_PAGES = 5;
  * ponytail: filters and sorts in memory. Move the filters into the content query once a
  * directory outgrows 500 listings.
  */
-export async function listPublished(ctx: PluginContext): Promise<ListingCard[]> {
-	if (!ctx.content) return [];
+export async function hasListingsCollection(ctx: PluginContext): Promise<boolean> {
 	try {
-		const ratings = await ratingsMap(ctx);
-		const cards: ListingCard[] = [];
+		const collections = (await ctx.schema?.listCollections()) ?? [];
+		return collections.some((item) => item.slug === LISTINGS);
+	} catch {
+		return false;
+	}
+}
+
+// The listings type's field names, read once per request. A site may have built its type by hand
+// without some optional fields (expires_at, listing_status, gallery...). Writing a field the type
+// does not have makes EmDash reject the write inside its bridge, where the rejection goes
+// unanswered until workerd cancels the request as hung, so every write is filtered first.
+const fieldCache = new WeakMap<PluginContext, Promise<Set<string> | null>>();
+export function listingFields(ctx: PluginContext): Promise<Set<string> | null> {
+	let found = fieldCache.get(ctx);
+	if (!found) {
+		found = (async () => {
+			const collection = await ctx.schema?.getCollection(LISTINGS).catch(() => null);
+			return collection ? new Set(collection.fields.map((field) => field.slug)) : null;
+		})();
+		fieldCache.set(ctx, found);
+	}
+	return found;
+}
+
+/** Only the fields the listings type has. Unknown schema: the data as it is. */
+export async function knownFields(ctx: PluginContext, data: Record<string, unknown>): Promise<Record<string, unknown>> {
+	const fields = await listingFields(ctx);
+	if (!fields) return data;
+	return Object.fromEntries(Object.entries(data).filter(([key]) => fields.has(key)));
+}
+
+export async function listPublished(ctx: PluginContext): Promise<ListingCard[]> {
+	// A site that has not run the seed yet has no listings table: asking for its rows makes the
+	// host log a database error, so check first.
+	if (!ctx.content || !(await hasListingsCollection(ctx))) return [];
+	try {
+		const found: Parameters<typeof listingFromContent>[0][] = [];
 		let cursor: string | undefined;
 		for (let read = 0; read < MAX_PAGES; read += 1) {
 			const page = await ctx.content.list(LISTINGS, { limit: PAGE_SIZE, cursor, where: { status: "published" } });
-			for (const item of page.items) cards.push(listingFromContent(item, ratings.get(item.id)));
+			found.push(...page.items);
 			if (!page.hasMore || !page.cursor) break;
 			cursor = page.cursor;
 		}
-		return cards;
+		const ratings = await ratingsMap(ctx, found.map((item) => item.id));
+		return found.map((item) => listingFromContent(item, ratings.get(item.id)));
 	} catch {
 		return [];
 	}
@@ -122,7 +161,7 @@ export async function patchListing(
 	if (!listing || !ctx.content?.update) return { state: "missing" };
 	if ((listing as { draftRevisionId?: string | null }).draftRevisionId) return { state: "busy" };
 	const data = { ...listing.data, ...patch };
-	await ctx.content.update(LISTINGS, id, data);
+	await ctx.content.update(LISTINGS, id, await knownFields(ctx, data));
 	if (listing.status === "published") await publishNow(ctx, id);
 	return { state: "done", data };
 }
@@ -164,13 +203,12 @@ export async function expireDue(ctx: PluginContext, now = Date.now()): Promise<n
  */
 export async function syncRating(ctx: PluginContext, listingId: string): Promise<void> {
 	if (!listingId) return;
-	// ponytail: reads up to 500 reviews per listing. Keep running totals on the rating row
-	// if one listing ever collects more than that.
-	const found = await ctx.storage.reviews.query({ where: { listingId }, limit: 500 });
-	const stars = rows(found)
-		.filter((row) => row.status === "published")
-		.map((row) => asNumber(row.stars) ?? 0);
-	if (!stars.length) {
+	// The count is exact. The average is over every published review up to 10000 (the read
+	// bound per request); past that it is the average of the newest 10000, and the row says so.
+	const count = await ctx.storage.reviews.count({ listingId, status: "published" });
+	const found = await queryAll(ctx.storage.reviews, { where: { listingId, status: "published" }, orderBy: { createdAt: "desc" } }, 10_000);
+	const stars = rows(found).map((row) => asNumber(row.stars) ?? 0);
+	if (!count || !stars.length) {
 		await ctx.storage.ratings.delete(listingId);
 		return;
 	}
@@ -178,7 +216,8 @@ export async function syncRating(ctx: PluginContext, listingId: string): Promise
 	const listing = await ctx.content?.get?.(LISTINGS, listingId).catch(() => null);
 	await ctx.storage.ratings.put(listingId, {
 		average: Math.round((stars.reduce((sum, value) => sum + value, 0) / stars.length) * 10) / 10,
-		count: stars.length,
+		count,
+		sampled: found.truncated,
 		schema: listingTypeBySlug(asString(asRecord(listing?.data).listing_type)).schemaType,
 	});
 }
@@ -187,7 +226,7 @@ export async function syncRating(ctx: PluginContext, listingId: string): Promise
 export async function backfillRatings(ctx: PluginContext): Promise<void> {
 	if ((await ctx.kv.get<string>("ratings_v2")) === "1") return;
 	try {
-		const found = await ctx.storage.reviews.query({ where: { status: "published" }, limit: 500 });
+		const found = await queryAll(ctx.storage.reviews, { where: { status: "published" } });
 		for (const id of new Set(rows(found).map((row) => asString(row.listingId)))) await syncRating(ctx, id);
 		await ctx.kv.set("ratings_v2", "1");
 	} catch {

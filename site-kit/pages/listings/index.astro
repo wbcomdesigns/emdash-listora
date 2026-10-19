@@ -307,8 +307,9 @@ function amenityList(value: unknown): string[] {
 								<path d="m21 21-4.3-4.3"></path>
 							</svg>
 						</div>
-						<h2>{S.directory.emptyTitle}</h2>
-						<p>{S.directory.emptyBody}</p>
+						{/* An empty directory is not a search that found nothing: say which it is. */}
+						<h2>{published.length ? S.directory.emptyTitle : S.directory.noneYetTitle}</h2>
+						<p>{published.length ? S.directory.emptyBody : S.directory.noneYetBody}</p>
 						<a class="listora-btn" href="/listings/submit/">{S.directory.add}</a>
 					</div>
 				) : (

@@ -4,13 +4,11 @@
 
 One living list of flow-level cases for Listora on EmDash. Walk all of it before every release. When you add or fix behaviour, add or change its case in the same pull request. There are no per-release QA files.
 
-Last walk: 2026-10-14, version 0.5.0, as guest, subscriber and admin.
+Last walk: 2026-10-19, version 0.6.2, on EmDash 1.3.1 (blog template, Node), as guest and admin, with the 0.6.1 engine and kit mixed both ways.
 
-How it was walked: an independent pass (not the person who built it) ran the cases in a browser on the starter-template lab and the portfolio-template lab and looked at a screenshot of every screen, at 1440, 768 and 390 in light and dark, plus keyboard, right-to-left and the accessibility tree. It found 22 points. Each real one was fixed and re-checked in the browser, and the cases it did not reach were then walked by the builder: G-23, M-6, A-16, A-41, A-49, A-52, A-53, and the new cases G-35 to G-37, M-40 to M-43.
+How it was walked: the builder walked the cases 0.6.2 changed in a browser on a fresh 1.3.1 blog site and a 1.3.1 lab, at 1440, 768 and 390 in light and dark, measuring contrast and widths with DOM queries, and two independent checks read the pull request and walked it. Covered by automated tests only: A-62 to A-64 (rows past 100, a failed approval), A-12, A-17, A-20, A-29, A-13, A-14, A-32, A-33, A-36 and A-37.
 
-Covered by an automated test only, because the lab cannot produce the state by hand: A-12 (no collection), A-17, A-20 and A-29 (scheduled tasks and mail), A-13, A-14, A-32, A-33, A-36 and A-37 (stale or rejected items). A-42 was walked when photos were built and not again in this pass.
-
-Not done: a pass with a real screen reader, swipe on a real phone, a measured contrast figure for every text and background pair (judged by eye in both themes), and a preview on a live site (see Known gaps).
+Not done in 0.6.2: a registry install on 1.3.1 (done on 1.3.0), Cloudflare hosting, a full subscriber walk of every case, a real screen reader, and a live site.
 
 ## Setup
 
@@ -67,6 +65,8 @@ Three roles, always in this order: **guest**, **member** (subscriber role), **ad
 | G-35 | Open an event, a home, a restaurant and a job listing | The extra details of that type show under the summary with plain labels: Starts and Ends as a date and time in the site's zone, Bedrooms, Bathrooms, Price, Cuisine, Salary and so on. A listing with none shows nothing there |
 | G-36 | View source of an event listing | The Event block has `startDate`, `endDate` when set, and `location` with the address |
 | G-37 | A listing with a street address and no map position | A Location card with the address, and no empty map |
+| G-38 | `/listings/` on a site with no listings yet | "No listings yet" and "This directory is empty. Be the first to add a listing." with Add a listing. No admin wording. A search that finds nothing still says "No listings match" | |
+| G-39 | Guest console on `/listings/` and a listing | One `401` from the `favorites` check on the first visit, nothing else. Expected and documented | |
 | G-12 | Request `import`, `dashboard`, `favorites`, `privacy` routes directly | 401 each | prove: guests refused |
 
 ## Member (subscriber role)
@@ -140,39 +140,49 @@ Three roles, always in this order: **guest**, **member** (subscriber role), **ad
 | A-18 | Turn off "Email the listing owner when a message arrives" and save | Stays off after reload. New messages are stored and marked Owner not notified |
 | A-19 | Set "Listings expire after this many days" to 10, save, reload | Shows 10. A listing approved after that carries a date 10 days ahead | dates a listing on approval |
 | A-20 | A listing past its date, after the daily check | Gone from the directory and search. Its page says it has expired | marks a listing past its date as expired |
-| A-21 | Open Settings | Three groups (Submissions, Listing lifetime, Messages), a line under each heading saying what each option does, a Save button per group | settings page and dashboard card |
+| A-21 | Open Settings | Four tabs (Listings, Lifetime, Photos, Email) that fit the row at 1440, 768 and 390, a line under each heading saying what each option does, a Save button per group | settings page and dashboard card |
 | A-22 | Change one option in each group, save, reload | Each stays as saved | same test |
 | A-23 | Enter a negative number or text for the days and save | Refused with a message. The saved value is unchanged | same test |
 | A-24 | Open the Listings queue | Only counts and the waiting list. No settings form | same test |
 | A-25 | Open the EmDash dashboard | A "Listora: waiting for you" card with the four counts and a link to each list. "Nothing is waiting." when all are zero | same test |
 | A-26 | With more than 25 listings waiting, open the Listings queue | 25 rows, "Showing 25 of N", Load more adds 25. Approve or reject one further down: the list stays where it was | long admin lists |
 | A-27 | Type part of a listing name in "Find in this list" and press Find | Only matching rows, with a line saying how many. Text that matches nothing says "Nothing matches". Reopening the page clears the search | same test |
-| A-28 | Settings, Listing lifetime: turn "Email the owner 7 days before" off and save, reload | Stays off. Turn it back on the same way |
+| A-28 | Settings, Lifetime: turn "Email the owner 7 days before" off and save, reload | Stays off. Turn it back on the same way |
 | A-29 | A listing expiring within 7 days, after the daily check | Its owner gets one email, to their account address, with no listing name and no link. A second run sends nothing. After a renewal the next date is warned once. Nothing is sent when the switch is off | warns the owner once per expiry date |
-| A-30 | Listings queue with an owner's change waiting | A "Changes to live listings" block: the listing name, one line per changed field with before and after, a long change written out in full, Approve and publish, Reject. The dashboard card counts it under Changes |
+| A-30 | Listings queue with an owner's change waiting | A "Changes to live listings" block: the listing name, one line per changed field with before and after, a long change written out in full, Approve and publish, Reject. The dashboard card counts it under Listings (new listings, changes and photos share one tile) |
 | A-31 | Approve a change | "Change published." The public page shows the new values. The block goes |
 | A-32 | Reject a change | "Change rejected." The public page is unchanged |
 | A-33 | The owner sends a newer change after you opened the page, then you approve the old one | Refused: "That item changed after this page loaded." | owner edits a live listing |
-| A-34 | Reviews page with an owner reply waiting | An "Owner replies waiting" block: the listing, the review in full, the reply in full as exact text, Approve the reply, Reject the reply. The dashboard card counts it under Replies |
+| A-34 | Reviews page with an owner reply waiting | An "Owner replies waiting" block: the listing, the review in full, the reply in full as exact text, Approve the reply, Reject the reply. The dashboard card counts it under Reviews (reviews and replies share one tile) |
 | A-35 | Approve the reply | "Reply published." The listing page shows it under the review as "Reply from the owner" with the date |
 | A-36 | The owner rewrites a published reply; reject the rewrite | The earlier reply stays on the page | owner reply to a review |
 | A-37 | A change or reply whose sender no longer owns the listing (a claim was approved since) | A warning on the change, and approving is refused | owner edits a live listing |
-| A-38 | Listings queue with photos waiting | A "Photos waiting" block: the picture at a size you can judge, the listing, the date, the owner's file name, Approve the photo, Reject and delete. The picture's size shows when EmDash reports it. The dashboard card counts Photos |
+| A-38 | Listings queue with photos waiting | A "Photos waiting" block: the picture at a size you can judge, the listing, the date, the owner's file name, Approve the photo, Reject and delete. The picture's size shows when EmDash reports it. The dashboard card counts it under Listings |
 | A-39 | Approve a photo | "Photo added to the listing." The listing page shows it. The first photo becomes the cover when there was none |
 | A-40 | Reject a photo | "Photo rejected and deleted." The file is gone from the media library |
 | A-41 | Settings, Photos: set the number to 0, then back | 0 turns Add a photo off everywhere. A site with no Photos field shows a notice saying how to add it |
 | A-42 | Edit a listing in EmDash and add rows to its Photos field | They show in the listing's gallery like owner photos |
-| A-43 | Settings, Import and export: follow the link | `/listings/import/` opens with Export and Import panels |
+| A-43 | Settings: follow Open import and export under the tabs | `/listings/import/` opens with Export and Import panels |
 | A-44 | Download listings | A file `listings-<date>.csv` downloads with the column names first and one row per published listing |
 | A-45 | Choose a CSV with good rows, a row with no title, an unknown type and a bad latitude, then Check file | "N of M rows are ready", each bad row listed with its row number and reason. Nothing is created yet |
 | A-46 | Import N listings as drafts | "N listings added as drafts". They are in the Listings queue, not on the site |
 | A-47 | Check the same file again | The imported rows are listed as already in the directory and skipped |
-| A-49 | On a new template site, follow `docs/website/getting-started/install.md` and nothing else | `/listings/`, `/listings/submit/`, `/listings/calendar/` and `/account/` all open. Running the command again leaves `ListoraLayout.astro` as it was |
+| A-49 | On a new template site, follow `docs/website/getting-started/install.md` and nothing else | `/listings/`, `/listings/submit/`, `/listings/calendar/` and `/account/` all open. Running the command again leaves `ListoraLayout.astro` as it was. Untouched kit files from an older release are replaced with no backup and no message; each edited one (wording, a page, the styles) is saved as `<file>.bak-YYYYMMDD` (with a time on a second run the same day) and listed |
 | A-50 | With the block switched on: in a post, type `/listings`, choose Listings | A form with Heading, Listing type (Any type chosen), Category name, City, How many. Insert works straight away |
 | A-51 | Insert it mid-article with type Restaurant and 3, save, publish | The post shows the heading and three restaurant cards at that spot, linking to each listing. Looks right at 1440 and 390, light and dark. The article's contents list gains the heading only |
 | A-52 | A block whose filters match nothing | Nothing is drawn on the page |
 | A-53 | A site without the block switched on | `/listings` offers no Listings block, and nothing else changes |
 | A-54 | On a standard blog site, install Listora from the registry (admin, Registry, Install), copy the kit with the setup command, then as a subscriber add a listing, review, save and message | Each works. The kit reaches Listora at its registry id (`r_2oeji6rfeg7ovdex`), not at `/listora/`. Tests: `tests/kit-fetch.test.ts` |
+| A-55 | Get started on a new install | A "Set up visitor pages" card: the six-line kit command for the installed version (nothing cut off at 1440 and 768), "Copy it from the install guide on a phone", the six visitor addresses, Visitor pages are set up | gives the kit command for the installed version |
+| A-56 | Press Visitor pages are set up, then Show the setup steps again | The card becomes one line with the install guide link and Show the setup steps again; that button brings the full card back | gives the kit command for the installed version |
+| A-57 | Load sample directory, then approve Night Owl Locksmith in the Listings queue | "Listing published." The listing opens on the site. Little Dock Dumplings still waits | loads waiting samples as real drafts |
+| A-58 | Move a waiting listing to Trash (or delete it), open the Listings queue | Its row says "(deleted or in Trash)" with only Remove from the queue. Remove asks once, then "Removed from the queue." Removing it again from a second tab says it was already removed | offers only a confirmed Remove |
+| A-59 | Open the Listings queue in two tabs. Approve a listing in one, then Reject it in the other (and the other way round) | The stale tab says "This listing was already approved." (or rejected). The listing stays as the first decision left it | two admin tabs deciding on one listing |
+| A-60 | A member listing with a 200-letter title with no spaces | The queue table wraps the title; at 1440 the Decision column stays on screen. At 768 and 390 the table scrolls sideways inside its own box (EmDash table) | |
+| A-61 | As a guest, call the `health` route | Plugin id, version and whether the listings collection exists. No waiting count. Nothing is written | writes nothing |
+| A-62 | A directory with more than 100 rated listings, a listing with more than 100 reviews, a member with more than 100 saved listings | Every card has its rating; the listing shows 20 reviews with More reviews and the full count and average; the account counts every row. Past 5000 rows the account says "Showing the first 5000 of each list." | more than 100 stored rows |
+| A-63 | More than 100 listings waiting | The queue says "Showing 25 of N" with the real N and pages through all of them; the CSV check knows every waiting listing | more than 100 stored rows |
+| A-64 | An approval that fails part way (the listing cannot be saved or published) | "Could not publish that listing. It is waiting in the queue again." The row is still in the queue and counted; a click on a listing being approved right now says "Someone else is deciding this listing right now."; the member's account shows "Awaiting approval", never a raw word | an approval that fails part way |
 | A-48 | A file over 100 rows, an empty file, a file with no title column | A plain message, nothing imported |
 | A-12 | Get started on a site with no listings collection | Clear "create the collection first" message, no crash | tells the owner to create the listings collection first |
 

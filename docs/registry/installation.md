@@ -1,17 +1,36 @@
-Setting up takes a developer about ten minutes.
+## Before you install
 
-1. Install Listora from the registry and confirm the permissions. Your site needs EmDash 1.2 and a sandbox runner in `astro.config.mjs`. Without a runner, EmDash skips sandboxed plugins at startup.
-2. Add the directory pages to your site with one command:
+**1. Your site needs a sandbox runner.** Registry plugins run in a sandbox. Until the site has one, Admin, Plugins shows "No plugins configured" and there is no Registry in the menu.
+
+- **Node:** in your site, run `npm install @emdash-cms/sandbox-workerd workerd`, then add `sandboxRunner: "@emdash-cms/sandbox-workerd/sandbox",` inside `emdash({ ... })` in `astro.config.mjs`.
+- **Cloudflare:** add `import { sandbox } from "@emdash-cms/cloudflare";` and `sandboxRunner: sandbox(),`. It needs the Workers Paid plan and a `worker_loaders` binding named `LOADER` in your Wrangler config. The EmDash Cloudflare templates ship that binding commented out. EmDash's guide: https://docs.emdashcms.com/deployment/plugin-sandbox/#cloudflare-workers
+
+Stop the dev server and start it again. **Registry** now shows in the admin menu.
+
+**2. The plugin is the engine. Visitor pages come from its site kit.** A registry plugin cannot add pages to your site. Until you copy the kit, its addresses (for example `/listings/`) show your site's 404 page. That is expected. The kit copy below takes one command.
+
+**3. You need Node 22.16 or later** for the `npx emdash seed` step.
+
+Checked on EmDash 1.3.1 with the `blog` template on Node. The Cloudflare lines follow EmDash's own guide; we have not run them on a Cloudflare site yet.
+
+## Install
+
+1. Admin, Registry, search **Listora**, Install, then accept the permissions.
+2. From your site's root folder:
 
    ```bash
-   git clone --depth 1 https://github.com/wbcomdesigns/emdash-listora
-   emdash-listora/scripts/add-to-site.sh /path/to/your/site
+   kit="$(mktemp -d)" &&
+     git clone --depth 1 \
+       --branch v0.6.2 \
+       https://github.com/wbcomdesigns/emdash-listora \
+       "$kit/emdash-listora" &&
+     "$kit/emdash-listora/scripts/add-to-site.sh" .
    ```
 
-3. Create the listings collection: `npx emdash seed .emdash/listora-seed.json --no-content` in your site. It adds no content and skips anything that exists.
-4. Add four menu links: `/listings/`, `/listings/submit/`, `/listings/calendar/` and `/account/`.
-5. Open the admin, Listora, Listings queue, and load the sample directory to see 12 listings with reviews.
+3. Run the printed seed command. Restart the dev server.
+4. Add the printed menu links in Admin, Menus.
+5. Open Listora, Get started.
 
-Run the command again after each plugin update to refresh the pages. It never replaces the one file that connects them to your layout.
+After each update, rerun step 2 with the new tag.
 
-Full guide: https://github.com/wbcomdesigns/emdash-listora/blob/main/docs/website/getting-started/install.md
+Full guide: https://github.com/wbcomdesigns/emdash-listora/blob/v0.6.2/docs/website/getting-started/install.md

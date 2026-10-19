@@ -2,13 +2,14 @@ import { pluginResponse } from "emdash/plugin";
 import type { SandboxedPlugin } from "emdash/plugin";
 
 import { handleAdmin } from "./admin";
-import { maybeSeedDemo } from "./lib/onboard";
+import { hasListingsCollection } from "./lib/onboard";
 import {
 	filterListings,
 	expireDue,
 	expiryDays,
 	expiryFrom,
 	isPublicListing,
+	knownFields,
 	listingOwner,
 	listPublished,
 	paginate,
@@ -18,7 +19,8 @@ import {
 	publishNow,
 } from "./lib/listings-query";
 import { CSV_COLUMNS, parseCsv, toCsv, unguard } from "./lib/csv";
-import { clean, EDITABLE, editPatch, filled, webAddress } from "./lib/edits";
+import { clean, EDITABLE, editPatch, fieldValue, filled, webAddress } from "./lib/edits";
+import { parseHours } from "./lib/hours";
 import { galleryReady, imageType, PHOTO_MAX_BYTES, photoLimit } from "./lib/photos";
 export { imageType } from "./lib/photos";
 import { LISTING_TYPES, LISTINGS, NOTIFY_CRON, listingTypeBySlug } from "./lib/types";
@@ -30,6 +32,7 @@ import {
 	asStringArray,
 	nowIso,
 	parseJson,
+	queryAll,
 	rows,
 } from "./lib/util";
 
@@ -63,7 +66,7 @@ type SubmitInput = {
 
 function parseSubmit(input: unknown): { ok: true; data: SubmitInput } | { ok: false; error: string } {
 	const raw = asRecord(input);
-	const title = asString(raw.title);
+	const title = clean(raw.title, 10_000);
 	if (!title) return { ok: false, error: "Title is required." };
 	if (title.length > 200) return { ok: false, error: "Title must be 200 characters or fewer." };
 	if (asString(raw.company_website) || asString(raw.honeypot)) {
@@ -75,36 +78,55 @@ function parseSubmit(input: unknown): { ok: true; data: SubmitInput } | { ok: fa
 	const site = asString(raw.website);
 	if (site && !/^https?:\/\/\S+\.\S+/i.test(site)) return { ok: false, error: "Website must be a full address starting with http:// or https://." };
 
+	// Every stored field is cleaned and capped exactly as an owner's edit is (fieldValue), so a
+	// request that skips the form cannot store a field of any size.
+	const text = (key: string) => fieldValue(key, raw[key]);
 	return {
 		ok: true,
 		data: {
-			title,
-			excerpt: asString(raw.excerpt),
-			description: asString(raw.description),
-			listing_type: asString(raw.listing_type) || "business",
-			phone: asString(raw.phone),
-			website: asString(raw.website),
+			title: text("title"),
+			excerpt: text("excerpt"),
+			description: text("description"),
+			listing_type: wantedType || "business",
+			phone: text("phone"),
+			website: webAddress(raw.website),
 			email: plainEmail(raw.email),
-			address: asString(raw.address),
-			city: asString(raw.city),
-			state: asString(raw.state),
-			country: asString(raw.country),
-			postal_code: asString(raw.postal_code),
-			lat: asNumber(raw.lat),
-			lng: asNumber(raw.lng),
+			address: text("address"),
+			city: text("city"),
+			state: text("state"),
+			country: text("country"),
+			postal_code: clean(raw.postal_code, 20),
+			lat: coordinate(raw.lat, 90),
+			lng: coordinate(raw.lng, 180),
 			agree_terms: asBoolean(raw.agree_terms),
-			owner_name: asString(raw.owner_name),
-			hours: typeof raw.hours === "string" ? raw.hours : JSON.stringify(raw.hours ?? []),
-			services: typeof raw.services === "string" ? raw.services : JSON.stringify(raw.services ?? []),
-			amenities: asStringArray(raw.amenities).join(", "),
-			price_range: asString(raw.price_range),
-			cuisine: asString(raw.cuisine),
-			event_start: asString(raw.event_start),
-			event_end: asString(raw.event_end),
-			type_fields: parseJson<Record<string, unknown>>(raw.type_fields, asRecord(raw.type_fields)),
+			owner_name: text("owner_name"),
+			hours: JSON.stringify(
+				parseHours(typeof raw.hours === "string" ? raw.hours : JSON.stringify(raw.hours ?? []))
+					.slice(0, 14)
+					.map((row) => ({ day: row.day, open: clean(row.open, 5), close: clean(row.close, 5) })),
+			),
+			services: JSON.stringify(
+				parseJson<unknown[]>(raw.services, Array.isArray(raw.services) ? raw.services : [])
+					.slice(0, 20)
+					.map((item) => asRecord(item))
+					.filter((item) => clean(item.name, 120))
+					.map((item) => ({ name: clean(item.name, 120), price: asNumber(item.price), duration: asNumber(item.duration) })),
+			),
+			amenities: fieldValue("amenities", asStringArray(raw.amenities).join(", ")),
+			price_range: text("price_range"),
+			cuisine: text("cuisine"),
+			event_start: text("event_start"),
+			event_end: text("event_end"),
+			type_fields: filled(raw.type_fields),
 			honeypot: asString(raw.company_website),
 		},
 	};
+}
+
+/** A map coordinate inside its range, or none. */
+function coordinate(value: unknown, limit: number): number | null {
+	const n = asNumber(value);
+	return n !== null && Number.isFinite(n) && Math.abs(n) <= limit ? n : null;
 }
 
 function spamBlocked(title: string, description: string, keywords: string[]): boolean {
@@ -122,6 +144,7 @@ const RATE_MAX = 8;
 // Short enough that the moderation table can show every character an admin approves.
 const REVIEW_TITLE_MAX = 120;
 const REVIEW_BODY_MAX = 1000;
+const REVIEWS_PER_PAGE = 20;
 // One import: a file of up to 100 listings. Each row is two writes to the site, and a plugin
 // has a time limit per request, so a larger file is split by the admin, not risked half done.
 const IMPORT_MAX_ROWS = 100;
@@ -269,9 +292,9 @@ async function eraseMember(ctx: Ctx, memberId: string): Promise<void> {
 		return ctx.storage.photos.delete(row.id);
 	});
 	// Replies this member wrote as a listing owner, public or still waiting, and their done marks.
-	for (const listing of rows(await ctx.storage.submissions.query({ where: { member_id: memberId }, limit: 200 }))) {
+	for (const listing of rows(await queryAll(ctx.storage.submissions, { where: { member_id: memberId } }))) {
 		const listingId = asString(listing.listingId) || listing.id;
-		for (const review of rows(await ctx.storage.reviews.query({ where: { listingId }, limit: 200 }))) {
+		for (const review of rows(await queryAll(ctx.storage.reviews, { where: { listingId } }))) {
 			if (review.reply_by !== memberId) continue;
 			await ctx.storage.reviews.updateIf(review.id, {
 				where: {},
@@ -422,23 +445,15 @@ const plugin: SandboxedPlugin = {
 		},
 	},
 	routes: {
+		// Public and read only: it writes nothing and tells a visitor nothing an admin screen keeps.
 		health: {
 			public: true,
-			handler: async (_routeCtx, ctx) => {
-				const seed = await maybeSeedDemo(ctx);
-				const collections = (await ctx.schema?.listCollections()) ?? [];
-				const hasListings = collections.some((item) => item.slug === LISTINGS);
-				const pending = await ctx.storage.submissions.count({ status: "pending" });
-				return {
-					ok: true,
-					plugin: ctx.plugin.id,
-					version: ctx.plugin.version,
-					listingsCollection: hasListings,
-					pendingSubmissions: pending,
-					demoSeeded: seed.seeded || (await ctx.kv.get<string>("demo_seeded_v2")) === "1",
-					drops: ["ui", "types", "search", "trust", "owner", "contact"],
-				};
-			},
+			handler: async (_routeCtx, ctx) => ({
+				ok: true,
+				plugin: ctx.plugin.id,
+				version: ctx.plugin.version,
+				listingsCollection: await hasListingsCollection(ctx),
+			}),
 		},
 		types: {
 			public: true,
@@ -528,7 +543,7 @@ const plugin: SandboxedPlugin = {
 					};
 				}
 
-				const created = await ctx.content.create(LISTINGS, {
+				const created = await ctx.content.create(LISTINGS, await knownFields(ctx, {
 					title: parsed.data.title,
 					excerpt: parsed.data.excerpt,
 					description: parsed.data.description,
@@ -555,7 +570,7 @@ const plugin: SandboxedPlugin = {
 					event_end: parsed.data.event_end,
 					type_fields: JSON.stringify(parsed.data.type_fields),
 					listing_status: "live",
-				});
+				}));
 
 				// Moderation off means the listing goes live now, not into a queue nobody reads.
 				const published = !requireModeration && (await publishNow(ctx, created.id));
@@ -635,30 +650,34 @@ const plugin: SandboxedPlugin = {
 				const raw = asRecord(routeCtx.input);
 				const listingId = asString(raw.listingId || raw.listing_id);
 				if (!listingId) return { ok: true, items: [], average: 0, count: 0 };
-				const found = await ctx.storage.reviews.query({
-					where: { listingId },
+				// 20 published reviews per request, newest first, with a cursor for the next 20. The
+				// total and the average come from the listing's stored rating, so they cover them all.
+				const page = await ctx.storage.reviews.query({
+					where: { listingId, status: "published" },
 					orderBy: { createdAt: "desc" },
-					limit: 100,
+					limit: REVIEWS_PER_PAGE,
+					cursor: asString(raw.cursor) || undefined,
 				});
 				// Named fields only. A review row also holds the member's id (its own id is built
 				// from it) and email, version tokens and an owner reply still waiting for approval:
 				// none of that is public.
-				const items = rows(found)
-					.filter((row) => row.status === "published")
-					.map((row) => ({
-						author: asString(row.author),
-						stars: asNumber(row.stars) ?? 0,
-						title: asString(row.title),
-						body: asString(row.body),
-						createdAt: asString(row.createdAt),
-						owner_reply: asString(row.owner_reply),
-						owner_reply_at: asString(row.owner_reply_at),
-					}));
-				const avg =
-					items.length === 0
-						? 0
-						: items.reduce((sum, row) => sum + (asNumber(row.stars) ?? 0), 0) / items.length;
-				return { ok: true, items, average: Math.round(avg * 10) / 10, count: items.length };
+				const items = rows(page).map((row) => ({
+					author: asString(row.author),
+					stars: asNumber(row.stars) ?? 0,
+					title: asString(row.title),
+					body: asString(row.body),
+					createdAt: asString(row.createdAt),
+					owner_reply: asString(row.owner_reply),
+					owner_reply_at: asString(row.owner_reply_at),
+				}));
+				const rating = asRecord(await ctx.storage.ratings.get(listingId));
+				return {
+					ok: true,
+					items,
+					average: asNumber(rating.average) ?? 0,
+					count: asNumber(rating.count) ?? 0,
+					cursor: page.hasMore && page.cursor ? page.cursor : null,
+				};
 			},
 		},
 		review: {
@@ -749,7 +768,7 @@ const plugin: SandboxedPlugin = {
 					await ctx.storage.favorites.delete(id);
 					return { ok: true, favorited: false };
 				}
-				const found = await ctx.storage.favorites.query({ where: { member_id: user.id }, limit: 100 });
+				const found = await queryAll(ctx.storage.favorites, { where: { member_id: user.id } });
 				return { ok: true, items: rows(found) };
 			},
 		},
@@ -758,12 +777,12 @@ const plugin: SandboxedPlugin = {
 			handler: async (routeCtx, ctx) => {
 				const user = routeCtx.user as Member | undefined;
 				if (!user) return SIGN_IN;
-				const mine = { where: { member_id: user.id }, limit: 100 };
+				const mine = { where: { member_id: user.id } };
 				const [reviews, claims, favorites, listings] = await Promise.all([
-					ctx.storage.reviews.query(mine),
-					ctx.storage.claims.query(mine),
-					ctx.storage.favorites.query(mine),
-					ctx.storage.submissions.query(mine),
+					queryAll(ctx.storage.reviews, mine),
+					queryAll(ctx.storage.claims, mine),
+					queryAll(ctx.storage.favorites, mine),
+					queryAll(ctx.storage.submissions, mine),
 				]);
 				await rememberEmail(ctx, user);
 				// Messages for listings this member answers for right now. listingOwner decides,
@@ -790,12 +809,10 @@ const plugin: SandboxedPlugin = {
 					items: (
 						await Promise.all(
 							owned.map((listingId) =>
-								ctx.storage.reviews.query({ where: { listingId }, orderBy: { createdAt: "desc" }, limit: 10 }),
+								ctx.storage.reviews.query({ where: { listingId, status: "published" }, orderBy: { createdAt: "desc" }, limit: 10 }),
 							),
 						)
-					)
-						.flatMap((found) => found.items)
-						.filter((item) => asRecord(item.data).status === "published"),
+					).flatMap((found) => found.items),
 				};
 				// Names and links for every row, so the member never sees a bare id.
 				const all = [listings, reviews, claims, favorites, inbox, received].map(rows);
@@ -803,14 +820,14 @@ const plugin: SandboxedPlugin = {
 				const days = await expiryDays(ctx);
 				// Which of this member's listings have a change waiting.
 				const editing = new Set(
-					rows(await ctx.storage.edits.query({ where: { member_id: user.id }, limit: 100 }))
+					rows(await queryAll(ctx.storage.edits, { where: { member_id: user.id } }))
 						.filter((row) => row.status === "pending")
 						.map((row) => asString(row.listingId)),
 				);
 				// Photos this member added, by listing, and whether the site has photos turned on.
 				const limit = (await galleryReady(ctx)) ? await photoLimit(ctx) : 0;
 				const photosBy = new Map<string, Array<{ id: string; url: string; status: string; label: string }>>();
-				for (const row of rows(await ctx.storage.photos.query({ where: { member_id: user.id }, orderBy: { createdAt: "asc" }, limit: 200 }))) {
+				for (const row of rows(await queryAll(ctx.storage.photos, { where: { member_id: user.id }, orderBy: { createdAt: "asc" } }))) {
 					if (row.status === "rejected") continue;
 					const key = asString(row.listingId);
 					// An approved photo is public on the listing. A waiting one has no address here.
@@ -840,6 +857,8 @@ const plugin: SandboxedPlugin = {
 				return {
 					ok: true,
 					member: { id: user.id, name: user.name },
+					// True when a list stopped at the read bound (5000 rows): the page says so.
+					partial: [reviews, claims, favorites, listings].some((found) => found.truncated),
 					counts: {
 						listings: listings.items.length,
 						reviews: reviews.items.length,
@@ -996,7 +1015,7 @@ const plugin: SandboxedPlugin = {
 				if (!listingId || (await listingOwner(ctx, listingId)) !== user.id) return NOT_YOURS;
 				// The owner is given a handle for each review, never its stored id.
 				let id = "";
-				for (const row of rows(await ctx.storage.reviews.query({ where: { listingId }, limit: 100 }))) {
+				for (const row of rows(await queryAll(ctx.storage.reviews, { where: { listingId } }))) {
 					if (row.status === "published" && (await refOf(ctx, row.id)) === asString(raw.ref)) id = row.id;
 				}
 				if (!id) return NOT_YOURS;
@@ -1164,7 +1183,7 @@ const plugin: SandboxedPlugin = {
 				// What is already in the directory, live or waiting: same name and same city is a duplicate.
 				const key = (title: string, city: string) => `${title.trim().toLowerCase()}|${city.trim().toLowerCase()}`;
 				const known = new Set((await listPublished(ctx)).map((item) => key(item.title, item.city)));
-				for (const row of rows(await ctx.storage.submissions.query({ where: { status: "pending" }, limit: 500 }))) {
+				for (const row of rows(await queryAll(ctx.storage.submissions, { where: { status: "pending" } }))) {
 					known.add(key(asString(row.title), asString(row.city)));
 				}
 				const good: Array<{ line: number; data: Record<string, string>; type: string }> = [];
@@ -1191,7 +1210,7 @@ const plugin: SandboxedPlugin = {
 				for (const item of good) {
 					// Each row on its own, so one refused row does not stop the rest.
 					try {
-						const created = await ctx.content.create(LISTINGS, {
+						const created = await ctx.content.create(LISTINGS, await knownFields(ctx, {
 							title: item.data.title,
 							excerpt: item.data.excerpt,
 							description: item.data.description,
@@ -1208,7 +1227,7 @@ const plugin: SandboxedPlugin = {
 							lng: item.data.lng === "" ? null : Number(item.data.lng),
 							is_claimed: false,
 							listing_status: "live",
-						});
+						}));
 						await ctx.storage.submissions.put(created.id, {
 							listingId: created.id,
 							title: item.data.title,
@@ -1230,11 +1249,11 @@ const plugin: SandboxedPlugin = {
 			handler: async (routeCtx, ctx) => {
 				const user = routeCtx.user as Member | undefined;
 				if (!user) return SIGN_IN;
-				const mine = { where: { member_id: user.id }, limit: 200 };
+				const mine = { where: { member_id: user.id } };
 				const [reviews, claims, favorites] = await Promise.all([
-					ctx.storage.reviews.query(mine),
-					ctx.storage.claims.query(mine),
-					ctx.storage.favorites.query(mine),
+					queryAll(ctx.storage.reviews, mine),
+					queryAll(ctx.storage.claims, mine),
+					queryAll(ctx.storage.favorites, mine),
 				]);
 				if (asString(asRecord(routeCtx.input).action) === "erase") {
 					await eraseMember(ctx, user.id);

@@ -74,37 +74,37 @@
 				"path": "/setup",
 				"label": "Get started",
 				"icon": "sparkle",
-				"group": "Listings"
+				"group": "Listora"
 			},
 			{
 				"path": "/queue",
 				"label": "Listings queue",
 				"icon": "buildings",
-				"group": "Listings"
+				"group": "Listora"
 			},
 			{
 				"path": "/reviews",
-				"label": "Reviews",
+				"label": "Listing reviews",
 				"icon": "star",
-				"group": "Listings"
+				"group": "Listora"
 			},
 			{
 				"path": "/claims",
 				"label": "Claims",
 				"icon": "badge-check",
-				"group": "Listings"
+				"group": "Listora"
 			},
 			{
 				"path": "/messages",
 				"label": "Messages",
 				"icon": "envelope",
-				"group": "Listings"
+				"group": "Listora"
 			},
 			{
 				"path": "/settings",
 				"label": "Settings",
 				"icon": "settings",
-				"group": "Listings"
+				"group": "Listora"
 			}
 		],
 		"widgets": [{ "id": "waiting", "title": "Listora: waiting for you", "size": "half" }],

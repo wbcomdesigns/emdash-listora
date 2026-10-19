@@ -1,6 +1,6 @@
 {
 	"name": "@wbcomdesigns/listora",
-	"version": "0.6.1",
+	"version": "0.6.2",
 	"private": true,
 	"type": "module",
 	"packageManager": "npm@10.9.8",
@@ -23,7 +23,7 @@
 		"build": "emdash-plugin build",
 		"dev": "emdash-plugin dev",
 		"typecheck": "tsc --noEmit",
-		"test": "emdash-plugin validate && tsc --noEmit && vitest run",
+		"test": "emdash-plugin validate && tsc --noEmit && bash scripts/kit-sums.sh --check && vitest run",
 		"bundle": "emdash-plugin bundle",
 		"login": "emdash-plugin login",
 		"publish": "emdash-plugin publish",

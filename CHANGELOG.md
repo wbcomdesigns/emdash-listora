@@ -2,6 +2,27 @@
 
 Versions match `package.json`, the git tag, and the EmDash registry release. Newest first. Never publish a version that is not on `origin/main`.
 
+## [0.6.2] - 2026-10-19
+
+Copy the kit again after you update, with the new tag (see the install guide). Any kit file you changed is now kept as a dated backup; untouched ones are simply replaced.
+
+- New      - Get started opens with a Set up visitor pages card: the kit command for the installed version, the addresses it adds and the install guide, until you press Visitor pages are set up; Show the setup steps again reopens it.
+- Improve  - The admin group is named Listora and its reviews page is Listing reviews, so a site that also runs WB Reviews can tell them apart.
+- Improve  - The dashboard card shows four counts that fit its width, one per list it links to.
+- Improve  - The setup command copies the kit of the tagged release, backs up any kit file you changed (wording, pages, styles) and lists them, and prints the seed command, the menu links and the restart step.
+- Improve  - The install guide and Installation tab start with what the site needs first: a sandbox runner, the site kit and Node 22.16 or later.
+- Fix      - Load sample directory creates the two listings it puts in the queue, so both approve, and a queue row whose listing was deleted or moved to Trash can only be removed, after a confirm.
+- Fix      - A second decision on a listing from a stale admin tab is refused with a plain message, so a Reject can no longer undo an Approve.
+- Fix      - Every list read from plugin storage reads all its rows, so ratings, reviews, a member's account and the queues no longer stop at 100 on a large site.
+- Fix      - An approval that fails part way puts the listing back in the queue with a plain message, instead of leaving it out of every list.
+- Improve  - A listing shows its reviews 20 at a time with More reviews, and its total and average always count every review.
+- Improve  - Settings has four short tabs that fit a phone (Listings, Lifetime, Photos, Email), with the import and export link under them.
+- Fix      - Listora writes only the fields your listings type has, so a type made by hand without an expiry field still approves and publishes, and Settings says listings do not expire there.
+- Fix      - An empty directory says it has no listings yet, instead of saying no listings match a search.
+- Fix      - Buttons and selected chips use the theme's brand colour pair in dark mode, so their text passes 4.5:1 on the EmDash blog template.
+- Security - A new listing stores every field cleaned and capped the same way an owner's edit does.
+- Security - The public health check writes nothing and no longer reports how many submissions are waiting.
+
 ## [0.6.1] - 2026-10-16
 
 Copy the kit again (`scripts/add-to-site.sh`) after you update. Keep a copy of any wording you changed in `listora-strings.ts` and put it back.

@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
+import { validateBlockResponse } from "@emdash-cms/blocks/server";
 
 import {
 	createPluginRuntimeTestHost,
@@ -48,9 +49,11 @@ const member = (id: string, role = 10) => ({
 const ana = member("ana");
 const ben = member("ben");
 
+// Clear the handle first, so a slow or failing dispose cannot leave the next test on this site.
 afterEach(async () => {
-	await host?.dispose();
+	const done = host;
 	host = undefined;
+	await done?.dispose().catch(() => undefined);
 });
 
 describe("health route", () => {
@@ -64,7 +67,75 @@ describe("health route", () => {
 	});
 });
 
+describe("health is public and read only", () => {
+	it("writes nothing and does not tell a visitor how many submissions wait", async () => {
+		const site = await directory();
+		await site.invokeRoute("submit", { title: "Waiting Shop", agree_terms: true }, { method: "POST", user: ana });
+		const before = JSON.stringify(await Promise.all(["submissions", "reviews", "claims", "favorites", "blocked"].map((c) => site.storage(c).list())));
+		const result = await site.invokeRoute("health");
+		expect(result).toEqual({ ok: true, plugin: "listora", version: expect.any(String), listingsCollection: true });
+		expect(JSON.stringify(result)).not.toMatch(/pending/i);
+		const after = JSON.stringify(await Promise.all(["submissions", "reviews", "claims", "favorites", "blocked"].map((c) => site.storage(c).list())));
+		expect(after).toBe(before);
+	});
+});
+
 describe("submit route", () => {
+	it("cleans and caps every field of an oversized listing the same way an edit does", async () => {
+		const site = await directory();
+		const huge = "x".repeat(6_000);
+		const result = (await site.invokeRoute(
+			"submit",
+			{
+				title: "Big\u200b Shop\u0007",
+				agree_terms: true,
+				excerpt: huge,
+				description: huge,
+				phone: huge,
+				address: huge,
+				city: huge,
+				postal_code: huge,
+				owner_name: huge,
+				cuisine: huge,
+				amenities: [huge, huge],
+				lat: 9999,
+				lng: "abc",
+				hours: Array.from({ length: 40 }, (_, i) => ({ day: i % 7, open: "09:00" + huge, close: "17:00" })),
+				services: Array.from({ length: 40 }, () => ({ name: huge, price: 5, extra: huge })),
+				type_fields: { year_founded: huge, not_a_field: huge },
+			},
+			{ method: "POST", user: ana },
+		)) as { ok: boolean; listing: { id: string } };
+		expect(result.ok).toBe(true);
+		const stored = (await site.rt.inspect.content.get("listings", result.listing.id)) as { data: Record<string, unknown> };
+		const data = stored.data;
+		const json = (value: unknown) => (typeof value === "string" ? JSON.parse(value) : value);
+		expect(data.title).toBe("Big Shop");
+		expect(String(data.excerpt)).toHaveLength(280);
+		expect(String(data.description)).toHaveLength(5000);
+		for (const key of ["phone", "address", "city", "owner_name", "cuisine", "amenities"]) expect(String(data[key]).length).toBeLessThanOrEqual(200);
+		expect(String(data.postal_code).length).toBeLessThanOrEqual(20);
+		expect(data.lat ?? null).toBeNull();
+		expect(data.lng ?? null).toBeNull();
+		const hours = json(data.hours) as Array<{ open: string }>;
+		expect(hours).toHaveLength(14);
+		expect(hours[0].open).toBe("09:00");
+		const services = json(data.services) as Array<Record<string, unknown>>;
+		expect(services).toHaveLength(20);
+		expect(Object.keys(services[0]).sort()).toEqual(["duration", "name", "price"]);
+		expect(String(services[0].name)).toHaveLength(120);
+		const details = json(data.type_fields) as Record<string, string>;
+		expect(Object.keys(details)).toEqual(["year_founded"]);
+		expect(details.year_founded).toHaveLength(200);
+		expect(JSON.stringify(data).length).toBeLessThan(15_000);
+	});
+
+	it("refuses a website that is not http or https", async () => {
+		const site = await directory();
+		const result = await site.invokeRoute("submit", { title: "Bad Link", agree_terms: true, website: "javascript:alert(1)" }, { method: "POST", user: ana });
+		expect(result).toMatchObject({ ok: false, error: { code: "VALIDATION_ERROR" } });
+	});
+
 	it("rejects a missing title", async () => {
 		host = await createPluginTestHost();
 		const result = await host.invokeRoute("submit", { excerpt: "No title" }, { method: "POST", user: ana });
@@ -98,7 +169,7 @@ describe("admin route", () => {
 		const { rt } = await directory();
 		for (const [path, header] of [
 			["/queue", "Listings queue"],
-			["/reviews", "Reviews"],
+			["/reviews", "Listing reviews"],
 			["/claims", "Claims"],
 			["/messages", "Messages"],
 		] as const) {
@@ -118,10 +189,43 @@ describe("admin route", () => {
 		expect(result).toMatchObject({
 			blocks: expect.arrayContaining([
 				expect.objectContaining({ type: "header", text: "Get started" }),
+				expect.objectContaining({ type: "banner", title: "Set up visitor pages" }),
 				expect.objectContaining({ type: "banner", title: "Get a finished first look" }),
-				expect.objectContaining({ type: "empty", title: "Then copy the site kit" }),
 			]),
 		});
+	});
+
+	it("gives the kit command for the installed version until the owner says the pages are set up", async () => {
+		const { rt } = await directory();
+		const version = (await rt.transport.invokeRoute("health")) as { version: string };
+		const before = JSON.stringify(await rt.transport.invokeRoute("admin", { type: "page_load", page: "/setup" }));
+		expect(before).toContain("Set up visitor pages");
+		const card = (await rt.transport.invokeRoute("admin", { type: "page_load", page: "/setup" })) as { blocks: Array<{ type: string; code?: string }> };
+		const code = card.blocks.find((block) => block.type === "code")!.code!;
+		expect(code).toBe(
+			[
+				'kit="$(mktemp -d)" &&',
+				"  git clone --depth 1 \\",
+				`    --branch v${version.version} \\`,
+				"    https://github.com/wbcomdesigns/emdash-listora \\",
+				'    "$kit/emdash-listora" &&',
+				'  "$kit/emdash-listora/scripts/add-to-site.sh" .',
+			].join("\n"),
+		);
+		expect(code.split("\n").every((line) => line.length <= 52)).toBe(true);
+		expect(before).toContain("Copy it from the install guide on a phone");
+		expect(before).not.toContain("/tmp/");
+		expect(before).toContain(`blob/v${version.version}/docs/website/getting-started/install.md`);
+		expect(before).toContain("/listings/submit/");
+		expect(before).not.toContain("blob/main");
+		const after = JSON.stringify(await rt.transport.invokeRoute("admin", { type: "block_action", action_id: "kit_done", page: "/setup" }));
+		expect(after).not.toContain("Set up visitor pages");
+		expect(after).not.toContain("git clone");
+		expect(after).toContain(`blob/v${version.version}/docs/website/getting-started/install.md`);
+		expect(after).toContain('"action_id":"kit_show"');
+		const again = JSON.stringify(await rt.transport.invokeRoute("admin", { type: "block_action", action_id: "kit_show", page: "/setup" }));
+		expect(again).toContain("Set up visitor pages");
+		expect(again).toContain("git clone --depth 1");
 	});
 
 	it("tells the owner to create the listings collection first", async () => {
@@ -140,6 +244,92 @@ describe("admin route", () => {
 				expect.objectContaining({ type: "header", text: "Get started" }),
 			]),
 		});
+	});
+});
+
+describe("sample directory queue", () => {
+	it("loads waiting samples as real drafts that approve, and an orphan row can only be removed", async () => {
+		const rt = await createPluginRuntimeTestHost();
+		await rt.fixtures.collection(listingsCollection as never);
+		host = { dispose: () => rt.dispose() } as unknown as PluginTestHost;
+		const route = rt.transport.invokeRoute.bind(rt.transport);
+		await route("admin", { type: "block_action", action_id: "load_sample", page: "/setup" });
+		const pending = (await rt.inspect.storage.list<{ status: string; title: string; listingId: string }>("submissions")).filter((row) => row.data.status === "pending");
+		expect(pending.map((row) => row.data.title).sort()).toEqual(["Little Dock Dumplings", "Night Owl Locksmith"]);
+		for (const row of pending) {
+			const entry = (await rt.inspect.content.get("listings", row.data.listingId)) as { status: string } | null;
+			expect(entry?.status).toBe("draft");
+		}
+		// A row left by an earlier release points at an entry that does not exist.
+		await rt.fixtures.plugin.storage("submissions", "listing-gone", { listingId: "listing-gone", title: "Gone Shop", status: "pending", createdAt: "2026-01-01T00:00:00.000Z" });
+		const queue = JSON.stringify(await route("admin", { type: "page_load", page: "/queue" }));
+		const [owl, dock] = ["Night Owl Locksmith", "Little Dock Dumplings"].map((title) => pending.find((row) => row.data.title === title)!.data.listingId);
+		expect(queue).toContain(`approve:${owl}`);
+		expect(queue).toContain("Gone Shop (deleted or in Trash)");
+		expect(queue).toContain("forget:listing-gone");
+		expect(queue).not.toContain("approve:listing-gone");
+		// The admin host validates Block Kit: the deleted row and the visitor pages card render.
+		for (const path of ["/queue", "/setup"]) {
+			const response = await route("admin", { type: "page_load", page: path });
+			expect(validateBlockResponse(response, { pluginPagePaths: ["/setup", "/queue", "/reviews", "/claims", "/messages", "/settings"] }), path).toMatchObject({ valid: true, errors: [] });
+		}
+		const published = JSON.stringify(await route("admin", { type: "block_action", action_id: "review", value: `approve:${owl}`, page: "/queue" }));
+		expect(published).toContain("Listing published.");
+		expect(((await rt.inspect.content.get("listings", owl)) as { status: string }).status).toBe("published");
+		expect(JSON.stringify(await route("admin", { type: "block_action", action_id: "review", value: `forget:${dock}`, page: "/queue" }))).toContain("This listing exists");
+		expect(JSON.stringify(await route("admin", { type: "block_action", action_id: "review", value: "forget:listing-gone", page: "/queue" }))).toContain("Removed from the queue.");
+		expect(await rt.inspect.storage.get("submissions", "listing-gone")).toBeNull();
+		// A second remove from a stale page says it is already done.
+		expect(JSON.stringify(await route("admin", { type: "block_action", action_id: "review", value: "forget:listing-gone", page: "/queue" }))).toContain("already removed");
+	});
+
+	it("offers only a confirmed Remove for a listing in Trash", async () => {
+		const rt = await createPluginRuntimeTestHost();
+		await rt.fixtures.collection(listingsCollection as never);
+		host = { dispose: () => rt.dispose() } as unknown as PluginTestHost;
+		const made = await rt.fixtures.content("listings", { data: { title: "Binned Bakery" }, slug: "binned", status: "draft" } as never);
+		await rt.fixtures.plugin.storage("submissions", made.id, { listingId: made.id, title: "Binned Bakery", status: "pending", createdAt: "2026-01-01T00:00:00.000Z" });
+		await (rt.actions.content.trash as (c: string, id: string) => Promise<unknown>)("listings", made.id);
+		const queue = (await rt.transport.invokeRoute("admin", { type: "page_load", page: "/queue" })) as { blocks: Array<{ type: string; rows?: Array<Record<string, unknown>> }> };
+		const row = queue.blocks.find((block) => block.type === "table")!.rows![0];
+		expect(row.title).toBe("Binned Bakery (deleted or in Trash)");
+		expect(row.action).toMatchObject({ type: "button", value: `forget:${made.id}`, confirm: { confirm: "Remove" } });
+	});
+});
+
+describe("two admin tabs deciding on one listing", () => {
+	async function waiting() {
+		const site = await directory();
+		await site.invokeRoute("submit", { title: "Race Cafe", listing_type: "restaurant", agree_terms: true }, { method: "POST", user: ana });
+		const id = (await site.storage<{ title: string }>("submissions").list()).find((row) => row.data.title === "Race Cafe")!.id;
+		const decide = (verb: string) => site.invokeRoute("admin", { type: "block_action", action_id: "review", value: `${verb}:${id}`, page: "/queue" }).then((r) => JSON.stringify(r));
+		return { site, id, decide };
+	}
+
+	it("refuses a stale Reject after an Approve and keeps the listing published", async () => {
+		const { site, id, decide } = await waiting();
+		expect(await decide("approve")).toContain("Listing published.");
+		expect(await decide("reject")).toContain("This listing was already approved.");
+		expect(await site.storage("submissions").get(id)).toMatchObject({ status: "approved" });
+		expect(((await site.rt.inspect.content.get("listings", id)) as { status: string }).status).toBe("published");
+	});
+
+	it("refuses a stale Approve after a Reject and publishes nothing", async () => {
+		const { site, id, decide } = await waiting();
+		expect(await decide("reject")).toContain("Listing rejected.");
+		expect(await decide("approve")).toContain("This listing was already rejected.");
+		expect(await site.storage("submissions").get(id)).toMatchObject({ status: "rejected" });
+		expect(((await site.rt.inspect.content.get("listings", id)) as { status: string }).status).not.toBe("published");
+	});
+
+	it("lets only one of two decisions sent together apply", async () => {
+		const { site, id, decide } = await waiting();
+		const [first, second] = await Promise.all([decide("approve"), decide("reject")]);
+		const applied = [first, second].filter((text) => text.includes("Listing published.") || text.includes("Listing rejected."));
+		expect(applied).toHaveLength(1);
+		const status = ((await site.storage<{ status: string }>("submissions").get(id)) as { status: string }).status;
+		const published = ((await site.rt.inspect.content.get("listings", id)) as { status: string }).status === "published";
+		expect(status === "approved" ? published : !published).toBe(true);
 	});
 });
 
@@ -174,7 +364,7 @@ describe("search and reviews", () => {
 	it("does not auto-create reviews when the directory is empty", async () => {
 		host = await createPluginTestHost();
 		const health = await host.invokeRoute("health");
-		expect(health).toMatchObject({ ok: true, demoSeeded: false });
+		expect(health).toMatchObject({ ok: true, listingsCollection: false });
 		const result = await host.invokeRoute("reviews", { listingId: "listing-golden-fork" });
 		expect(result).toMatchObject({ ok: true, items: [] });
 	});
@@ -709,7 +899,7 @@ describe("settings page and dashboard card", () => {
 		const page = JSON.stringify(await rt.admin.loadPage("/settings"));
 		expect(page).toContain('"type":"tab"');
 		expect(page).not.toContain("Each group saves");
-		for (const label of ["Submissions", "Listing lifetime", "Photos", "Messages", "Import and export"]) {
+		for (const label of ["Listings", "Lifetime", "Photos", "Email", "Import and export"]) {
 			expect(page).toContain(label);
 		}
 		for (const action of ["save_submissions", "save_lifetime", "save_photos", "save_messages"]) {
@@ -1156,5 +1346,107 @@ describe("spreadsheet import and export", () => {
 		// which this in-process test does not exercise. scripts/prove-lab.sh checks it on a real
 		// site as a guest and as a subscriber.
 		expect(await route("import", {}, { method: "POST" })).toMatchObject({ ok: false, error: { code: "VALIDATION_ERROR" } });
+	});
+});
+
+describe("more than 100 stored rows", () => {
+	// EmDash returns at most 100 rows per storage query, with no error. These read every row.
+	it("finds a pending listing past the first 100 rows, and the queue lists more than 100", async () => {
+		const rt = await createPluginRuntimeTestHost();
+		await rt.fixtures.collection(listingsCollection as never);
+		host = { dispose: () => rt.dispose() } as unknown as PluginTestHost;
+		for (let i = 0; i < 150; i += 1) {
+			const n = String(i).padStart(3, "0");
+			await rt.fixtures.plugin.storage("submissions", `row-${n}`, { listingId: `row-${n}`, title: `Waiting ${n}`, city: `Town ${n}`, status: "pending", createdAt: `2026-01-01T00:00:00.${n}Z` });
+		}
+		// The CSV check knows every waiting listing, so the oldest (row 0, read last) is a duplicate.
+		const checked = (await rt.transport.invokeRoute("import", { csv: "title,city\nWaiting 000,Town 000\nWaiting 149,Town 149", mode: "check" }, { method: "POST" })) as { duplicates: unknown[] };
+		expect(checked.duplicates).toHaveLength(2);
+		// The queue shows 25 at a time and pages through all 150.
+		let page = JSON.stringify(await rt.transport.invokeRoute("admin", { type: "page_load", page: "/queue" }));
+		expect(page).toContain("Showing 25 of 150.");
+		for (let cursor = 25; cursor < 150; cursor += 25) page = JSON.stringify(await rt.transport.invokeRoute("admin", { type: "block_action", action_id: "queue_page", value: { cursor: cursor + 25 }, page: "/queue" }));
+		expect(page).toContain("Waiting 000");
+	});
+
+	it("pages a listing's 120 reviews 20 at a time, with the full count and average", async () => {
+		const site = await directory();
+		for (let i = 0; i < 120; i += 1) {
+			const n = String(i).padStart(3, "0");
+			await site.rt.fixtures.plugin.storage("reviews", `rev-${n}`, { listingId: site.a, member_id: `m${n}`, author: `Reader ${n}`, stars: i % 2 ? 5 : 3, title: "", body: `Review ${n}`, status: "published", createdAt: `2026-01-01T00:00:00.${n}Z` });
+		}
+		await site.rt.fixtures.plugin.storage("reviews", "rev-hidden", { listingId: site.a, member_id: "x", stars: 1, body: "Waiting", status: "pending", createdAt: "2026-02-01T00:00:00.000Z" });
+		// A decision recalculates the stored rating from every published review.
+		const pending = (await site.storage<{ rev?: string; createdAt: string }>("reviews").get("rev-hidden"))!;
+		await site.invokeRoute("admin", { type: "block_action", action_id: "review_mod", value: `reject|${pending.rev || pending.createdAt}|rev-hidden`, page: "/reviews" });
+		type Page = { items: Array<{ body: string }>; count: number; average: number; cursor: string | null };
+		let page = (await site.invokeRoute("reviews", { listingId: site.a }, { method: "GET" })) as Page;
+		expect(page.items).toHaveLength(20);
+		expect(page.items[0].body).toBe("Review 119");
+		expect(page).toMatchObject({ count: 120, average: 4 });
+		const seen = [...page.items];
+		while (page.cursor) {
+			page = (await site.invokeRoute("reviews", { listingId: site.a, cursor: page.cursor }, { method: "GET" })) as Page;
+			seen.push(...page.items);
+		}
+		expect(seen).toHaveLength(120);
+		expect(new Set(seen.map((item) => item.body)).size).toBe(120);
+		expect(seen.some((item) => item.body === "Waiting")).toBe(false);
+	});
+
+	it("rates every listing on a directory of 150 rated listings", async () => {
+		const rt = await createPluginRuntimeTestHost();
+		await rt.fixtures.collection(listingsCollection as never);
+		host = { dispose: () => rt.dispose() } as unknown as PluginTestHost;
+		const ids: string[] = [];
+		for (let i = 0; i < 150; i += 1) {
+			const made = await rt.fixtures.content("listings", { data: { title: `Rated ${i}`, listing_type: "restaurant" }, slug: `rated-${i}`, status: "published" } as never);
+			ids.push(made.id);
+			await rt.fixtures.plugin.storage("ratings", made.id, { average: 4, count: 1, schema: "Restaurant" });
+		}
+		const all = (await rt.transport.invokeRoute("ratings", { all: "1" }, { method: "GET" })) as { ratings: Record<string, unknown> };
+		expect(Object.keys(all.ratings)).toHaveLength(150);
+		const cards = (await rt.transport.invokeRoute("listings", { per_page: 60, page: 3 })) as { items: Array<{ rating_count: number }>; total: number };
+		expect(cards.total).toBe(150);
+		expect(cards.items.every((item) => item.rating_count === 1)).toBe(true);
+	});
+});
+
+describe("an approval that fails part way", () => {
+	async function waitingOn(fields: (all: Array<Record<string, unknown>>) => Array<Record<string, unknown>>) {
+		const rt = await createPluginRuntimeTestHost();
+		await rt.fixtures.collection({ ...(listingsCollection as object), fields: fields((listingsCollection as { fields: Array<Record<string, unknown>> }).fields) } as never);
+		host = { dispose: () => rt.dispose() } as unknown as PluginTestHost;
+		const made = await rt.fixtures.content("listings", { data: { title: "Fragile Cafe" }, slug: "fragile", status: "draft" } as never);
+		await rt.fixtures.plugin.storage("submissions", made.id, { listingId: made.id, title: "Fragile Cafe", status: "pending", createdAt: "2026-01-01T00:00:00.000Z" });
+		const route = rt.transport.invokeRoute.bind(rt.transport);
+		const approve = () => route("admin", { type: "block_action", action_id: "review", value: `approve:${made.id}`, page: "/queue" }).then((r) => JSON.stringify(r));
+		return { rt, id: made.id, route, approve };
+	}
+
+	it("approves and publishes when the listings type has no expiry field", async () => {
+		// A listings type made by hand without expires_at: nothing is written to a field it lacks,
+		// the listing is published, and Settings, Lifetime says listings do not expire.
+		const { rt, id, route, approve } = await waitingOn((all) => all.filter((field) => field.slug !== "expires_at"));
+		await rt.fixtures.plugin.setting("expiry_days", 30);
+		expect(await approve()).toContain("Listing published.");
+		expect(await rt.inspect.storage.get("submissions", id)).toMatchObject({ status: "approved" });
+		expect(((await rt.inspect.content.get("listings", id)) as { status: string }).status).toBe("published");
+		const settings = JSON.stringify(await route("admin", { type: "page_load", page: "/settings" }));
+		expect(settings).toContain("Your listings type has no expires_at field, so listings do not expire.");
+	});
+
+	it("puts the row back when the listing cannot be published", async () => {
+		const { rt, id, approve } = await waitingOn((all) => all);
+		// Gone before the click: moved to Trash in another tab.
+		await (rt.actions.content.trash as (c: string, id: string) => Promise<unknown>)("listings", id);
+		expect(await approve()).toMatch(/Could not publish/);
+		expect(await rt.inspect.storage.get("submissions", id)).toMatchObject({ status: "pending" });
+	});
+
+	it("answers a click on a listing being approved right now", async () => {
+		const { rt, id, route } = await waitingOn((all) => all);
+		await rt.fixtures.plugin.storage("submissions", id, { listingId: id, title: "Fragile Cafe", status: "approving", createdAt: "2026-01-01T00:00:00.000Z" });
+		expect(JSON.stringify(await route("admin", { type: "block_action", action_id: "review", value: `reject:${id}`, page: "/queue" }))).toContain("Someone else is deciding this listing right now.");
 	});
 });

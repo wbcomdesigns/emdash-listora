@@ -1,3 +1,21 @@
+## 0.6.2
+
+Copy the kit again after you update, from your site's root folder:
+
+```bash
+kit="$(mktemp -d)" &&
+  git clone --depth 1 \
+    --branch v0.6.2 \
+    https://github.com/wbcomdesigns/emdash-listora \
+    "$kit/emdash-listora" &&
+  "$kit/emdash-listora/scripts/add-to-site.sh" .
+```
+
+- New: Get started gives the kit command for the installed version and the visitor addresses it adds.
+- Fix: lists no longer stop at 100 rows on a large site; sample listings in the queue approve; a stale second decision is refused; an empty directory says so; dark mode buttons pass 4.5:1.
+- Security: a new listing stores each field capped; the public health check writes nothing.
+- Improve: admin group named Listora, reviews page named Listing reviews.
+
 ## 0.6.1
 
 - Security: map popups show listing titles as plain text; emails are stored as plain addresses only. Copy the kit again after updating.
@@ -16,19 +34,5 @@
 
 - Fix: the directory pages now reach Listora on a site that installed it from the registry. Adding a listing, reviews, saving, messages and the account page failed there before. Copy the kit again after updating.
 - Improve: banner no longer cut off on a phone.
-
-## 0.5.0
-
-New permissions: sending email, reading and assigning categories, adding files to the media library.
-
-- New: owners edit their listing, add photos, read visitors' messages, reply to reviews and renew, all from their account. Edits, photos and replies wait for approval.
-- New: listing expiry with a reminder email, and an hourly notice when messages wait.
-- New: browse by category and city. Listing pages show the details of their type.
-- New: import and export as a spreadsheet, a Settings page, and a dashboard card.
-- New: one setup command adds the directory pages, and an optional Listings block for post text.
-- Improve: site time zone, live search, admin lists with Load more.
-- Security: member ids never shown, stricter checks on every member action.
-
-Run `scripts/add-to-site.sh` again after updating.
 
 Older versions: https://github.com/wbcomdesigns/emdash-listora/blob/main/CHANGELOG.md

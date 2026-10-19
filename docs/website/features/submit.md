@@ -22,4 +22,4 @@ With that setting off, the listing goes live when it is submitted.
 
 A listing whose title and city match one already in the directory shows a warning with a link to that listing. The visitor can still send it.
 
-Blocked words, set under Settings, Submissions, refuse the listing. The form says why.
+Blocked words, set under Settings, Listings, refuse the listing. The form says why.

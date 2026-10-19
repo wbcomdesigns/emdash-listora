@@ -24,24 +24,14 @@ if (( ${#blocked[@]} )) && [[ "$FORCE" != "--force" ]]; then
 	exit 1
 fi
 
-mkdir -p "$LAB/src/layouts" "$LAB/src/styles" "$LAB/src/lib" "$LAB/src/pages/listings" "$LAB/src/pages/account"
-
+mkdir -p "$LAB/src/layouts"
 # The owner edits this file to point at their own layout, so never overwrite it.
 [[ -f "$LAB/src/layouts/ListoraLayout.astro" ]] || cp "$PLUGIN/site-kit/layouts/ListoraLayout.astro" "$LAB/src/layouts/ListoraLayout.astro"
-cp "$PLUGIN/site-kit/listora-ui.css" "$LAB/src/styles/listora-ui.css"
-cp "$PLUGIN/site-kit/lib/listora.ts" "$LAB/src/lib/listora.ts"
-cp "$PLUGIN/site-kit/lib/listora-strings.ts" "$LAB/src/lib/listora-strings.ts"
-cp "$PLUGIN/site-kit/pages/listings/index.astro" "$LAB/src/pages/listings/index.astro"
-cp "$PLUGIN/site-kit/pages/listings/[slug].astro" "$LAB/src/pages/listings/[slug].astro"
-cp "$PLUGIN/site-kit/pages/listings/submit.astro" "$LAB/src/pages/listings/submit.astro"
-cp "$PLUGIN/site-kit/pages/listings/calendar.astro" "$LAB/src/pages/listings/calendar.astro"
-cp "$PLUGIN/site-kit/pages/listings/import.astro" "$LAB/src/pages/listings/import.astro"
-cp "$PLUGIN/site-kit/pages/account/index.astro" "$LAB/src/pages/account/index.astro"
-# The optional in-text Listings block. It does nothing until astro.config.mjs lists it (see the install guide).
-mkdir -p "$LAB/src/listora-block"
-cp "$PLUGIN"/site-kit/blocks/* "$LAB/src/listora-block/"
-
-mkdir -p "$LAB/public/vendor"
-cp -R "$PLUGIN/site-kit/public/vendor/." "$LAB/public/vendor/"
+# Every other kit file, from the one list in kit-files.sh. The optional in-text Listings block
+# (src/listora-block/) does nothing until astro.config.mjs lists it (see the install guide).
+"$PLUGIN/scripts/kit-files.sh" "$PLUGIN" | while read -r from to; do
+	mkdir -p "$(dirname "$LAB/$to")"
+	cp "$PLUGIN/$from" "$LAB/$to"
+done
 
 echo "Copied site-kit into $LAB"

@@ -2,11 +2,13 @@
 .listora-block {
 	--listora-primary: var(--color-brand, #2271b1);
 	--listora-primary-hover: var(--color-brand-hover, #135e96);
-	/* Filled controls (buttons, active chips). In dark mode a theme's brand colour is usually
-	   a light tint, which white text cannot sit on, so the fill is darkened and the text is white. */
-	--listora-primary-bg: light-dark(var(--listora-primary), color-mix(in srgb, var(--listora-primary) 58%, #000000));
-	--listora-primary-bg-hover: light-dark(var(--listora-primary-hover), color-mix(in srgb, var(--listora-primary) 46%, #000000));
-	--listora-primary-fg: light-dark(var(--color-on-brand, #ffffff), #ffffff);
+	/* Filled controls (buttons, active chips) use the theme's own brand pair in both modes:
+	   --color-brand behind --color-on-brand. The EmDash blog template's dark brand is #fafafa with
+	   #0a0a0a text, so forcing white text in dark mode gave white on grey (about 3.2:1). The
+	   fallbacks, for a theme without the pair, pass 4.5:1 with white text. */
+	--listora-primary-bg: var(--color-brand, light-dark(#2271b1, #1d5fb8));
+	--listora-primary-bg-hover: var(--color-brand-hover, light-dark(#135e96, #174c94));
+	--listora-primary-fg: var(--color-on-brand, #ffffff);
 	--listora-primary-text-mix: 65%;
 	--listora-primary-text-toward: light-dark(#000000, #ffffff);
 	--listora-primary-text: color-mix(
