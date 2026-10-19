@@ -352,6 +352,12 @@
 	padding-block-end: 2px;
 }
 
+/* Chips that must all be seen at once (the account counts) wrap instead of scrolling. */
+.listora-chips--wrap {
+	flex-wrap: wrap;
+	overflow-x: visible;
+}
+
 ul.listora-chips {
 	list-style: none;
 	margin: 0;
@@ -1715,6 +1721,20 @@ textarea.listora-input {
 	border-bottom: 1px solid var(--listora-border-subtle);
 }
 
+/* "More reviews" stands apart from the last review, and the review form from the list. */
+.listora-more {
+	margin-block: var(--listora-space-4) 0;
+}
+
+/* Under Reviews of your listings: a listing has more reviews than the dashboard shows. */
+.listora-dash-more {
+	margin-block: var(--listora-space-3) var(--listora-space-6);
+}
+
+.listora-reviews + .listora-form-section {
+	margin-block-start: var(--listora-space-6);
+}
+
 .listora-dash {
 	display: grid;
 	grid-template-columns: 14rem minmax(0, 1fr);
@@ -1835,12 +1855,10 @@ textarea.listora-input {
 		gap: var(--listora-space-4);
 	}
 
-	/* One sideways-scrolling row of tabs, so the content starts above the fold. */
+	/* Tabs wrap onto a second row rather than scroll, so every tab is in view on a phone. */
 	.listora-dash nav {
 		display: flex;
-		overflow-x: auto;
-		padding-block-end: var(--listora-space-2);
-		scrollbar-width: thin;
+		flex-wrap: wrap;
 	}
 
 	.listora-dash nav .listora-chip {

@@ -79,7 +79,9 @@ Copied the Listora $VERSION site kit into $SITE
 DONE
 if [[ -n "$backups" ]]; then
 	echo
-	echo "  You had changed these kit files. Your copies were saved next to them; copy your changes back:"
+	echo "  You had changed these kit files. Your copies were saved at the paths below: next to each file,"
+	echo "  except files under public/, which go to .listora-backups/ (public/ is served to visitors)."
+	echo "  Copy your changes back:"
 	printf '%s' "$backups"
 fi
 cat <<DONE

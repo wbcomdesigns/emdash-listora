@@ -33,6 +33,7 @@ import {
 	nowIso,
 	parseJson,
 	queryAll,
+	readCursor,
 	rows,
 } from "./lib/util";
 
@@ -652,11 +653,16 @@ const plugin: SandboxedPlugin = {
 				if (!listingId) return { ok: true, items: [], average: 0, count: 0 };
 				// 20 published reviews per request, newest first, with a cursor for the next 20. The
 				// total and the average come from the listing's stored rating, so they cover them all.
+				// A cursor is the visitor's to change: one storage cannot read is answered in plain words.
+				const cursor = readCursor(raw.cursor);
+				if (cursor === null) {
+					return { ok: false, error: { code: "VALIDATION_ERROR", message: "Those reviews could not be loaded. Reload the page to see the newest reviews." } };
+				}
 				const page = await ctx.storage.reviews.query({
 					where: { listingId, status: "published" },
 					orderBy: { createdAt: "desc" },
 					limit: REVIEWS_PER_PAGE,
-					cursor: asString(raw.cursor) || undefined,
+					cursor,
 				});
 				// Named fields only. A review row also holds the member's id (its own id is built
 				// from it) and email, version tokens and an owner reply still waiting for approval:
@@ -804,16 +810,24 @@ const plugin: SandboxedPlugin = {
 						)
 					).flatMap((found) => found.items),
 				};
-				// Published reviews of the listings this member answers for, so they can reply.
-				const received = {
-					items: (
-						await Promise.all(
-							owned.map((listingId) =>
-								ctx.storage.reviews.query({ where: { listingId, status: "published" }, orderBy: { createdAt: "desc" }, limit: 10 }),
-							),
-						)
-					).flatMap((found) => found.items),
-				};
+				// Published reviews of the listings this member answers for, so they can reply. The
+				// newest 10 per listing; a listing with more gets its full count, so the page can say so.
+				const receivedPages = await Promise.all(
+					owned.map((listingId) =>
+						ctx.storage.reviews.query({ where: { listingId, status: "published" }, orderBy: { createdAt: "desc" }, limit: 10 }),
+					),
+				);
+				const received = { items: receivedPages.flatMap((found) => found.items) };
+				const receivedMore = await Promise.all(
+					owned
+						.map((listingId, index) => ({ listingId, shown: receivedPages[index].items.length, more: receivedPages[index].hasMore }))
+						.filter((entry) => entry.more)
+						.map(async ({ listingId, shown }) => ({
+							listingId,
+							shown,
+							total: await ctx.storage.reviews.count({ listingId, status: "published" }),
+						})),
+				);
 				// Names and links for every row, so the member never sees a bare id.
 				const all = [listings, reviews, claims, favorites, inbox, received].map(rows);
 				const refs = await listingRefs(ctx, all.flat().map((row) => asString(row.listingId)));
@@ -871,6 +885,11 @@ const plugin: SandboxedPlugin = {
 					reviews: named(all[1]),
 					claims: named(all[2]),
 					favorites: named(all[3]),
+					// Listings with more published reviews than the newest 10 shown under received.
+					received_more: receivedMore.map(({ listingId, shown, total }) => {
+						const ref = refs.get(listingId);
+						return { listing_title: ref?.title ?? "", listing_url: ref?.published ? `/listings/${ref.slug}/` : "", shown, total };
+					}),
 					// Reviews of the member's listings: the reviewer's name and a handle to reply with.
 					// Never the stored id (it holds the reviewer's account id) or their email.
 					received: await Promise.all(
