@@ -182,13 +182,14 @@ export function wrappable(text: string): string {
 
 /**
  * A decision cut off part way (the sandbox time limit, or a failed write) leaves its row
- * "approving", out of the queue and every count. Put those rows back before anything counts them.
+ * "approving" (a photo also "rejecting"), out of the queue and every count. Put those rows back
+ * before anything counts them.
  * A photo gets a new version token, so a button drawn before the cut-off cannot act on it.
  */
 async function reopenCutOff(ctx: PluginContext): Promise<void> {
 	await Promise.all([
 		reopenStaleClaims(ctx.storage.submissions),
-		reopenStaleClaims(ctx.storage.photos, undefined, { rev: crypto.randomUUID() }),
+		reopenStaleClaims(ctx.storage.photos, undefined, { rev: crypto.randomUUID() }, ["approving", "rejecting"]),
 	]);
 }
 
@@ -1204,6 +1205,11 @@ export async function handleAdmin(
 		};
 		const data = asRecord(listing.data);
 		const gallery = Array.isArray(data.gallery) ? data.gallery : [];
+		// A reopened approval may already have added this photo before it was cut off.
+		if (gallery.some((entry) => asString(asRecord(asRecord(entry).image).id) === image.id)) {
+			await ctx.storage.photos.updateIf(id, { where: { status: "approving" }, set: { status: "approved" } });
+			return renderQueue(ctx, { toast: { message: "Photo added to the listing.", type: "success" } });
+		}
 		// The first photo also becomes the cover when the listing has none.
 		const patched = await patchListing(ctx, listingId, {
 			gallery: [...gallery, { image }],

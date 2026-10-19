@@ -1186,7 +1186,7 @@ describe("owner reply to a review", () => {
 		expect(String(seen[0].owner_reply_at)).toMatch(/^20/);
 
 		// A made-up cursor gets a plain answer, never the storage error.
-		for (const cursor of ["not-a-cursor", btoa("[1]"), btoa('{"orderValue":1,"id":"x"}'), "x".repeat(5000)]) {
+		for (const cursor of ["not-a-cursor", btoa("[1]"), btoa('{"orderValue":1,"id":"x"}'), btoa('{"orderValue":"a","id":"b","sortValues":1}'), "x".repeat(5000)]) {
 			const badCursor = JSON.stringify(await route("reviews", { listingId, cursor }, { method: "GET" }));
 			expect(badCursor).toContain("Those reviews could not be loaded.");
 			expect(badCursor).not.toMatch(/Bridge|pagination|storage/i);
@@ -1281,6 +1281,24 @@ describe("owner photos", () => {
 		expect(await route("photo_remove", { id: photos[0].id }, { method: "POST", user: ana })).toMatchObject({ ok: false });
 		// A second click on the same decision is refused.
 		expect((await admin("photo_mod", `approve|${photos[0].data.rev}|${photos[0].id}`)).toast?.type).toBe("error");
+
+		// An approval cut off after the photo reached the listing is reopened; approving it again adds no second copy.
+		const galleryOf = async () => ((await rt.inspect.content.get("listings", id)) as { data: { gallery?: unknown[] } }).data.gallery ?? [];
+		const inGallery = (await galleryOf()).length;
+		const cutOff = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+		const approved = (await rt.inspect.storage.get<Record<string, unknown>>("photos", photos[0].id))!;
+		await rt.fixtures.plugin.storage("photos", photos[0].id, { ...approved, status: "approving", claimedAt: cutOff });
+		await route("admin", { type: "page_load", page: "/queue" });
+		const reopened = (await rt.inspect.storage.get<{ status: string; rev: string }>("photos", photos[0].id))!;
+		expect(reopened.status).toBe("pending");
+		expect((await admin("photo_mod", `approve|${reopened.rev}|${photos[0].id}`)).toast?.type).toBe("success");
+		expect((await galleryOf()).length).toBe(inGallery);
+		expect(await rt.inspect.storage.get("photos", photos[0].id)).toMatchObject({ status: "approved" });
+		// A reject cut off before the file was deleted waits in the queue again too.
+		await rt.fixtures.plugin.storage("photos", photos[0].id, { ...approved, status: "rejecting", claimedAt: cutOff });
+		await route("admin", { type: "page_load", page: "/queue" });
+		expect(await rt.inspect.storage.get("photos", photos[0].id)).toMatchObject({ status: "pending" });
+		await rt.fixtures.plugin.storage("photos", photos[0].id, approved);
 
 		// Deleting her data unlinks the approved photo from her and removes anything still waiting.
 		await route("admin", { type: "form_submit", action_id: "save_photos", page: "/settings", values: { photo_limit: 5 } });
@@ -1485,6 +1503,10 @@ describe("an approval that fails part way", () => {
 		expect(queue).toContain("Fragile Cafe");
 		expect(queue).toContain('{"label":"Pending","value":1}');
 		expect(await rt.inspect.storage.get("submissions", id)).toMatchObject({ status: "pending" });
+		// A claim taken after the stale row was read carries a new claim time and is left alone.
+		await rt.fixtures.plugin.storage("submissions", id, { listingId: id, title: "Fragile Cafe", status: "approving", claimedAt: new Date().toISOString(), createdAt: "2026-01-01T00:00:00.000Z" });
+		await route("admin", { type: "page_load", page: "/queue" });
+		expect(await rt.inspect.storage.get("submissions", id)).toMatchObject({ status: "approving" });
 		// Left over from 0.6.2, with no claim time at all: also stuck, also released, on the click itself.
 		await rt.fixtures.plugin.storage("submissions", id, { listingId: id, title: "Fragile Cafe", status: "approving", createdAt: "2026-01-01T00:00:00.000Z" });
 		// Two admins click at once: one publishes, the other is told it is handled.
