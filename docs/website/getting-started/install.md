@@ -25,7 +25,7 @@ Checked on EmDash 1.3.1 with the `blog` template on Node. The Cloudflare lines f
    ```bash
    kit="$(mktemp -d)" &&
      git clone --depth 1 \
-       --branch v0.6.2 \
+       --branch v0.6.3 \
        https://github.com/wbcomdesigns/emdash-listora \
        "$kit/emdash-listora" &&
      "$kit/emdash-listora/scripts/add-to-site.sh" .

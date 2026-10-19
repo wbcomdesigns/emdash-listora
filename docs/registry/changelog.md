@@ -1,15 +1,22 @@
-## 0.6.2
+## 0.6.3
 
 Copy the kit again after you update, from your site's root folder:
 
 ```bash
 kit="$(mktemp -d)" &&
   git clone --depth 1 \
-    --branch v0.6.2 \
+    --branch v0.6.3 \
     https://github.com/wbcomdesigns/emdash-listora \
     "$kit/emdash-listora" &&
   "$kit/emdash-listora/scripts/add-to-site.sh" .
 ```
+
+- Fix: an approval cut off part way returns the listing or photo to the queue; More reviews has space above the review form; a damaged reviews link gets a plain message.
+- Improve: account tabs wrap on a phone; the account names the full review count past 10; Settings names /listings/import/ on a fresh site.
+
+## 0.6.2
+
+Copy the kit again after you update.
 
 - New: Get started gives the kit command for the installed version and the visitor addresses it adds.
 - Fix: lists no longer stop at 100 rows on a large site; sample listings in the queue approve; a stale second decision is refused; an empty directory says so; dark mode buttons pass 4.5:1.
@@ -25,14 +32,5 @@ kit="$(mktemp -d)" &&
 
 - Security: website links must be a full http or https address; server-side calls run inside EmDash with no web request.
 - Improve: settings in tabs, Find and Load more on every admin list, all visitor wording in one file. Copy the kit again after updating.
-
-## 0.5.2
-
-- Fix: the directory offers a type filter only for types its listings use, and hides it when there is just one. Copy the kit again after updating.
-
-## 0.5.1
-
-- Fix: the directory pages now reach Listora on a site that installed it from the registry. Adding a listing, reviews, saving, messages and the account page failed there before. Copy the kit again after updating.
-- Improve: banner no longer cut off on a phone.
 
 Older versions: https://github.com/wbcomdesigns/emdash-listora/blob/main/CHANGELOG.md

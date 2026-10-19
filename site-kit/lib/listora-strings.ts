@@ -301,6 +301,7 @@ export const S = {
 		replyLabel: "Your reply (public, up to 1000 characters)",
 		sendReply: "Send for approval",
 		partial: "Showing the first 5000 of each list.",
+		allOnListing: "All of them are on the listing, under Reviews.",
 		noReviewsTitle: "No reviews yet",
 		noReviewsBody: "Reviews of your listings show here once they are published.",
 		noName: "No name given",
@@ -366,6 +367,11 @@ export function photoAlt(title: string, index: number, total: number): string {
 
 export function photoPosition(index: number, total: number): string {
 	return `Photo ${index} of ${total}`;
+}
+
+/** Under Reviews of your listings, when a listing has more reviews than the dashboard shows. */
+export function newestReviewsOf(shown: number, total: number): string {
+	return `Showing the newest ${shown} of ${total} reviews of`;
 }
 
 export function signedInAs(name: string): string {

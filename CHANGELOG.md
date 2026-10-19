@@ -2,6 +2,19 @@
 
 Versions match `package.json`, the git tag, and the EmDash registry release. Newest first. Never publish a version that is not on `origin/main`.
 
+## [0.6.3] - 2026-10-19
+
+Copy the kit again after you update, with the new tag (see the install guide).
+
+- Improve  - Account tabs and counts wrap onto a second row on a phone, so every tab is in view.
+- Improve  - Reviews of your listings in the account names the full count when a listing has more reviews than the newest 10 shown, with a link to the listing.
+- Improve  - Settings names the /listings/import/ page when the site address is not known yet, on a fresh site before a restart.
+- Fix      - A listing whose approval was cut off part way returns to the queue and its counts within five minutes, and Approve works on it again.
+- Fix      - A photo whose approval was cut off part way returns to Photos waiting within five minutes.
+- Fix      - More reviews and the Write a review form have space between them.
+- Fix      - A damaged reviews page link gets a plain message instead of an internal error.
+- Dev      - The kit setup command says where backups of files under public/ go (.listora-backups/).
+
 ## [0.6.2] - 2026-10-19
 
 Copy the kit again after you update, with the new tag (see the install guide). Any kit file you changed is now kept as a dated backup; untouched ones are simply replaced.

@@ -2,7 +2,7 @@
 import { getSiteSettings } from "emdash";
 import Layout from "../../layouts/ListoraLayout.astro";
 import { siteZone } from "../../lib/listora";
-import { signedInAs, S } from "../../lib/listora-strings";
+import { newestReviewsOf, signedInAs, S } from "../../lib/listora-strings";
 import "../../styles/listora-ui.css";
 
 const tab = Astro.url.searchParams.get("tab") || "overview";
@@ -46,7 +46,7 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 			<div id="dash-main" data-tab={tab} data-zone={zone}>
 				<section id="overview-panel">
 					<p class="listora-helper">{S.account.overviewHelp}</p>
-					<div class="listora-chips" id="dash-counts"></div>
+					<div class="listora-chips listora-chips--wrap" id="dash-counts"></div>
 				</section>
 				<section id="list-panel" hidden>
 					<h2>{S.account.myListings}</h2>
@@ -338,6 +338,15 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 						.join("")}</ul>`
 				: `<div class="listora-empty"><h2>${esc(S.account.noReviewsTitle)}</h2><p>${esc(S.account.noReviewsBody)}</p></div>`,
 		);
+		// A listing with more reviews than the newest 10 shown above: say how many there are.
+		const more = ((data.received_more ?? []) as Rows)
+			.map((item) => {
+				const title = esc(item.listing_title || S.account.aListing);
+				const named = item.listing_url ? `<a href="${esc(item.listing_url)}">${title}</a>` : title;
+				return `<p class="listora-meta listora-dash-more">${esc(newestReviewsOf(Number(item.shown) || 0, Number(item.total) || 0))} ${named}. ${item.listing_url ? esc(S.account.allOnListing) : ""}</p>`;
+			})
+			.join("");
+		if (more) document.getElementById("dash-received")?.insertAdjacentHTML("beforeend", more);
 		fill("dash-claims", list(data.claims as Rows, ["status"]));
 		// Visitors wrote these: every value goes through esc, and the address is only ever a mailto.
 		const messages = (data.messages ?? []) as Rows;

@@ -11,7 +11,7 @@ From your site's root folder, with the tag of the Listora version installed on t
 ```bash
 kit="$(mktemp -d)" &&
   git clone --depth 1 \
-    --branch v0.6.2 \
+    --branch v0.6.3 \
     https://github.com/wbcomdesigns/emdash-listora \
     "$kit/emdash-listora" &&
   "$kit/emdash-listora/scripts/add-to-site.sh" .

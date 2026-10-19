@@ -319,7 +319,7 @@ const schema = {
 					</div>
 
 					<div id="tab-reviews" hidden role="tabpanel" aria-labelledby="tab-btn-reviews">
-						<div id="listora-reviews"></div>
+						<div id="listora-reviews" class="listora-reviews"></div>
 					<form id="listora-review-form" class="listora-form listora-form-section">
 						<h2>{S.listing.writeReview}</h2>
 						<p class="listora-helper">{S.listing.writeHelp}</p>
@@ -640,7 +640,7 @@ const schema = {
 		}
 		const items = (data.items ?? []) as Array<Record<string, unknown>>;
 		const next = typeof data.cursor === "string" ? data.cursor : "";
-		const button = next ? `<p><button type="button" class="listora-btn listora-btn--secondary" data-more-reviews="${esc(next)}">${esc(S.listing.moreReviews)}</button></p>` : "";
+		const button = next ? `<p class="listora-more"><button type="button" class="listora-btn listora-btn--secondary" data-more-reviews="${esc(next)}">${esc(S.listing.moreReviews)}</button></p>` : "";
 		if (cursor) {
 			more?.parentElement?.remove();
 			box.insertAdjacentHTML("beforeend", items.map(reviewHtml).join("") + button);

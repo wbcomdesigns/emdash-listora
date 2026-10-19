@@ -16,7 +16,7 @@ import { getOnboardState, loadSampleDirectory } from "./lib/onboard";
 import { editPatch } from "./lib/edits";
 import { galleryReady, photoLimit } from "./lib/photos";
 import { LISTING_TYPES, LISTINGS, NOTIFY_CRON } from "./lib/types";
-import { asBoolean, asRecord, asString, queryAll } from "./lib/util";
+import { asBoolean, asRecord, asString, nowIso, queryAll, reopenStaleClaims } from "./lib/util";
 
 export type BlockMap = Record<string, unknown> & { type: string };
 
@@ -180,11 +180,24 @@ export function wrappable(text: string): string {
 	return text.replace(/(\S{24})(?=\S)/g, "$1\u200B");
 }
 
+/**
+ * A decision cut off part way (the sandbox time limit, or a failed write) leaves its row
+ * "approving", out of the queue and every count. Put those rows back before anything counts them.
+ * A photo gets a new version token, so a button drawn before the cut-off cannot act on it.
+ */
+async function reopenCutOff(ctx: PluginContext): Promise<void> {
+	await Promise.all([
+		reopenStaleClaims(ctx.storage.submissions),
+		reopenStaleClaims(ctx.storage.photos, undefined, { rev: crypto.randomUUID() }),
+	]);
+}
+
 export async function renderQueue(
 	ctx: PluginContext,
 	extra?: Pick<BlockResponse, "toast">,
 ): Promise<BlockResponse> {
 	const settings = await loadSettings(ctx);
+	await reopenCutOff(ctx);
 	const [pendingCount, approvedCount, rejectedCount, pending] = await Promise.all([
 		ctx.storage.submissions.count({ status: "pending" }),
 		ctx.storage.submissions.count({ status: "approved" }),
@@ -321,7 +334,7 @@ async function reviewListing(
 		const message = !row.listingId
 			? "That item is no longer in the queue."
 			: status === "approving"
-				? "Someone else is deciding this listing right now."
+				? "Someone else is deciding this listing right now. If they do not finish, it returns to the queue within a few minutes."
 				: status === "approved"
 					? "This listing was already approved."
 					: status === "rejected"
@@ -342,6 +355,9 @@ async function reviewListing(
 		return renderQueue(ctx, { toast: { message: "Removed from the queue.", type: "info" } });
 	}
 
+	// A claim left behind by a cut-off decision is released first, so this click can decide.
+	await reopenStaleClaims(ctx.storage.submissions, [listingId]);
+
 	if (action === "reject") {
 		const claim = await ctx.storage.submissions.updateIf(listingId, { where: { status: "pending" }, set: { status: "rejected" } });
 		if (!claim.applied) return handled();
@@ -353,7 +369,7 @@ async function reviewListing(
 		return renderQueue(ctx, { toast: { message: "Unknown review action.", type: "error" } });
 	}
 
-	const claim = await ctx.storage.submissions.updateIf(listingId, { where: { status: "pending" }, set: { status: "approving" } });
+	const claim = await ctx.storage.submissions.updateIf(listingId, { where: { status: "pending" }, set: { status: "approving", claimedAt: nowIso() } });
 	if (!claim.applied) return handled();
 	// From here on, any failure puts the row back to waiting: a row left "approving" would drop
 	// out of the queue and every count while its listing is still a draft.
@@ -772,7 +788,12 @@ export async function renderSettings(
 			},
 			// Not a tab: it is one link, and a fifth tab did not fit the tab row at 768 and 390.
 			{ type: "divider" },
-			{ type: "context", text: "Import and export: download published listings, or add drafts from a spreadsheet. Nothing goes live until you approve it." },
+			{
+				type: "context",
+				// EmDash learns the site address only at server start, so a fresh site has none until
+				// a restart: name the page then, so the owner can still reach it.
+				text: `Import and export: download published listings, or add drafts from a spreadsheet. Nothing goes live until you approve it.${importUrl ? "" : " Open /listings/import/ on your site while signed in."}`,
+			},
 			...(importUrl ? [{ type: "actions", elements: [{ type: "link", label: "Open import and export", target: { kind: "external", url: importUrl } }] }] : []),
 		],
 		toast: extra?.toast,
@@ -781,6 +802,7 @@ export async function renderSettings(
 
 /** The card on the EmDash dashboard: what is waiting, with a way to each list. */
 export async function renderWaiting(ctx: PluginContext): Promise<BlockResponse> {
+	await reopenCutOff(ctx);
 	const [photos, replies, edits, listings, reviews, claims, messages] = await Promise.all([
 		ctx.storage.photos.count({ status: "pending" }),
 		ctx.storage.reviews.count({ reply_status: "pending" }),
@@ -1147,7 +1169,7 @@ export async function handleAdmin(
 		const listingId = asString(photo.listingId);
 		// Claim the row in the database before doing anything with its file. The owner removing
 		// it at this same moment also has to move it out of "pending": only one of us can.
-		const claim = await ctx.storage.photos.updateIf(id, { where: { status: "pending" }, set: { status: action === "approve" ? "approving" : "rejecting" } });
+		const claim = await ctx.storage.photos.updateIf(id, { where: { status: "pending" }, set: { status: action === "approve" ? "approving" : "rejecting", claimedAt: nowIso() } });
 		if (!claim.applied) return renderQueue(ctx, { toast: { message: "Someone already handled that photo.", type: "error" } });
 		// If the approval cannot finish, the photo goes back to waiting with a new version.
 		const release = (message: string) =>

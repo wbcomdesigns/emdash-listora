@@ -905,6 +905,15 @@ describe("settings page and dashboard card", () => {
 		for (const action of ["save_submissions", "save_lifetime", "save_photos", "save_messages"]) {
 			expect(page).toContain(action);
 		}
+		// Import and export: with no site address yet (a fresh site before a restart) the page is named.
+		await rt.fixtures.site({ url: "" });
+		const unknown = JSON.stringify(await rt.admin.loadPage("/settings"));
+		expect(unknown).toContain("Open /listings/import/ on your site");
+		expect(unknown).not.toContain("Open import and export");
+		await rt.fixtures.site({ url: "https://directory.example" });
+		const known = JSON.stringify(await rt.admin.loadPage("/settings"));
+		expect(known).toContain("https://directory.example/listings/import/");
+		expect(known).not.toContain("Open /listings/import/ on your site");
 		// The queue has a find box, not a settings form.
 		const queue = JSON.stringify(await rt.admin.loadPage("/queue"));
 		expect(queue).toContain("queue_find");
@@ -1176,6 +1185,13 @@ describe("owner reply to a review", () => {
 		expect(seen[0].owner_reply).toBe("Thank you, Ben.");
 		expect(String(seen[0].owner_reply_at)).toMatch(/^20/);
 
+		// A made-up cursor gets a plain answer, never the storage error.
+		for (const cursor of ["not-a-cursor", btoa("[1]"), btoa('{"orderValue":1,"id":"x"}'), "x".repeat(5000)]) {
+			const badCursor = JSON.stringify(await route("reviews", { listingId, cursor }, { method: "GET" }));
+			expect(badCursor).toContain("Those reviews could not be loaded.");
+			expect(badCursor).not.toMatch(/Bridge|pagination|storage/i);
+		}
+
 		// A rejected rewrite leaves the public reply in place.
 		await route("reply", { listingId, ref, text: "Rude words" }, { method: "POST", user: ana });
 		const again = (await rt.inspect.storage.get<{ reply_rev: string }>("reviews", review.id))!;
@@ -1183,6 +1199,16 @@ describe("owner reply to a review", () => {
 		expect((await publicReviews(listingId))[0].owner_reply).toBe("Thank you, Ben.");
 		// The review itself was never changed by any of this.
 		expect(await rt.inspect.storage.get("reviews", review.id)).toMatchObject({ status: "published", body: "Nice place.", stars: 4 });
+
+		// The dashboard shows the newest 10 reviews per listing and names the full count when there are more.
+		type Dash = { received: unknown[]; received_more: Array<Record<string, unknown>> };
+		expect(((await route("dashboard", {}, { user: ana })) as Dash).received_more).toEqual([]);
+		for (let i = 0; i < 25; i++) {
+			await rt.fixtures.plugin.storage("reviews", `extra-${i}`, { listingId, status: "published", stars: 5, body: `Visit ${i}`, author: "Guest", createdAt: `2026-02-${String(i + 1).padStart(2, "0")}T00:00:00.000Z` });
+		}
+		const busy = (await route("dashboard", {}, { user: ana })) as Dash;
+		expect(busy.received).toHaveLength(10);
+		expect(busy.received_more).toEqual([{ listing_title: "Reply Cafe", listing_url: expect.stringMatching(/^\/listings\/.+\/$/), shown: 10, total: 26 }]);
 
 		// Ana deletes her data: her public reply goes too, and the review stays.
 		await route("privacy", { action: "erase" }, { method: "POST", user: ana });
@@ -1446,7 +1472,24 @@ describe("an approval that fails part way", () => {
 
 	it("answers a click on a listing being approved right now", async () => {
 		const { rt, id, route } = await waitingOn((all) => all);
-		await rt.fixtures.plugin.storage("submissions", id, { listingId: id, title: "Fragile Cafe", status: "approving", createdAt: "2026-01-01T00:00:00.000Z" });
+		await rt.fixtures.plugin.storage("submissions", id, { listingId: id, title: "Fragile Cafe", status: "approving", claimedAt: new Date().toISOString(), createdAt: "2026-01-01T00:00:00.000Z" });
 		expect(JSON.stringify(await route("admin", { type: "block_action", action_id: "review", value: `reject:${id}`, page: "/queue" }))).toContain("Someone else is deciding this listing right now.");
+		expect(JSON.stringify(await route("admin", { type: "page_load", page: "/queue" }))).not.toContain("Fragile Cafe");
+	});
+
+	it("puts a row left approving by a cut-off decision back in the queue, the counts and Approve", async () => {
+		const { rt, id, route, approve } = await waitingOn((all) => all);
+		const cutOff = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+		await rt.fixtures.plugin.storage("submissions", id, { listingId: id, title: "Fragile Cafe", status: "approving", claimedAt: cutOff, createdAt: "2026-01-01T00:00:00.000Z" });
+		const queue = JSON.stringify(await route("admin", { type: "page_load", page: "/queue" }));
+		expect(queue).toContain("Fragile Cafe");
+		expect(queue).toContain('{"label":"Pending","value":1}');
+		expect(await rt.inspect.storage.get("submissions", id)).toMatchObject({ status: "pending" });
+		// Left over from 0.6.2, with no claim time at all: also stuck, also released, on the click itself.
+		await rt.fixtures.plugin.storage("submissions", id, { listingId: id, title: "Fragile Cafe", status: "approving", createdAt: "2026-01-01T00:00:00.000Z" });
+		// Two admins click at once: one publishes, the other is told it is handled.
+		const both = await Promise.all([approve(), approve()]);
+		expect(both.filter((text) => text.includes("Listing published.")).length).toBe(1);
+		expect(await rt.inspect.storage.get("submissions", id)).toMatchObject({ status: "approved" });
 	});
 });
