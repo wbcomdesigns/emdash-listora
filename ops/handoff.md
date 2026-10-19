@@ -1,15 +1,15 @@
-# Handoff (2026-10-14, after 0.5.0)
+# Handoff (2026-10-19, after 0.6.3)
 
 Read this first in a new session. Then `AGENTS.md`, `CONTRIBUTING.md`, and `docs/website/getting-started/new-machine.md`.
 
-This product is Free only. No Pro. Work is tracked as GitHub issues under the `0.3.0`, `0.4.0` and `Later` milestones. There is no Basecamp board. Do not add Compare, Needs, credits, Google Maps, lead forms, verification, photo reviews, or native-plugin features.
+This product is Free only. No Pro. Work is tracked as GitHub issues under version milestones and `Later`. There is no Basecamp board. Do not add Compare, Needs, credits, Google Maps, lead forms, verification, photo reviews, or native-plugin features.
 
 ## Where the code lives
 
 | Thing | Where |
 | --- | --- |
 | Plugin (source of truth) | this repo, `main` |
-| Registry | `@vapvarun.bsky.social/listora`. Latest published is `0.5.0` (2026-10-14) |
+| Registry | `@vapvarun.bsky.social/listora`. Latest published is `0.6.3` (2026-10-19) |
 | Lab host | sibling EmDash site `emdash-local` (not this git repo) |
 | WordPress Listora | scope and visual reference only. Do not copy PHP |
 
@@ -47,13 +47,13 @@ Override lab folder with `LISTORA_LAB`. After a kit change: edit `site-kit/`, th
 
 ## Next, in order
 
-0.5.0 is released: merged to `main`, tagged `v0.5.0`, published to the registry and on GitHub releases. `PLAN.md` holds every owner decision behind it and its corrections. `docs/qa/QA_CHECKLIST.md` says how it was walked and lists the known gaps honestly.
+0.6.3 is released: merged to `main`, tagged `v0.6.3`, published to the registry and on GitHub releases. It closed #77 to #81: stale "approving" claims (and photo "rejecting" claims) reopen after five minutes (`reopenStaleClaims` in `src/lib/util.ts`, guarded on status and claimedAt), the owner dashboard names the full review count, Settings names /listings/import/ before the site address is known, `readCursor` refuses a malformed cursor before storage sees it, and the account tabs wrap on a phone.
 
-1. `0.6.0` is the open release branch. Issue #59 moved visitor phrases into `site-kit/lib/listora-strings.ts`. Issue #55 puts Settings in tabs and keeps Load more on the lists. Issue #60 rewrites the owner guides for those screens. Do not merge, tag, or publish until the bundle PR is ready.
+1. Not yet walked for 0.6.3: 768, a keyboard pass, a subscriber walk, and a fresh-site registry install. Walk them on the shared lab (`~/code/emdash-lab-all`, port 4340) and on the Cloudflare test site (`~/code/emdash-plugin-testbed`) once its browser walk runs.
 2. Issue #28 (type editor, reminders, health check) stays under Later until the owner picks it.
-3. Worth proving when a site allows it, none of it blocking: a 100-row import and the scheduled tasks on a Cloudflare-hosted site, owner photos on R2, real mail delivery, and the kit on a live site once one runs EmDash 1.2 (never on a preview that shares the live database).
+3. Worth proving on the Cloudflare test site: a 100-row import, the scheduled tasks, owner photos on R2 (R2 must be enabled on the account first), real mail delivery.
 
-How 0.5.0 was checked, for the next release to copy: an independent agent walked the whole checklist in a browser and looked at every screenshot (it found 22 points, including that listing pages never showed the extra fields of their type), then an independent review read the new code (no security hole, six practical fixes). The builder fixed and re-checked each. The automatic security review that used to follow each push did not arrive for the last pushes, so do not wait on it: ask for an independent review.
+How a release is checked: an independent agent walks the checklist in a browser and looks at every screenshot, then an independent review reads `git diff <last tag>..HEAD`. On 0.6.3 that review found a reopened photo approval could add the photo twice; fixed before tagging.
 
 ## How a release is verified
 
