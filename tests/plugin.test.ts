@@ -1424,16 +1424,16 @@ describe("an approval that fails part way", () => {
 		return { rt, id: made.id, route, approve };
 	}
 
-	it("puts the row back in the queue when saving the expiry date throws", async () => {
-		// A site whose listings collection has no expires_at field: the update on approval throws.
+	it("approves and publishes when the listings type has no expiry field", async () => {
+		// A listings type made by hand without expires_at: nothing is written to a field it lacks,
+		// the listing is published, and Settings, Lifetime says listings do not expire.
 		const { rt, id, route, approve } = await waitingOn((all) => all.filter((field) => field.slug !== "expires_at"));
 		await rt.fixtures.plugin.setting("expiry_days", 30);
-		expect(await approve()).toContain("It is waiting in the queue again");
-		expect(await rt.inspect.storage.get("submissions", id)).toMatchObject({ status: "pending" });
-		const queue = JSON.stringify(await route("admin", { type: "page_load", page: "/queue" }));
-		expect(queue).toContain(`approve:${id}`);
-		expect(queue).toContain('{"label":"Pending","value":1}');
-		expect(((await rt.inspect.content.get("listings", id)) as { status: string }).status).toBe("draft");
+		expect(await approve()).toContain("Listing published.");
+		expect(await rt.inspect.storage.get("submissions", id)).toMatchObject({ status: "approved" });
+		expect(((await rt.inspect.content.get("listings", id)) as { status: string }).status).toBe("published");
+		const settings = JSON.stringify(await route("admin", { type: "page_load", page: "/settings" }));
+		expect(settings).toContain("Your listings type has no expires_at field, so listings do not expire.");
 	});
 
 	it("puts the row back when the listing cannot be published", async () => {

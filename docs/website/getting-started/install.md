@@ -55,6 +55,10 @@ Open `src/layouts/ListoraLayout.astro`. It wraps every Listora page in `src/layo
 
 Colours and fonts come from your site: the kit reads `--color-bg`, `--color-text`, `--color-surface`, `--color-border`, `--color-brand`, `--color-on-brand` and `--font-body` when they exist, and uses its own neutral set when they do not.
 
+## A listings type made by hand
+
+If you created the `listings` type in the admin instead of with the seed command, it may lack optional fields. Listora only writes the fields your type has. Without an `expires_at` field, listings never expire, and Admin, Listora, Settings, Lifetime says so. To add it, run the seed command again (it adds missing fields and skips the rest), or add a field with the slug `expires_at` in Content Types, Listings.
+
 ## Check four addresses
 
 Start the site and open each one:

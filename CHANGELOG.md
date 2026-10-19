@@ -17,6 +17,7 @@ Copy the kit again after you update, with the new tag (see the install guide). A
 - Fix      - An approval that fails part way puts the listing back in the queue with a plain message, instead of leaving it out of every list.
 - Improve  - A listing shows its reviews 20 at a time with More reviews, and its total and average always count every review.
 - Improve  - Settings has four short tabs that fit a phone (Listings, Lifetime, Photos, Email), with the import and export link under them.
+- Fix      - Listora writes only the fields your listings type has, so a type made by hand without an expiry field still approves and publishes, and Settings says listings do not expire there.
 - Fix      - An empty directory says it has no listings yet, instead of saying no listings match a search.
 - Fix      - Buttons and selected chips use the theme's brand colour pair in dark mode, so their text passes 4.5:1 on the EmDash blog template.
 - Security - A new listing stores every field cleaned and capped the same way an owner's edit does.

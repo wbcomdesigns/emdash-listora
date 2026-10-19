@@ -2,7 +2,7 @@ import type { PluginContext } from "emdash/plugin";
 
 import { seedRelatedStorage } from "./demo-seed";
 import { SAMPLE_LISTINGS } from "./sample-listings";
-import { hasListingsCollection } from "./listings-query";
+import { hasListingsCollection, knownFields } from "./listings-query";
 import { LISTINGS } from "./types";
 
 export { hasListingsCollection };
@@ -96,7 +96,7 @@ export async function loadSampleDirectory(
 			listing_status: "live",
 		};
 		try {
-			const item = await ctx.content.create(LISTINGS, data);
+			const item = await ctx.content.create(LISTINGS, await knownFields(ctx, data));
 			// A waiting sample stays a draft with a pending queue row that points at it.
 			if (!row.pending && ctx.content.getVersioned && ctx.content.publish) {
 				const versioned = await ctx.content.getVersioned(LISTINGS, item.id);

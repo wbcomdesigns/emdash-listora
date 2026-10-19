@@ -4,6 +4,8 @@ import {
 	backfillRatings,
 	expiryDays,
 	expiryFrom,
+	knownFields,
+	listingFields,
 	listingOwner,
 	listingRefs,
 	patchListing,
@@ -361,10 +363,12 @@ async function reviewListing(
 	};
 	try {
 		// A new listing gets its date at the moment it is approved.
-		const days = await expiryDays(ctx);
+		// Only when the listings type has an expires_at field; without it listings never expire
+		// (Settings, Lifetime says so) and the approval still publishes.
+		const days = (await listingFields(ctx))?.has("expires_at") === false ? 0 : await expiryDays(ctx);
 		const draft = days ? await ctx.content?.get?.("listings", listingId).catch(() => null) : null;
 		if (draft && ctx.content?.update && !asString(asRecord(draft.data).expires_at)) {
-			await ctx.content.update("listings", listingId, { ...draft.data, expires_at: expiryFrom(days) });
+			await ctx.content.update("listings", listingId, await knownFields(ctx, { ...draft.data, expires_at: expiryFrom(days) }));
 		}
 		if (!(await publishNow(ctx, listingId))) {
 			return release("Could not publish. Open the listing in admin and publish it there.");
@@ -642,6 +646,7 @@ export async function renderSettings(
 	extra?: Pick<BlockResponse, "toast">,
 ): Promise<BlockResponse> {
 	const settings = await loadSettings(ctx);
+	const noExpiryField = (await listingFields(ctx))?.has("expires_at") === false;
 	const importUrl = /^https?:\/\//.test(asString(ctx.site?.url))
 		? new URL("/listings/import/", asString(ctx.site.url)).href
 		: "";
@@ -686,6 +691,9 @@ export async function renderSettings(
 					{
 						label: "Lifetime",
 						blocks: [
+							...(noExpiryField
+								? [{ type: "banner", title: "Listings do not expire on this site", description: "Your listings type has no expires_at field, so listings do not expire. The install guide shows how to add it.", variant: "default" }]
+								: []),
 							{ type: "context", text: "0 means a listing never expires. Above 0, it leaves the directory after that many days and its owner can renew it." },
 							{
 								type: "form",

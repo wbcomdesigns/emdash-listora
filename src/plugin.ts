@@ -9,6 +9,7 @@ import {
 	expiryDays,
 	expiryFrom,
 	isPublicListing,
+	knownFields,
 	listingOwner,
 	listPublished,
 	paginate,
@@ -542,7 +543,7 @@ const plugin: SandboxedPlugin = {
 					};
 				}
 
-				const created = await ctx.content.create(LISTINGS, {
+				const created = await ctx.content.create(LISTINGS, await knownFields(ctx, {
 					title: parsed.data.title,
 					excerpt: parsed.data.excerpt,
 					description: parsed.data.description,
@@ -569,7 +570,7 @@ const plugin: SandboxedPlugin = {
 					event_end: parsed.data.event_end,
 					type_fields: JSON.stringify(parsed.data.type_fields),
 					listing_status: "live",
-				});
+				}));
 
 				// Moderation off means the listing goes live now, not into a queue nobody reads.
 				const published = !requireModeration && (await publishNow(ctx, created.id));
@@ -1209,7 +1210,7 @@ const plugin: SandboxedPlugin = {
 				for (const item of good) {
 					// Each row on its own, so one refused row does not stop the rest.
 					try {
-						const created = await ctx.content.create(LISTINGS, {
+						const created = await ctx.content.create(LISTINGS, await knownFields(ctx, {
 							title: item.data.title,
 							excerpt: item.data.excerpt,
 							description: item.data.description,
@@ -1226,7 +1227,7 @@ const plugin: SandboxedPlugin = {
 							lng: item.data.lng === "" ? null : Number(item.data.lng),
 							is_claimed: false,
 							listing_status: "live",
-						});
+						}));
 						await ctx.storage.submissions.put(created.id, {
 							listingId: created.id,
 							title: item.data.title,

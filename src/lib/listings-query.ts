@@ -39,6 +39,30 @@ export async function hasListingsCollection(ctx: PluginContext): Promise<boolean
 	}
 }
 
+// The listings type's field names, read once per request. A site may have built its type by hand
+// without some optional fields (expires_at, listing_status, gallery...). Writing a field the type
+// does not have makes EmDash reject the write inside its bridge, where the rejection goes
+// unanswered until workerd cancels the request as hung, so every write is filtered first.
+const fieldCache = new WeakMap<PluginContext, Promise<Set<string> | null>>();
+export function listingFields(ctx: PluginContext): Promise<Set<string> | null> {
+	let found = fieldCache.get(ctx);
+	if (!found) {
+		found = (async () => {
+			const collection = await ctx.schema?.getCollection(LISTINGS).catch(() => null);
+			return collection ? new Set(collection.fields.map((field) => field.slug)) : null;
+		})();
+		fieldCache.set(ctx, found);
+	}
+	return found;
+}
+
+/** Only the fields the listings type has. Unknown schema: the data as it is. */
+export async function knownFields(ctx: PluginContext, data: Record<string, unknown>): Promise<Record<string, unknown>> {
+	const fields = await listingFields(ctx);
+	if (!fields) return data;
+	return Object.fromEntries(Object.entries(data).filter(([key]) => fields.has(key)));
+}
+
 export async function listPublished(ctx: PluginContext): Promise<ListingCard[]> {
 	// A site that has not run the seed yet has no listings table: asking for its rows makes the
 	// host log a database error, so check first.
@@ -137,7 +161,7 @@ export async function patchListing(
 	if (!listing || !ctx.content?.update) return { state: "missing" };
 	if ((listing as { draftRevisionId?: string | null }).draftRevisionId) return { state: "busy" };
 	const data = { ...listing.data, ...patch };
-	await ctx.content.update(LISTINGS, id, data);
+	await ctx.content.update(LISTINGS, id, await knownFields(ctx, data));
 	if (listing.status === "published") await publishNow(ctx, id);
 	return { state: "done", data };
 }
