@@ -48,6 +48,20 @@ describe("visitor wording", () => {
 		}
 	});
 
+	it("imports every wording helper a page script calls into that script", () => {
+		// The frontmatter and each <script> block of an .astro page import separately: a helper
+		// imported only in the frontmatter is undefined in the browser and stops the page script.
+		const helpers = [...stringsFile.matchAll(/export function (\w+)/g)].map((match) => match[1]);
+		for (const page of [account, calendar, directory, importer, listing, submit, block]) {
+			for (const script of page.match(/<script\b(?:(?!\/>)[^>])*>[\s\S]*?<\/script>/g) ?? []) {
+				const imported = new Set([...script.matchAll(/import \{([^}]*)\} from "[^"]*listora-strings"/g)].flatMap((match) => match[1].split(",").map((name) => name.trim())));
+				for (const helper of helpers) {
+					if (new RegExp(`\\b${helper}\\(`).test(script)) expect(imported, helper).toContain(helper);
+				}
+			}
+		}
+	});
+
 	it("turns error codes into plain sentences", () => {
 		expect(phrase("SIGN_IN_REQUIRED")).toBe("Sign in to continue.");
 		expect(phrase("RATE_LIMITED")).toBe("Too many requests. Try again in an hour.");

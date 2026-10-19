@@ -1726,6 +1726,11 @@ textarea.listora-input {
 	margin-block: var(--listora-space-4) 0;
 }
 
+/* Under Reviews of your listings: a listing has more reviews than the dashboard shows. */
+.listora-dash-more {
+	margin-block: var(--listora-space-3) var(--listora-space-6);
+}
+
 .listora-reviews + .listora-form-section {
 	margin-block-start: var(--listora-space-6);
 }

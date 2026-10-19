@@ -2,7 +2,7 @@
 import { getSiteSettings } from "emdash";
 import Layout from "../../layouts/ListoraLayout.astro";
 import { siteZone } from "../../lib/listora";
-import { newestReviewsOf, signedInAs, S } from "../../lib/listora-strings";
+import { signedInAs, S } from "../../lib/listora-strings";
 import "../../styles/listora-ui.css";
 
 const tab = Astro.url.searchParams.get("tab") || "overview";
@@ -99,7 +99,7 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 
 <script>
 	import { api, day, esc, uploadPhoto } from "../../lib/listora";
-	import { expiresOn, freshCount, outOf5, photoName, photoUsage, renewedUntil, S } from "../../lib/listora-strings";
+	import { expiresOn, freshCount, newestReviewsOf, outOf5, photoName, photoUsage, renewedUntil, S } from "../../lib/listora-strings";
 
 	const tab = document.getElementById("dash-main")?.getAttribute("data-tab") || "overview";
 	const panels: Record<string, string> = {
@@ -343,7 +343,7 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 			.map((item) => {
 				const title = esc(item.listing_title || S.account.aListing);
 				const named = item.listing_url ? `<a href="${esc(item.listing_url)}">${title}</a>` : title;
-				return `<p class="listora-meta listora-dash-more">${esc(newestReviewsOf(Number(item.shown) || 0, Number(item.total) || 0))} ${named}. ${item.listing_url ? esc(S.account.allOnListing) : ""}</p>`;
+				return `<p class="listora-helper listora-dash-more">${esc(newestReviewsOf(Number(item.shown) || 0, Number(item.total) || 0))} ${named}. ${item.listing_url ? esc(S.account.allOnListing) : ""}</p>`;
 			})
 			.join("");
 		if (more) document.getElementById("dash-received")?.insertAdjacentHTML("beforeend", more);

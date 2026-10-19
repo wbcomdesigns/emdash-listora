@@ -4,11 +4,11 @@
 
 One living list of flow-level cases for Listora on EmDash. Walk all of it before every release. When you add or fix behaviour, add or change its case in the same pull request. There are no per-release QA files.
 
-Last walk: 2026-10-19, version 0.6.2, on EmDash 1.3.1 (blog template, Node), as guest and admin, with the 0.6.1 engine and kit mixed both ways.
+Last walk: 2026-10-19, version 0.6.3 (branch, before release), on EmDash 1.3.1 (blog template, Node).
 
-How it was walked: the builder walked the cases 0.6.2 changed in a browser on a fresh 1.3.1 blog site and a 1.3.1 lab, at 1440, 768 and 390 in light and dark, measuring contrast and widths with DOM queries, and two independent checks read the pull request and walked it. Covered by automated tests only: A-62 to A-64 (rows past 100, a failed approval), A-12, A-17, A-20, A-29, A-13, A-14, A-32, A-33, A-36 and A-37.
+What was walked in a browser for 0.6.3, by the builder only: on the plugin's own 1.3.1 lab with the branch engine and kit, as admin, the queue (a row left approving by a cut-off approval back in the queue and counts, then approved), Settings with and without a known site address, the account Reviews tab with 28 reviews on one listing, the account tabs, and More reviews on a listing; as a guest, the account sign-in state and More reviews. Widths 1440 and 390 (390 inside a 390-wide frame), light, and dark by applying the theme's dark rules (no system setting switch was available), plus the account in right-to-left. On the shared 1.3.1 lab with the registry 0.6.2 engine and the 0.6.3 kit: a listing's reviews and the guest account at 390, light and dark. Covered by automated tests only: two admins approving at once, the fresh-claim refusal, every cursor shape, and the cases listed as Auto.
 
-Not done in 0.6.2: a registry install on 1.3.1 (done on 1.3.0), Cloudflare hosting, a full subscriber walk of every case, a real screen reader, and a live site.
+Not done in 0.6.3: an independent check, a registry install of 0.6.3, a subscriber walk, 768, a real screen reader, Cloudflare hosting, and a live site.
 
 ## Setup
 
@@ -100,7 +100,7 @@ Three roles, always in this order: **guest**, **member** (subscriber role), **ad
 | M-26 | Change the title and phone, send | "Your changes are waiting for approval." My listings shows "Changes waiting for approval" and "Edit again". The public page is unchanged | owner edits a live listing |
 | M-27 | Send the form without changing anything | "Nothing was different, so there is nothing to approve." | same test |
 | M-28 | Open `/listings/submit/?edit=` with someone else's listing or a made-up id | No form. "That listing is not available to edit." | same test |
-| M-29 | Reviews tab as a listing owner | "Reviews of your listings" lists published reviews of your listings with the reviewer's name, stars and date. "Reviews you wrote" sits below |
+| M-29 | Reviews tab as a listing owner | "Reviews of your listings" lists published reviews of your listings with the reviewer's name, stars and date. "Reviews you wrote" sits below. A listing with more than 10 published reviews shows its newest 10 and a line "Showing the newest 10 of N reviews of <listing>", linking to the listing | dashboard names the full count past 10 |
 | M-30 | Press Reply, write a reply, send | "Waiting for approval" with your text under the review. The button becomes "Change your reply". The public page does not show it yet | owner reply to a review |
 | M-31 | Block the request and send a reply | An error under the form, and the button works again |
 | M-32 | Call `reply` for a review on someone else's listing, a made-up id, or a review that is not published | The same "not available" answer | same test |
@@ -115,7 +115,7 @@ Three roles, always in this order: **guest**, **member** (subscriber role), **ad
 | M-41 | Send `submit` without the confirm tick, with a listing type that does not exist, or with a website that is not a web address | Each is refused with a plain reason. On the form, a bad web address is caught on the Details step | owner reply to a review |
 | M-42 | Review a listing you own | Refused: "You cannot review your own listing." | owner reply to a review |
 | M-43 | Open the add-a-listing form | Country and State start empty. The preview shows the type by name. After Continue, focus is on the new step's heading |
-| M-13 | Dashboard at 390 | Tabs are one sideways-scrolling row. Content starts above the fold | |
+| M-13 | Dashboard at 390 | Tabs wrap onto a second row and every tab is in view; the overview counts wrap too. Nothing runs past the screen edge | |
 
 ## Admin
 
@@ -180,10 +180,11 @@ Three roles, always in this order: **guest**, **member** (subscriber role), **ad
 | A-59 | Open the Listings queue in two tabs. Approve a listing in one, then Reject it in the other (and the other way round) | The stale tab says "This listing was already approved." (or rejected). The listing stays as the first decision left it | two admin tabs deciding on one listing |
 | A-60 | A member listing with a 200-letter title with no spaces | The queue table wraps the title; at 1440 the Decision column stays on screen. At 768 and 390 the table scrolls sideways inside its own box (EmDash table) | |
 | A-61 | As a guest, call the `health` route | Plugin id, version and whether the listings collection exists. No waiting count. Nothing is written | writes nothing |
-| A-62 | A directory with more than 100 rated listings, a listing with more than 100 reviews, a member with more than 100 saved listings | Every card has its rating; the listing shows 20 reviews with More reviews and the full count and average; the account counts every row. Past 5000 rows the account says "Showing the first 5000 of each list." | more than 100 stored rows |
+| A-62 | A directory with more than 100 rated listings, a listing with more than 100 reviews, a member with more than 100 saved listings | Every card has its rating; the listing shows 20 reviews with More reviews (with space between it and the Write a review form) and the full count and average; a damaged cursor on the reviews route gets "Those reviews could not be loaded."; the account counts every row. Past 5000 rows the account says "Showing the first 5000 of each list." | more than 100 stored rows |
 | A-63 | More than 100 listings waiting | The queue says "Showing 25 of N" with the real N and pages through all of them; the CSV check knows every waiting listing | more than 100 stored rows |
-| A-64 | An approval that fails part way (the listing cannot be saved or published) | "Could not publish that listing. It is waiting in the queue again." The row is still in the queue and counted; a click on a listing being approved right now says "Someone else is deciding this listing right now."; the member's account shows "Awaiting approval", never a raw word | an approval that fails part way |
+| A-64 | An approval that fails part way (the listing cannot be saved or published) | "Could not publish that listing. It is waiting in the queue again." The row is still in the queue and counted; a click on a listing being approved right now says "Someone else is deciding this listing right now."; a row left "approving" for more than five minutes (the request was cut off) is back in the queue and the counts, and Approve publishes it; the member's account shows "Awaiting approval", never a raw word | an approval that fails part way; a row left approving by a cut-off decision |
 | A-48 | A file over 100 rows, an empty file, a file with no title column | A plain message, nothing imported |
+| A-65 | Settings on a fresh site before its first restart (no site address yet) | The Import and export line names /listings/import/; after a restart it has an Open import and export link | saves each group |
 | A-12 | Get started on a site with no listings collection | Clear "create the collection first" message, no crash | tells the owner to create the listings collection first |
 
 ## Presentation, every screen
