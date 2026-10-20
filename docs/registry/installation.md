@@ -3,7 +3,7 @@
 **1. Your site needs a sandbox runner.** Registry plugins run in a sandbox. Until the site has one, Admin, Plugins shows "No plugins configured" and there is no Registry in the menu.
 
 - **Node:** in your site, run `npm install @emdash-cms/sandbox-workerd workerd`, then add `sandboxRunner: "@emdash-cms/sandbox-workerd/sandbox",` inside `emdash({ ... })` in `astro.config.mjs`.
-- **Cloudflare: not supported yet.** On Cloudflare Workers EmDash gives each plugin call 10 requests to the site, and several of this plugin's pages and actions need more, so they fail. A release that fits is in progress. Node sites are not affected.
+- **Cloudflare: not supported yet.** On Cloudflare Workers EmDash gives each plugin call 10 requests to the site. From 0.7.0 every page, action and task of this plugin fits in that limit by its tests, but it has not yet passed a walk on a Cloudflare site, so treat Cloudflare as not supported until it does. Node sites are not affected.
 
 Stop the dev server and start it again. **Registry** now shows in the admin menu.
 
@@ -21,7 +21,7 @@ Checked on EmDash 1.3.1 with the `blog` template on Node.
    ```bash
    kit="$(mktemp -d)" &&
      git clone --depth 1 \
-       --branch v0.6.3 \
+       --branch v0.7.0 \
        https://github.com/wbcomdesigns/emdash-listora \
        "$kit/emdash-listora" &&
      "$kit/emdash-listora/scripts/add-to-site.sh" .
@@ -33,4 +33,4 @@ Checked on EmDash 1.3.1 with the `blog` template on Node.
 
 After each update, rerun step 2 with the new tag.
 
-Full guide: https://github.com/wbcomdesigns/emdash-listora/blob/v0.6.3/docs/website/getting-started/install.md
+Full guide: https://github.com/wbcomdesigns/emdash-listora/blob/v0.7.0/docs/website/getting-started/install.md

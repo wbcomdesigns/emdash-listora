@@ -4,11 +4,7 @@
 
 One living list of flow-level cases for Listora on EmDash. Walk all of it before every release. When you add or fix behaviour, add or change its case in the same pull request. There are no per-release QA files.
 
-Last walk: 2026-10-19, version 0.6.3 (branch, before release), on EmDash 1.3.1 (blog template, Node).
-
-What was walked in a browser for 0.6.3, by the builder only: on the plugin's own 1.3.1 lab with the branch engine and kit, as admin, the queue (a row left approving by a cut-off approval back in the queue and counts, then approved), Settings with and without a known site address, the account Reviews tab with 28 reviews on one listing, the account tabs, and More reviews on a listing; as a guest, the account sign-in state and More reviews. Widths 1440 and 390 (390 inside a 390-wide frame), light, and dark by applying the theme's dark rules (no system setting switch was available), plus the account in right-to-left. On the shared 1.3.1 lab with the registry 0.6.2 engine and the 0.6.3 kit: a listing's reviews and the guest account at 390, light and dark. Covered by automated tests only: two admins approving at once, the fresh-claim refusal, every cursor shape, and the cases listed as Auto.
-
-Not done in 0.6.3: an independent check, a registry install of 0.6.3, a subscriber walk, 768, a real screen reader, Cloudflare hosting, and a live site.
+Last walk: none yet for 0.7.0 (branch `0.7.0`, built 2026-10-20 on EmDash 1.3.1). The builder ran the automated tests only: every entry point's request count (tests/bridge-budget.test.ts, busy 500-listing seed and a 2000-listing directory), the race tests (tests/races.test.ts) and the security review fixes (tests/review-0-7-0.test.ts). Nothing was walked in a browser. Before release: an independent walk of this whole list on the Node lab and on the Cloudflare test site, with the registry install, plus the Cloudflare cases below.
 
 ## Setup
 
@@ -66,7 +62,10 @@ Three roles, always in this order: **guest**, **member** (subscriber role), **ad
 | G-36 | View source of an event listing | The Event block has `startDate`, `endDate` when set, and `location` with the address |
 | G-37 | A listing with a street address and no map position | A Location card with the address, and no empty map |
 | G-38 | `/listings/` on a site with no listings yet | "No listings yet" and "This directory is empty. Be the first to add a listing." with Add a listing. No admin wording. A search that finds nothing still says "No listings match" | |
-| G-39 | Guest console on `/listings/` and a listing | One `401` from the `favorites` check on the first visit, nothing else. Expected and documented | |
+| G-39 | Guest console on `/listings/` and a listing | At most one `401` (the `favorites` check) on the first visit, none on the next pages for half an hour | |
+| G-40 | Guest opens a listing's Reviews tab and its claim card | Sign in to write a review, and Sign in to claim this listing, in place of the forms. No form to fill in first | |
+| G-41 | Guest presses More reviews with the keyboard (Enter) | The next reviews load and focus moves to the first new one, not the page body | |
+| G-42 | Guest sends a message on a host that passes no visitor address (Node, no trustedProxyHeaders) | "This site cannot take messages from visitors yet..." Nothing stored | GUEST_UNAVAILABLE |
 | G-12 | Request `import`, `dashboard`, `favorites`, `privacy` routes directly | 401 each | prove: guests refused |
 
 ## Member (subscriber role)
@@ -115,6 +114,11 @@ Three roles, always in this order: **guest**, **member** (subscriber role), **ad
 | M-41 | Send `submit` without the confirm tick, with a listing type that does not exist, or with a website that is not a web address | Each is refused with a plain reason. On the form, a bad web address is caught on the Details step | owner reply to a review |
 | M-42 | Review a listing you own | Refused: "You cannot review your own listing." | owner reply to a review |
 | M-43 | Open the add-a-listing form | Country and State start empty. The preview shows the type by name. After Continue, focus is on the new step's heading |
+| M-14 | The member who added a listing opens it | You manage this listing, with Open my listings, in place of the review form and the claim card. No Claim button. Another member sees This listing is managed by its owner | #83 |
+| M-15 | Account tabs with a screen reader or the accessibility tree | The open tab has aria-current="page" | |
+| M-16 | Account, Profile tab, at 390 and 1440 | Space between the Profile and privacy card and the Delete my data card | |
+| M-17 | Account, Reviews tab, with more than 20 reviews of your listings | More reviews loads the next 20 under the list; focus moves to the first new one | |
+| M-18 | Delete my data with a lot of data (dozens of reviews and saved listings) | Deleting your data..., then the done message once; nothing left over | privacy erase |
 | M-13 | Dashboard at 390 | Tabs wrap onto a second row and every tab is in view; the overview counts wrap too. Nothing runs past the screen edge | |
 
 ## Admin
@@ -185,7 +189,30 @@ Three roles, always in this order: **guest**, **member** (subscriber role), **ad
 | A-64 | An approval that fails part way (the listing cannot be saved or published) | "Could not publish that listing. It is waiting in the queue again." The row is still in the queue and counted; a click on a listing being approved right now says "Someone else is deciding this listing right now."; a row left "approving" for more than five minutes (the request was cut off) is back in the queue and the counts, and Approve publishes it; the member's account shows "Awaiting approval", never a raw word | an approval that fails part way; a row left approving by a cut-off decision |
 | A-48 | A file over 100 rows, an empty file, a file with no title column | A plain message, nothing imported |
 | A-65 | Settings on a fresh site before its first restart (no site address yet) | The Import and export line names /listings/import/; after a restart it has an Open import and export link | saves each group |
+| A-66 | Admin, Listora, Listing changes and Listing photos | Each change shows its fields as Now and After approval; each photo shows the picture. Approve and Reject work and the page stays where it was | admin edit decisions, admin photo decisions |
+| A-67 | Any admin list with more than 25 items | Next page in the table, then Previous page, back to the top. A decision keeps the page | shows 25 at a time, pages on and back |
+| A-68 | Update a 0.6.3 site to 0.7.0 and open any Listora page | The Bringing your data over banner, then (minutes later) the banner is gone; the directory, ratings and waiting notices are all there | upgrade from 0.6.3 |
 | A-12 | Get started on a site with no listings collection | Clear "create the collection first" message, no crash | tells the owner to create the listings collection first |
+
+## Cloudflare (0.7.0)
+
+On the Cloudflare test site (`~/code/emdash-plugin-testbed`), registry install, kit from the tag. Every case must end without "Too many subrequests" in the Worker logs and without Something went wrong on the page.
+
+| ID | Steps | Expected | Auto |
+| --- | --- | --- | --- |
+| CF-1 | Update 0.6.3 to 0.7.0 with listings, reviews and waiting messages in place; open Listora's admin pages | The data upgrade runs a step a minute and finishes; no admin page fails meanwhile | cron upgrade (each step) |
+| CF-2 | The EmDash dashboard card | Listora: waiting for you shows four counts (the 0.6.3 walk showed Plugin error (400)) | admin widget waiting |
+| CF-3 | As a member, add a listing with a category, moderation on and off | One draft and one queue row each; live at once with moderation off; nothing half-saved | route submit |
+| CF-4 | As a member, write a review on a listing with many reviews; rewrite it | Saved and pending; the rating drops the rewritten review at once | route review |
+| CF-5 | As the owner, add a photo, remove it, add another; as admin approve it | No file left behind after any failure; the gallery shows the approved photo once | route photo, admin photo_mod |
+| CF-6 | Owner account: every tab, More reviews, reply to a review | Each tab loads; the reply waits for approval | route dashboard, route reply |
+| CF-7 | Admin: approve and reject on every page (queue, changes, photos, reviews, replies, claims, messages) | Each decision lands and the page redraws | admin decisions |
+| CF-8 | Import a 100-row file, then export | 100 drafts in the queue; the export holds every published listing | route import, route export |
+| CF-9 | A guest message, then wait for the hourly notice | One notice to the owner's account address; the message shows in their account | cron notify |
+| CF-10 | Expiry on with a listing past its date and one inside its last seven days | The next daily run expires one and warns the other's owner | cron expire |
+| CF-11 | Load sample directory on a fresh site | Loading, then 14 listings with reviews a few minutes later | cron sample |
+| CF-12 | Delete my data for a member with reviews and saved listings | Done after a few automatic parts; the ratings of their reviewed listings moved | route privacy (erase, each step) |
+| CF-13 | Owner photos on R2 | The uploaded photo shows in the admin and, approved, on the listing | |
 
 ## Presentation, every screen
 
@@ -205,13 +232,15 @@ Screens: archive, detail, submit, calendar, account, and the three admin pages. 
 
 ## Known gaps (do not fail a release on these, do not hide them)
 
-- The directory reads at most 500 listings. Public reads are cached for 30 seconds, so a change can take that long to show
+- The plugin's directory routes read the directory index, which follows each listing through the content hooks; a listing whose hook did not run is put right by the hourly sweep, so it can take up to a few hours to show in those routes. The kit's own directory page reads the listings directly (the newest 500). Public reads are cached for 30 seconds, so a change can take that long to show
+- Text, place, feature and distance filters on the plugin's directory routes read up to 600 listings per request and hand back a cursor; a rare text on a large directory takes several requests. Each request carries whole listing cards, so a directory of very long descriptions is the first place to watch Cloudflare's 50 ms CPU limit
 - The scheduled tasks (hourly owner notice, daily expiry and warning) are proven by automated tests, not by waiting for a real schedule. No real mail provider has been tested: the lab prints mail
 - Owner photos are proven on local storage only, not on Cloudflare R2
 - A photo waiting for approval sits in the media library. Its address is never shown to anyone, but the file can be fetched by someone who has that address
 - EmDash's own admin tables do not fit a phone: at 390 the Decision column is off screen and has to be scrolled to. A plugin cannot change that screen
 - The fields in the "Insert Listings" dialog are drawn by EmDash's editor and have no accessible names. A plugin cannot change that dialog
-- The contact limit is per visitor IP. On a host that passes no IP, every visitor shares one limit of 8 messages an hour
+- The contact limit is per visitor address (IPv6 by its /64). On a host that passes no address, guest messages are refused with a plain message
+- Owner notices and expiry warnings go to the address on the listing's submission row (the member's account address when they added or claimed it), or the one their account page last kept
 - Rewriting a published review takes it off the page until it is approved again
 - The spreadsheet export carries the main details of each listing (14 columns). Categories, hours, photos and the extra fields of each type are not in it, so it is not a full backup
 - An admin list holds up to 300 waiting items, 25 at a time with Load more

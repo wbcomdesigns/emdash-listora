@@ -1,8 +1,22 @@
-# Handoff (2026-10-19, after 0.6.3)
+# Handoff (2026-10-20, 0.7.0 built, not released)
 
 Read this first in a new session. Then `AGENTS.md`, `CONTRIBUTING.md`, and `docs/website/getting-started/new-machine.md`.
 
 This product is Free only. No Pro. Work is tracked as GitHub issues under version milestones and `Later`. There is no Basecamp board. Do not add Compare, Needs, credits, Google Maps, lead forms, verification, photo reviews, or native-plugin features.
+
+## Now: 0.7.0 (branch `0.7.0`, PR open, milestone 0.7.0: #85, #83, #84)
+
+0.7.0 fits every entry point in Cloudflare's 10 requests per plugin call. Built and tested; not walked in a browser, not merged, not tagged, not published.
+
+- Budget: `tests/bridge-budget.test.ts` measures every route, admin page and decision, hook and scheduled task (each step of a stepped one) on a 0.6.3-shaped busy seed and a 2000-listing directory. MEASURED is pinned, KNOWN_OVER is empty, the worst entry is 9. Re-measure with `VITE_BRIDGE_RECORD=1 npx vitest run tests/bridge-budget.test.ts`.
+- Races: `tests/races.test.ts`. Security review fixes: `tests/review-0-7-0.test.ts`.
+- Design: `src/lib/directory.ts` (the stored index), `src/lib/ratings.ts` (counters by increment, queue during the upgrade), `src/lib/upgrade.ts` (stepped 0.6.x upgrade), `src/lib/settings.ts` (one read), `src/lib/rates.ts`, `src/lib/refs.ts`, `src/tasks.ts` (scheduled work), `src/member.ts`, `src/public.ts`, `src/transfer.ts`, `src/admin.ts`.
+- Owner decision open on #83: does a listing a member adds count as claimed? `SUBMITTER_IS_OWNER` in `src/lib/types.ts`, true (recommended) by default.
+
+Next, in order:
+1. Independent Sonnet walk of `docs/qa/QA_CHECKLIST.md` on the shared Node lab (`~/code/emdash-lab-all`, 4340) and the Cloudflare cases (CF-1 to CF-13) on `~/code/emdash-plugin-testbed`, registry install from a tag, kit from the tag. Update the 0.6.3 site to 0.7.0 there first (CF-1).
+2. Independent Opus review of `git diff v0.6.3..0.7.0`, and the automatic security review of the final commit.
+3. Only after both: drop "Cloudflare: not supported yet" from the install texts, merge, tag, publish (owner says publish).
 
 ## Where the code lives
 
@@ -73,11 +87,11 @@ Every case in `docs/qa/QA_CHECKLIST.md` is run in a browser as guest, subscriber
 | Item | Note |
 | --- | --- |
 | Live-site preview | Kit is proven on a clean second site (`portfolio` template). Not yet proven on a preview deploy of a live fleet site (Cloudflare, EmDash 1.1) |
-| Directory size | Reads at most 500 listings and filters in memory |
+| Directory size | Plugin routes read the stored directory index a page at a time (proven at 2000 listings within 9 calls). The kit's own directory page still reads the newest 500 listings itself (site code, no request limit). Long descriptions make each index page heavy: watch Cloudflare's 50 ms CPU limit on text searches |
 | Contact | Stored, shown in admin Messages and in the owner's account. Nothing is mailed from the visitor's request. The hourly `notify` task (`notifyOwners`) sends each owner one notice to their account address, with no visitor text. Owner = the member on the listing's approved submission row (`listingOwner`); approving a claim moves that row. The address lives only in kv `member-email:<id>`, refreshed on member routes, deleted on erase |
 | Permissions | The next release adds `email:send`, `taxonomies:read`, `taxonomies:write`. That widens what the plugin may do, so decide the version number with the owner |
 | Categories | Filtering by category is done by the kit page, not the search route, so a search inside a category reloads the page |
-| Expiry | Off by default (0 days). The daily task is scheduled when the owner saves a number above 0. 50 listings per run |
+| Expiry | Off by default (0 days). Listora keeps the date on the directory index row (`exp`), set at approval (via the submission row and the content hook) and by Renew. The daily task expires two listings per run and carries on a minute later while work is left |
 | Photos | `photo` route (member, byte body, 5 MB) uploads to the media library and stores a `photos` row with a random id. The member is never given the file address or media id of a waiting photo. The admin approves from the Listings queue, which appends to the listing's `gallery` repeater field (and sets the cover if empty). Approval and removal both claim the row with a guarded update first. One upload at a time per listing (kv lock). Needs the `gallery` field: a plugin cannot add fields, so Settings shows how when it is missing |
 | Owner replies | `reply` route writes `reply_draft` on the review with a guarded update; the admin approves from the Reviews page; `owner_reply` is what the public sees. A reviewer rewriting their review clears the reply |
 | Showing member text to the admin | Use a `code` block (exact text, never shortened, never read as formatting). `src/lib/edits.ts` is the one place that decides what an edit changes: the screen and the approval both call `editPatch` |

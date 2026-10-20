@@ -2,6 +2,30 @@
 
 Versions match `package.json`, the git tag, and the EmDash registry release. Newest first. Never publish a version that is not on `origin/main`.
 
+## [0.7.0] - 2026-10-20
+
+Every page, action, hook and scheduled task now fits Cloudflare's limit of 10 requests per plugin call, on a directory of 2000 listings. Copy the kit again after you update, with the new tag. A 0.6.x site's data comes over by itself, a step a minute, after the update.
+
+- New      - Listing changes and Listing photos admin pages, so owner edits and owner photos are decided on their own page.
+- New      - The admin lists page with Next and Previous, 25 at a time, from any length of list.
+- Improve  - The directory routes read a directory index Listora keeps in plugin storage, a page per request with a cursor, and say when the index is being built.
+- Improve  - Ratings move in the database with each review decision, so the count and average stay exact on every listing.
+- Improve  - The account page loads one tab at a time, with More for reviews of your listings and for messages.
+- Improve  - Export downloads every published listing, and import sends a file a few rows at a time.
+- Improve  - Owner notices, expiry, the sample directory and Delete my data run in small steps that carry on by themselves.
+- Improve  - Listora keeps each listing's expiry date itself, so a listings type without an expires_at field still expires listings.
+- Fix      - The listing owner sees You manage this listing instead of Claim and Write a review, and the claim route refuses the owner.
+- Fix      - A listing a member adds counts as theirs, so it shows as claimed and nobody else can claim it (one setting in the code, SUBMITTER_IS_OWNER).
+- Fix      - Guests see Sign in in place of the review and claim forms, and a guest's browser no longer asks for saved listings on every page.
+- Fix      - After More reviews, keyboard focus moves to the first new review.
+- Fix      - The open account tab is marked for screen readers, and the Profile and Delete my data cards no longer touch.
+- Fix      - A failed directory read answers with an error instead of an empty list.
+- Fix      - A new listing's queue row is written right after the listing, and a photo is uploaded only when the rest of the request fits.
+- Security - Guest messages are limited per visitor address however it is written, and refused when the host passes on no address.
+- Dev      - Owner changes and photos approve from their own pages; a decision cut off part way comes back on the next click instead of a timer.
+- Dev      - Routes listings and search page by cursor, dashboard takes a tab, privacy erase answers MORE until done (see the routes guide).
+- Dev      - Tested against EmDash 1.3.1, with every entry point's request count pinned in tests/bridge-budget.test.ts.
+
 ## [0.6.3] - 2026-10-19
 
 Copy the kit again after you update, with the new tag (see the install guide).
