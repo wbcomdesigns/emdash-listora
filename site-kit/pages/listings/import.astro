@@ -55,7 +55,7 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 
 <script>
 	import { api, esc, listoraFetch, notify } from "../../lib/listora";
-	import { importDrafts, importedDrafts, rowDup, rowLine, rowsCannot, rowsReady, rowsSkipped, S } from "../../lib/listora-strings";
+	import { exportProgress, importDrafts, importedDrafts, importProgress, rowDup, rowLine, rowsCannot, rowsReady, rowsSkipped, S } from "../../lib/listora-strings";
 
 	type Bad = { line: number; title: string; reason: string };
 	type Dup = { line: number; title: string; city: string };
@@ -66,19 +66,33 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 		exportBtn.textContent = S.transfer.preparing;
 		try {
 			// A plain link cannot be used: the site only answers signed-in requests that carry this header.
-			const response = await listoraFetch("export", { credentials: "same-origin", headers: { "X-EmDash-Request": "1" } });
-			if (!response.ok) throw new Error();
-			const blob = await response.blob();
+			// The site sends a large directory in parts (the cursor for the next is in a header); only
+			// the first part has the column names. An engine before 0.7.0 sends one part.
+			const parts: BlobPart[] = [];
+			let cursor = "";
+			let name = "listings.csv";
+			let rows = 0;
+			for (let part = 0; part < 200; part += 1) {
+				const response = await listoraFetch(`export?part=1${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""}`, { credentials: "same-origin", headers: { "X-EmDash-Request": "1" } });
+				if (!response.ok) throw new Error();
+				if (!part) name = /filename="([^"]+)"/.exec(response.headers.get("Content-Disposition") || "")?.[1] || name;
+				const text = await response.text();
+				parts.push(text);
+				rows += text.split("\r\n").filter(Boolean).length - (part ? 0 : 1);
+				cursor = response.headers.get("X-Listora-Cursor") || "";
+				if (!cursor) break;
+				exportBtn.textContent = exportProgress(rows);
+			}
 			// The column names alone mean there was nothing to export.
-			if ((await blob.text()).trim().split("\n").length < 2) {
+			if (rows < 1) {
 				notify(exportBtn, { ok: false, error: { message: S.transfer.none } }, "");
 				exportBtn.disabled = false;
 				exportBtn.textContent = S.transfer.download;
 				return;
 			}
 			const link = document.createElement("a");
-			link.href = URL.createObjectURL(blob);
-			link.download = /filename="([^"]+)"/.exec(response.headers.get("Content-Disposition") || "")?.[1] || "listings.csv";
+			link.href = URL.createObjectURL(new Blob(parts, { type: "text/csv;charset=utf-8" }));
+			link.download = name;
 			link.click();
 			// Not at once: some browsers cancel a download whose address is withdrawn straight away.
 			setTimeout(() => URL.revokeObjectURL(link.href), 2000);
@@ -95,6 +109,27 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 	const checkBtn = document.getElementById("check-btn") as HTMLButtonElement | null;
 	const out = document.getElementById("import-result");
 	let csv = "";
+
+	/**
+	 * A CSV file as its header and its records, each as written (a quoted cell may hold a line
+	 * break, so records are split on line breaks outside quotes). Blank lines are dropped.
+	 */
+	function csvRecords(text: string): string[] {
+		const out: string[] = [];
+		let current = "";
+		let quoted = false;
+		for (const char of text.replace(/^\uFEFF/, "")) {
+			if (char === '"') quoted = !quoted;
+			if (!quoted && (char === "\n" || char === "\r")) {
+				if (current.trim()) out.push(current);
+				current = "";
+				continue;
+			}
+			current += char;
+		}
+		if (current.trim()) out.push(current);
+		return out;
+	}
 
 	const rowsList = (title: string, items: string[]) =>
 		items.length ? `<h3>${esc(title)}</h3><ul class="listora-transfer__rows">${items.map((item) => `<li>${item}</li>`).join("")}</ul>` : "";
@@ -140,8 +175,18 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 			const button = click.currentTarget as HTMLButtonElement;
 			button.disabled = true;
 			button.textContent = S.transfer.importing;
-			const done = await api("import", { csv, mode: "import" });
-			if (!done.ok) return failed(done.error?.message);
+			// The site creates a few listings per request, so the file goes in batches of three rows,
+			// each with the line it starts at in the file.
+			const [head, ...records] = csvRecords(csv);
+			const done = { ok: true, imported: 0, bad: [] as Bad[], duplicates: [] as Dup[] };
+			for (let at = 0; at < records.length; at += 3) {
+				button.textContent = importProgress(Math.min(at + 3, records.length), records.length);
+				const part = await api("import", { csv: [head, ...records.slice(at, at + 3)].join("\n"), mode: "import", firstLine: at + 2 });
+				if (!part.ok) return failed(part.error?.message);
+				done.imported += Number(part.imported) || 0;
+				done.bad.push(...((part.bad as Bad[]) || []));
+				done.duplicates.push(...((part.duplicates as Dup[]) || []));
+			}
 			const count = Number(done.imported);
 			form.reset();
 			show(

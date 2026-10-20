@@ -1607,6 +1607,11 @@ textarea.listora-input {
 	background: var(--listora-bg-elevated);
 }
 
+/* Two sections in a row (the Profile and Delete my data cards) never touch. */
+.listora-form-section + .listora-form-section {
+	margin-block-start: var(--listora-space-5);
+}
+
 .listora-form-section > h2 {
 	margin: 0 0 var(--listora-space-2);
 	font-size: var(--listora-text-size-xl);

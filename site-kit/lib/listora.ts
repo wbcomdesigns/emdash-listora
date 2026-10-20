@@ -434,20 +434,25 @@ export async function uploadPhoto(listingId: string, file: File): Promise<ApiRes
 	}
 }
 
-// Pages are the same for every visitor, so the browser keeps a note when a member request was
-// refused. It saves a guest from repeating a request that would be refused on every page. With
-// no note, the page asks: a member on a new device sees their saved listings straight away.
+// Pages are the same for every visitor, so the browser keeps a note when a member route refused
+// it. It saves a guest from a request that would be refused (and logged in the console) on every
+// page. Only member routes write or clear the note: a public route answers guests too. The note
+// lasts half an hour, and following any sign-in link clears it, so a visitor who signs in elsewhere
+// is asked again soon.
+const MEMBER_ROUTES = new Set(["submit", "review", "claims", "favorites", "dashboard", "photo", "photo_remove", "reply", "edit", "message", "privacy", "renew"]);
+const GUEST_NOTE_MS = 30 * 60 * 1000;
 function remember(guest: boolean): void {
 	try {
-		if (guest) localStorage.setItem("listora-guest", "1");
+		if (guest) localStorage.setItem("listora-guest", String(Date.now()));
 		else localStorage.removeItem("listora-guest");
 	} catch {
 		// Storage can be blocked. The only cost is one extra request.
 	}
 }
-function knownGuest(): boolean {
+export function knownGuest(): boolean {
 	try {
-		return localStorage.getItem("listora-guest") === "1";
+		const note = Number(localStorage.getItem("listora-guest"));
+		return note > 1 && Date.now() - note < GUEST_NOTE_MS;
 	} catch {
 		return false;
 	}
@@ -462,11 +467,12 @@ export async function api(path: string, body?: unknown, method = body ? "POST" :
 			headers: { "Content-Type": "application/json", "X-EmDash-Request": "1" },
 			body: body ? JSON.stringify(body) : undefined,
 		});
+		const member = MEMBER_ROUTES.has(path.split(/[?/]/)[0]!);
 		if (response.status === 401) {
-			remember(true);
+			if (member) remember(true);
 			return { ok: false, error: { code: "SIGN_IN_REQUIRED", message: phrase("SIGN_IN_REQUIRED") } };
 		}
-		remember(false);
+		if (member && response.ok) remember(false);
 		const json = await response.json().catch(() => null);
 		if (!response.ok || !json) {
 			return { ok: false, error: { code: "FAILED", message: json?.error?.message || phrase("FAILED") } };
@@ -493,12 +499,34 @@ export function day(value: unknown): string {
 	}
 }
 
-/** The listings this member has saved. Empty for a guest or when the request fails. A browser last seen as a guest is not asked again until it signs in. */
-export async function savedIds(): Promise<Set<string>> {
+/**
+ * Which of these listings this member has saved (up to 100 ids). Empty for a guest or when the
+ * request fails. A browser seen as a guest in the last half hour is not asked again.
+ */
+export async function savedIds(ids: string[] = []): Promise<Set<string>> {
 	if (knownGuest()) return new Set();
-	const result = await api("favorites");
+	const result = await api(ids.length ? `favorites?ids=${encodeURIComponent(ids.slice(0, 100).join(","))}` : "favorites");
 	const items = result.ok && Array.isArray(result.items) ? (result.items as Array<{ data?: { listingId?: string }; listingId?: string }>) : [];
 	return new Set(items.map((item) => String(item.data?.listingId ?? item.listingId ?? "")).filter(Boolean));
+}
+
+export type Viewer = { signedIn: boolean; known: boolean; saved: boolean; owner: "" | "you" | "other" };
+
+/**
+ * Who is looking at a listing page: a guest, a member, the member who manages it ("you"), or a
+ * member looking at a listing another member manages ("other"). One request, none for a browser
+ * seen as a guest in the last half hour. `known` is false when the site could not be asked (the
+ * page then shows what it shows everyone).
+ */
+export async function viewer(listingId: string): Promise<Viewer> {
+	if (knownGuest()) return { signedIn: false, known: true, saved: false, owner: "" };
+	const result = await api(`favorites?listingId=${encodeURIComponent(listingId)}`);
+	if (!result.ok) return { signedIn: false, known: result.error?.code === "SIGN_IN_REQUIRED", saved: false, owner: "" };
+	const items = Array.isArray(result.items) ? (result.items as Array<{ data?: { listingId?: string }; listingId?: string }>) : [];
+	// An engine before 0.7.0 answers with every saved listing and no owner.
+	const saved = typeof result.saved === "boolean" ? result.saved : items.some((item) => String(item.data?.listingId ?? item.listingId ?? "") === listingId);
+	const owner = result.owner === "you" || result.owner === "other" ? result.owner : "";
+	return { signedIn: true, known: true, saved, owner };
 }
 
 /** Show a result next to a form: success text, the API's error, or a sign-in link for guests. */
