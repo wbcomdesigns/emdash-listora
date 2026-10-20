@@ -1,9 +1,3 @@
-import type { PluginContext } from "emdash/plugin";
-
-import { syncRating } from "./listings-query";
-import { DEMO_MEMBER } from "./types";
-import { nowIso } from "./util";
-
 type ReviewSeed = {
 	id: string;
 	listingId: string;
@@ -175,74 +169,5 @@ const REVIEWS: ReviewSeed[] = [
 		helpful: 0,
 	},
 ];
-
-function listingId(ids: Record<string, string> | undefined, key: string): string {
-	return ids?.[key] || key;
-}
-
-export async function seedRelatedStorage(
-	ctx: PluginContext,
-	ids?: Record<string, string>,
-): Promise<void> {
-	const createdAt = nowIso();
-	await ctx.storage.reviews.putMany(
-		REVIEWS.map((review) => ({
-			id: review.id,
-			data: {
-				...review,
-				listingId: listingId(ids, review.listingId),
-				createdAt,
-				owner_reply: "",
-			},
-		})),
-	);
-
-	const casaId = listingId(ids, "listing-casa-miguel");
-	await ctx.storage.claims.put("claim-casa-miguel", {
-		listingId: casaId,
-		member_id: DEMO_MEMBER,
-		name: "Miguel Santos",
-		email: "miguel@example.com",
-		message: "I own Casa Miguel Cantina. Happy to show the lease.",
-		status: "pending",
-		createdAt,
-	});
-
-	const favoriteKeys = [
-		"listing-golden-fork",
-		"listing-sakura-house",
-		"listing-greenwich-hotel",
-		"listing-fitlab",
-	];
-	await ctx.storage.favorites.putMany(
-		favoriteKeys.map((key) => {
-			const listingIdValue = listingId(ids, key);
-			return {
-				id: `${DEMO_MEMBER}:${listingIdValue}`,
-				data: { member_id: DEMO_MEMBER, listingId: listingIdValue, createdAt },
-			};
-		}),
-	);
-
-	await ctx.storage.blocked.put("blocked-spam", {
-		member_id: "blocked-spam",
-		reason: "Repeat junk reviews",
-		createdAt,
-	});
-
-	// Waiting rows only for sample entries that exist on this site, so the queue never offers a
-	// decision on a listing that is not there. The sample loader writes its own rows.
-	for (const [key, title, listing_type, city] of [
-		["listing-night-owl", "Night Owl Locksmith", "business", "Manhattan"],
-		["listing-little-dock", "Little Dock Dumplings", "restaurant", "Brooklyn"],
-	] as const) {
-		const id = ids?.[key];
-		if (!id || (await ctx.storage.submissions.get(id))) continue;
-		await ctx.storage.submissions.put(id, { listingId: id, title, listing_type, city, status: "pending", createdAt });
-	}
-
-	for (const id of Object.values(ids ?? {})) await syncRating(ctx, id);
-	ctx.log.info("Listora demo storage seeded", { reviews: REVIEWS.length });
-}
 
 export { REVIEWS };

@@ -1,36 +1,27 @@
-## 0.6.3
+## 0.7.0
 
-Copy the kit again after you update, from your site's root folder:
+Fits Cloudflare's 10 requests per plugin call. Copy the kit again after you update, from your site's root folder:
 
 ```bash
 kit="$(mktemp -d)" &&
   git clone --depth 1 \
-    --branch v0.6.3 \
+    --branch v0.7.0 \
     https://github.com/wbcomdesigns/emdash-listora \
     "$kit/emdash-listora" &&
   "$kit/emdash-listora/scripts/add-to-site.sh" .
 ```
 
-- Fix: an approval cut off part way returns the listing or photo to the queue; More reviews has space above the review form; a damaged reviews link gets a plain message.
-- Improve: account tabs wrap on a phone; the account names the full review count past 10; Settings names /listings/import/ on a fresh site.
+Your 0.6.x data comes over by itself, a step a minute, after the update. Meanwhile the directory routes of the plugin API ask callers to try again.
+
+- New: Listing changes and Listing photos admin pages; Next and Previous on every admin list.
+- Improve: a stored directory index, exact ratings, the account one tab at a time, export of every listing, import a few rows at a time.
+- Fix: the owner sees their own view of a listing; a member's listing counts as theirs; guests get Sign in in place of the forms.
+- Security: guest messages limited per visitor address, refused when the host gives none.
+
+## 0.6.3
+
+- Fix: cut-off approvals return to the queue; small fixes. Improve: account tabs wrap on a phone.
 
 ## 0.6.2
 
-Copy the kit again after you update.
-
-- New: Get started gives the kit command for the installed version and the visitor addresses it adds.
-- Fix: lists no longer stop at 100 rows on a large site; sample listings in the queue approve; a stale second decision is refused; an empty directory says so; dark mode buttons pass 4.5:1.
-- Security: a new listing stores each field capped; the public health check writes nothing.
-- Improve: admin group named Listora, reviews page named Listing reviews.
-
-## 0.6.1
-
-- Security: map popups show listing titles as plain text; emails are stored as plain addresses only. Copy the kit again after updating.
-- Fix: renewing and editing follow the listing's current owner.
-
-## 0.6.0
-
-- Security: website links must be a full http or https address; server-side calls run inside EmDash with no web request.
-- Improve: settings in tabs, Find and Load more on every admin list, all visitor wording in one file. Copy the kit again after updating.
-
-Older versions: https://github.com/wbcomdesigns/emdash-listora/blob/main/CHANGELOG.md
+- New: Get started gives the kit command for the installed version. Fix: lists no longer stop at 100 rows.

@@ -136,3 +136,12 @@ export const DEMO_MEMBER = "demo-member";
 
 /** The owner-notice task runs once an hour. */
 export const NOTIFY_CRON = "7 * * * *";
+
+/**
+ * Owner decision still open (issue #83): does a listing a member added count as claimed by them?
+ * true (the recommended default): the member who added it is its owner, the listing shows as a
+ * claimed listing, and nobody else can file a claim on it. false: it shows the claim box to everyone
+ * else until an admin approves someone's claim (which then moves the listing to them). Either way
+ * the owner never sees Claim or Write a review on their own listing.
+ */
+export const SUBMITTER_IS_OWNER = true;

@@ -16,6 +16,7 @@ import { parseCsv, toCsv, unguard } from "../src/lib/csv";
 // @ts-expect-error plain module shared with the lab seed
 import { listingsCollection } from "../site-kit/seed/collection.mjs";
 import { imageUrl, jsonForScript, placeholderHtml, safeImageUrl } from "../site-kit/lib/listora";
+import { cron, eraseAll, publishListing, settle, untilDone, upgraded } from "./site";
 
 let host: PluginTestHost | undefined;
 
@@ -24,6 +25,8 @@ async function directory() {
 	const rt = await createPluginRuntimeTestHost();
 	await rt.fixtures.collection(listingsCollection as never);
 	const made = await rt.fixtures.content("listings", { data: { title: "Probe Cafe", listing_type: "restaurant" }, slug: "probe-cafe", status: "published" } as never);
+	// The 0.7.0 upgrade builds the directory index from the listings already there.
+	await upgraded(rt);
 	const site = {
 		rt,
 		a: made.id,
@@ -51,6 +54,7 @@ const ben = member("ben");
 
 // Clear the handle first, so a slow or failing dispose cannot leave the next test on this site.
 afterEach(async () => {
+	await settle();
 	const done = host;
 	host = undefined;
 	await done?.dispose().catch(() => undefined);
@@ -147,20 +151,14 @@ describe("submit route", () => {
 });
 
 describe("admin route", () => {
-	it("renders the queue on page_load", async () => {
+	it("renders the queue on page_load, and says while the data upgrade runs", async () => {
 		host = await createPluginTestHost();
 		const result = await host.invokeRoute("admin", { type: "page_load", page: "/queue" });
 		expect(result).toMatchObject({
 			blocks: expect.arrayContaining([
 				expect.objectContaining({ type: "header", text: "Listings queue" }),
+				expect.objectContaining({ type: "banner", title: "Bringing your data over" }),
 				expect.objectContaining({ type: "empty", title: "No pending submissions" }),
-				expect.objectContaining({ type: "banner", title: "Get a finished first look" }),
-				expect.objectContaining({
-					type: "actions",
-					elements: expect.arrayContaining([
-						expect.objectContaining({ action_id: "load_sample", label: "Load sample directory" }),
-					]),
-				}),
 			]),
 		});
 	});
@@ -172,6 +170,8 @@ describe("admin route", () => {
 			["/reviews", "Listing reviews"],
 			["/claims", "Claims"],
 			["/messages", "Messages"],
+			["/changes", "Listing changes"],
+			["/photos", "Listing photos"],
 		] as const) {
 			const page = JSON.stringify(await rt.transport.invokeRoute("admin", { type: "page_load", page: path }));
 			expect(page).toContain(header);
@@ -253,29 +253,44 @@ describe("sample directory queue", () => {
 		await rt.fixtures.collection(listingsCollection as never);
 		host = { dispose: () => rt.dispose() } as unknown as PluginTestHost;
 		const route = rt.transport.invokeRoute.bind(rt.transport);
-		await route("admin", { type: "block_action", action_id: "load_sample", page: "/setup" });
+		await upgraded(rt);
+		const started = JSON.stringify(await route("admin", { type: "block_action", action_id: "load_sample", page: "/setup" }));
+		expect(started).toContain("Loading the sample directory");
+		// It loads a step a minute, by a scheduled task.
+		expect((await rt.inspect.scheduledTasks()).map((task) => task.name)).toContain("sample");
+		await untilDone(rt, "sample", "state:sample");
+		expect((await rt.inspect.scheduledTasks()).map((task) => task.name)).not.toContain("sample");
 		const pending = (await rt.inspect.storage.list<{ status: string; title: string; listingId: string }>("submissions")).filter((row) => row.data.status === "pending");
 		expect(pending.map((row) => row.data.title).sort()).toEqual(["Little Dock Dumplings", "Night Owl Locksmith"]);
 		for (const row of pending) {
 			const entry = (await rt.inspect.content.get("listings", row.data.listingId)) as { status: string } | null;
 			expect(entry?.status).toBe("draft");
 		}
+		// The published samples are in the directory index, with their ratings.
+		const directory = (await route("listings", {}, { method: "GET" })) as { total: number; items: Array<{ title: string; rating_count: number }> };
+		expect(directory.total).toBe(12);
+		expect(directory.items.find((item) => item.title === "The Golden Fork")?.rating_count).toBe(3);
 		// A row left by an earlier release points at an entry that does not exist.
 		await rt.fixtures.plugin.storage("submissions", "listing-gone", { listingId: "listing-gone", title: "Gone Shop", status: "pending", createdAt: "2026-01-01T00:00:00.000Z" });
-		const queue = JSON.stringify(await route("admin", { type: "page_load", page: "/queue" }));
 		const [owl, dock] = ["Night Owl Locksmith", "Little Dock Dumplings"].map((title) => pending.find((row) => row.data.title === title)!.data.listingId);
+		const queue = JSON.stringify(await route("admin", { type: "page_load", page: "/queue" }));
 		expect(queue).toContain(`approve:${owl}`);
-		expect(queue).toContain("Gone Shop (deleted or in Trash)");
-		expect(queue).toContain("forget:listing-gone");
-		expect(queue).not.toContain("approve:listing-gone");
+		// Approving it finds the listing gone, and the row then offers only Remove.
+		expect(JSON.stringify(await route("admin", { type: "block_action", action_id: "review", value: "approve:listing-gone", page: "/queue" }))).toContain("deleted or moved to Trash");
+		const after = JSON.stringify(await route("admin", { type: "page_load", page: "/queue" }));
+		expect(after).toContain("Gone Shop (deleted or in Trash)");
+		expect(after).toContain("forget:listing-gone");
+		expect(after).not.toContain("approve:listing-gone");
 		// The admin host validates Block Kit: the deleted row and the visitor pages card render.
-		for (const path of ["/queue", "/setup"]) {
+		for (const path of ["/queue", "/setup", "/changes", "/photos"]) {
 			const response = await route("admin", { type: "page_load", page: path });
-			expect(validateBlockResponse(response, { pluginPagePaths: ["/setup", "/queue", "/reviews", "/claims", "/messages", "/settings"] }), path).toMatchObject({ valid: true, errors: [] });
+			expect(validateBlockResponse(response, { pluginPagePaths: ["/setup", "/queue", "/changes", "/photos", "/reviews", "/claims", "/messages", "/settings"] }), path).toMatchObject({ valid: true, errors: [] });
 		}
 		const published = JSON.stringify(await route("admin", { type: "block_action", action_id: "review", value: `approve:${owl}`, page: "/queue" }));
 		expect(published).toContain("Listing published.");
+		await settle();
 		expect(((await rt.inspect.content.get("listings", owl)) as { status: string }).status).toBe("published");
+		expect(((await route("listings", {}, { method: "GET" })) as { total: number }).total).toBe(13);
 		expect(JSON.stringify(await route("admin", { type: "block_action", action_id: "review", value: `forget:${dock}`, page: "/queue" }))).toContain("This listing exists");
 		expect(JSON.stringify(await route("admin", { type: "block_action", action_id: "review", value: "forget:listing-gone", page: "/queue" }))).toContain("Removed from the queue.");
 		expect(await rt.inspect.storage.get("submissions", "listing-gone")).toBeNull();
@@ -290,6 +305,8 @@ describe("sample directory queue", () => {
 		const made = await rt.fixtures.content("listings", { data: { title: "Binned Bakery" }, slug: "binned", status: "draft" } as never);
 		await rt.fixtures.plugin.storage("submissions", made.id, { listingId: made.id, title: "Binned Bakery", status: "pending", createdAt: "2026-01-01T00:00:00.000Z" });
 		await (rt.actions.content.trash as (c: string, id: string) => Promise<unknown>)("listings", made.id);
+		// The content hook marks the queue row.
+		await settle();
 		const queue = (await rt.transport.invokeRoute("admin", { type: "page_load", page: "/queue" })) as { blocks: Array<{ type: string; rows?: Array<Record<string, unknown>> }> };
 		const row = queue.blocks.find((block) => block.type === "table")!.rows![0];
 		expect(row.title).toBe("Binned Bakery (deleted or in Trash)");
@@ -355,10 +372,13 @@ describe("types and spam", () => {
 });
 
 describe("search and reviews", () => {
-	it("returns an empty search when the collection is missing", async () => {
-		host = await createPluginTestHost();
-		const result = await host.invokeRoute("search", { q: "fork" });
-		expect(result).toMatchObject({ ok: true, items: [], total: 0 });
+	it("asks callers to wait while the index is built, then answers an empty search when the collection is missing", async () => {
+		const rt = await createPluginRuntimeTestHost();
+		host = { dispose: () => rt.dispose() } as unknown as PluginTestHost;
+		expect(await rt.transport.invokeRoute("search", { q: "fork" })).toMatchObject({ ok: false, error: { code: "INDEX_BUILDING" } });
+		await upgraded(rt);
+		expect(await rt.transport.invokeRoute("search", { q: "fork" })).toMatchObject({ ok: true, items: [], total: null, cursor: null });
+		expect(await rt.transport.invokeRoute("listings", {})).toMatchObject({ ok: true, items: [], total: 0 });
 	});
 
 	it("does not auto-create reviews when the directory is empty", async () => {
@@ -415,7 +435,8 @@ describe("member routes", () => {
 			host!.invokeRoute("review", { listingId: a, body: "Fine." }, { method: "POST", user: ana });
 		for (let n = 0; n < 8; n += 1) expect(await send(n)).toMatchObject({ ok: true });
 		expect(await send(8)).toMatchObject({ ok: false, error: { code: "RATE_LIMITED" } });
-		expect(await host!.kv.get<string>("rate:review:ana")).toMatch(/^\d+\|8$/);
+		const rows = (await host!.storage<{ who: string; c: number }>("rates").list()).filter((row) => row.id.startsWith("review:ana:"));
+		expect(rows.map((row) => row.data.c)).toEqual([8]);
 	});
 
 	it("only lets the owner or an admin renew a listing", async () => {
@@ -577,24 +598,27 @@ describe("contact messages", () => {
 		const rt = await createPluginRuntimeTestHost();
 		await rt.fixtures.collection(listingsCollection as never);
 		host = { dispose: () => rt.dispose() } as unknown as PluginTestHost;
+		const unowned = await rt.fixtures.content("listings", { data: { title: "Claim Me Cafe", listing_type: "restaurant" }, slug: "claim-me", status: "published" } as never);
+		await upgraded(rt);
 		const route = rt.transport.invokeRoute.bind(rt.transport);
 		const admin = (action_id: string, value: string, page: string) => route("admin", { type: "block_action", action_id, value, page });
-		const tick = () => rt.transport.invokeHook("cron", { name: "notify", scheduledAt: new Date().toISOString() });
+		const tick = () => cron(rt, "notify");
 		type Dash = { messages: Array<{ message: string }>; listings: Array<Record<string, unknown>> };
-		const inbox = async (user: typeof ana) => ((await route("dashboard", {}, { user })) as Dash).messages.map((item) => item.message).sort();
+		const inbox = async (user: typeof ana) => ((await route("dashboard", { tab: "messages" }, { user })) as Dash).messages.map((item) => item.message).sort();
 
 		// Ana adds a listing and types someone else's address into it. That address must never get mail.
 		await route("submit", { title: "Mail Cafe", listing_type: "restaurant", email: "victim@elsewhere.test", agree_terms: true }, { method: "POST", user: ana });
-		const id = (await rt.inspect.storage.list("submissions"))[0].id;
-		const send = (message: string, ip: string) =>
-			route("contact", { listingId: id, name: "Vee", email: "vee@example.com", message }, {
+		const id = (await rt.inspect.storage.list<{ title: string }>("submissions")).find((row) => row.data.title === "Mail Cafe")!.id;
+		const send = (listingId: string, message: string, ip: string) =>
+			route("contact", { listingId, name: "Vee", email: "vee@example.com", message }, {
 				method: "POST",
 				meta: { ip, userAgent: null, referer: null, geo: null },
 			});
 
 		// Not approved yet: not public, so no message, no inbox, no mail.
-		expect(await send("too early", "203.0.113.1")).toMatchObject({ ok: false });
+		expect(await send(id, "too early", "203.0.113.1")).toMatchObject({ ok: false });
 		await admin("review", `approve:${id}`, "/queue");
+		await settle();
 
 		// An address with mail-link options would add recipients when the owner clicks it.
 		expect(
@@ -604,8 +628,10 @@ describe("contact messages", () => {
 			}),
 		).toMatchObject({ ok: false, error: { code: "INVALID_EMAIL" } });
 
-		expect(await send("Visit http://lure.test now", "203.0.113.1")).toMatchObject({ ok: true });
-		expect(await send("Second one", "203.0.113.2")).toMatchObject({ ok: true });
+		expect(await send(id, "Visit http://lure.test now", "203.0.113.1")).toMatchObject({ ok: true });
+		expect(await send(id, "Second one", "203.0.113.2")).toMatchObject({ ok: true });
+		// A message about a listing nobody owns has nobody to tell.
+		expect(await send(unowned.id, "Anyone there?", "203.0.113.3")).toMatchObject({ ok: true });
 		// Nothing is mailed from the visitor's request.
 		expect(await rt.inspect.email()).toHaveLength(0);
 		await tick();
@@ -617,52 +643,52 @@ describe("contact messages", () => {
 		for (const leak of ["victim@elsewhere.test", "lure.test", "Vee", "vee@example.com", "http"]) {
 			expect(JSON.stringify(mail)).not.toContain(leak);
 		}
-		expect((await rt.inspect.storage.list<{ notice: string }>("contacts")).map((row) => row.data.notice)).toEqual(["sent", "sent"]);
+		expect(await rt.inspect.storage.list("notice_queue")).toHaveLength(0);
+		expect((await rt.inspect.storage.list<{ notice: string; message: string }>("contacts")).find((row) => row.data.message === "Anyone there?")?.data.notice).toBe("none");
 
 		expect(await inbox(ana)).toEqual(["Second one", "Visit http://lure.test now"]);
 		expect(await inbox(ben)).toEqual([]);
 		// The member's own rows come back without ids or addresses.
-		const own = ((await route("dashboard", {}, { user: ana })) as Dash).listings[0];
+		const own = ((await route("dashboard", { tab: "listings" }, { user: ana })) as Dash).listings[0];
 		expect(own).not.toHaveProperty("member_id");
 		expect(own).not.toHaveProperty("member_email");
+		expect(own).not.toHaveProperty("owner_email");
 
 		// The owner marks one as done: it moves to the bottom and leaves the count. Another member cannot.
-		const first = ((await route("dashboard", {}, { user: ana })) as { messages: Array<{ id: string; done: boolean }>; counts: { messages: number } });
-		expect(first.counts.messages).toBe(2);
+		const first = (await route("dashboard", { tab: "messages" }, { user: ana })) as { messages: Array<{ id: string; done: boolean }> };
+		expect(((await route("dashboard", { tab: "overview" }, { user: ana })) as { counts: { messages: number } }).counts.messages).toBe(2);
 		expect(await route("message", { id: first.messages[0].id, done: true }, { method: "POST", user: ben })).toMatchObject({ ok: false, error: { code: "NOT_FOUND" } });
 		expect(await route("message", { id: "no-such-message", done: true }, { method: "POST", user: ana })).toMatchObject({ ok: false, error: { code: "NOT_FOUND" } });
 		expect(await route("message", { id: first.messages[0].id, done: true }, { method: "POST" })).not.toMatchObject({ ok: true });
 		expect(await route("message", { id: first.messages[0].id, done: true }, { method: "POST", user: ana })).toMatchObject({ ok: true, done: true });
-		const second = ((await route("dashboard", {}, { user: ana })) as typeof first);
-		expect(second.counts.messages).toBe(1);
+		const second = (await route("dashboard", { tab: "messages" }, { user: ana })) as typeof first;
+		expect(((await route("dashboard", { tab: "overview" }, { user: ana })) as { counts: { messages: number } }).counts.messages).toBe(1);
 		expect(second.messages.map((item) => item.done)).toEqual([false, true]);
 		// The admin's own flag is untouched.
 		expect(await rt.inspect.storage.get("contacts", first.messages[0].id)).toMatchObject({ status: "new", owner_done: true });
-		await route("message", { id: first.messages[0].id, done: false }, { method: "POST", user: ana });
 
-		// Ben claims the listing and the claim is approved: the inbox and the notices move to Ben.
-		await route("claims", { listingId: id, name: "Ben", email: "typed@elsewhere.test", message: "It is mine" }, { method: "POST", user: ben });
+		// Ben claims the unowned listing and the claim is approved: its inbox and its notices are Ben's.
+		await route("claims", { listingId: unowned.id, name: "Ben", email: "typed@elsewhere.test", message: "It is mine" }, { method: "POST", user: ben });
 		const claim = (await rt.inspect.storage.list<{ rev: string }>("claims"))[0];
 		expect(await inbox(ben)).toEqual([]);
 		await admin("claim_mod", `approve|${claim.data.rev}|${claim.id}`, "/claims");
-		expect(await inbox(ben)).toEqual(["Second one", "Visit http://lure.test now"]);
-		expect(await inbox(ana)).toEqual([]);
-		expect(await send("For the new owner", "203.0.113.3")).toMatchObject({ ok: true });
+		await settle();
+		expect(await inbox(ben)).toEqual(["Anyone there?"]);
+		expect(await send(unowned.id, "For the new owner", "203.0.113.4")).toMatchObject({ ok: true });
 		await tick();
 		const later = await rt.inspect.email();
 		expect(later).toHaveLength(2);
+		// The account address from the claim, never the one typed into the claim form.
 		expect(later[1].to).toBe("ben@example.com");
 
 		// Ben erases his data: the stored address goes, so he gets no more notices.
-		await route("privacy", { action: "erase" }, { method: "POST", user: ben });
+		await eraseAll(rt, ben);
 		expect(await rt.inspect.kv.get("member-email:ben")).toBeNull();
-		expect(await send("After the erase", "203.0.113.4")).toMatchObject({ ok: true });
-		await tick();
-		expect(await rt.inspect.email()).toHaveLength(2);
+		expect(await rt.inspect.storage.get("submissions", unowned.id)).toMatchObject({ member_id: "ben", owner_email: "" });
 
 		// An admin handles a message while it waits: the hourly task must not undo that or bring back a deleted one.
-		expect(await send("Handled first", "203.0.113.7")).toMatchObject({ ok: true });
-		expect(await send("Deleted first", "203.0.113.8")).toMatchObject({ ok: true });
+		expect(await send(id, "Handled first", "203.0.113.7")).toMatchObject({ ok: true });
+		expect(await send(id, "Deleted first", "203.0.113.8")).toMatchObject({ ok: true });
 		const fresh = (await rt.inspect.storage.list<{ message: string }>("contacts")).filter((row) => /first$/.test(row.data.message));
 		const idOf = (text: string) => fresh.find((row) => row.data.message === text)!.id;
 		await admin("message_mod", `done|${idOf("Handled first")}`, "/messages");
@@ -670,6 +696,28 @@ describe("contact messages", () => {
 		await tick();
 		expect(await rt.inspect.storage.get("contacts", idOf("Handled first"))).toMatchObject({ status: "handled" });
 		expect(await rt.inspect.storage.get("contacts", idOf("Deleted first"))).toBeNull();
+		expect(await rt.inspect.storage.get("notice_queue", idOf("Deleted first"))).toBeNull();
+	});
+
+	it("tells an owner at most once an hour, whatever arrives meanwhile", async () => {
+		const rt = await createPluginRuntimeTestHost();
+		await rt.fixtures.collection(listingsCollection as never);
+		host = { dispose: () => rt.dispose() } as unknown as PluginTestHost;
+		await upgraded(rt);
+		const route = rt.transport.invokeRoute.bind(rt.transport);
+		await route("submit", { title: "Busy Cafe", agree_terms: true }, { method: "POST", user: ana });
+		const id = (await rt.inspect.storage.list("submissions"))[0].id;
+		await route("admin", { type: "block_action", action_id: "review", value: `approve:${id}`, page: "/queue" });
+		await settle();
+		const send = (message: string, ip: string) => route("contact", { listingId: id, message }, { method: "POST", meta: { ip, userAgent: null, referer: null, geo: null } });
+		await send("one", "203.0.113.11");
+		await cron(rt, "notify");
+		await send("two", "203.0.113.12");
+		await cron(rt, "notify");
+		await cron(rt, "notify-more");
+		expect(await rt.inspect.email()).toHaveLength(1);
+		// The second message waits for the next hour, still queued.
+		expect(await rt.inspect.storage.list("notice_queue")).toHaveLength(1);
 	});
 
 	it("holds the hourly limit when messages arrive together", async () => {
@@ -695,18 +743,26 @@ describe("contact messages", () => {
 });
 
 describe("paging", () => {
-	it("returns one page with totals, and clamps a page past the end", async () => {
+	it("returns one page with the total, the next by cursor, and refuses a page number past 1", async () => {
 		const { rt } = await directory();
-		for (let n = 0; n < 5; n += 1) {
-			await rt.fixtures.content("listings", { data: { title: `Paged Place ${n}` }, slug: `paged-${n}`, status: "published" } as never);
-		}
-		const first = await host!.invokeRoute("listings", { per_page: 4 }, { method: "GET" });
-		expect(first).toMatchObject({ total: 6, page: 1, pages: 2, per_page: 4 });
-		expect((first as { items: unknown[] }).items).toHaveLength(4);
-		const last = await host!.invokeRoute("listings", { per_page: 4, page: 99 }, { method: "GET" });
-		expect(last).toMatchObject({ page: 2 });
-		expect((last as { items: unknown[] }).items).toHaveLength(2);
-		expect(await host!.invokeRoute("search", { q: "paged", per_page: 2 })).toMatchObject({ total: 5, pages: 3 });
+		for (let n = 0; n < 5; n += 1) await publishListing(rt, { title: `Paged Place ${n}` }, `paged-${n}`);
+		const first = (await host!.invokeRoute("listings", { per_page: 4 }, { method: "GET" })) as { items: Array<{ id: string }>; cursor: string | null; total: number };
+		expect(first).toMatchObject({ ok: true, total: 6, per_page: 4 });
+		expect(first.items).toHaveLength(4);
+		const next = (await host!.invokeRoute("listings", { per_page: 4, cursor: first.cursor }, { method: "GET" })) as typeof first;
+		expect(next.items).toHaveLength(2);
+		expect(next.cursor).toBeNull();
+		expect(new Set([...first.items, ...next.items].map((item) => item.id)).size).toBe(6);
+		expect(await host!.invokeRoute("listings", { per_page: 4, page: 2 }, { method: "GET" })).toMatchObject({ ok: false, error: { code: "VALIDATION_ERROR" } });
+		expect(await host!.invokeRoute("listings", { cursor: "not-a-cursor" }, { method: "GET" })).toMatchObject({ ok: false, error: { code: "VALIDATION_ERROR" } });
+		// A text search is checked row by row: no exact total, and the pages still join up.
+		const found = (await host!.invokeRoute("search", { q: "paged", per_page: 2 })) as typeof first;
+		expect(found).toMatchObject({ ok: true, total: null });
+		expect(found.items).toHaveLength(2);
+		const rest = (await host!.invokeRoute("search", { q: "paged", per_page: 2, cursor: found.cursor })) as typeof first;
+		const last = (await host!.invokeRoute("search", { q: "paged", per_page: 2, cursor: rest.cursor })) as typeof first;
+		expect([...found.items, ...rest.items, ...last.items]).toHaveLength(5);
+		expect(last.cursor).toBeNull();
 	});
 });
 
@@ -747,7 +803,8 @@ describe("listing guards", () => {
 		});
 		expect(result).toMatchObject({ toast: { type: "error" } });
 		// The rename was not pushed live and the claim is still waiting.
-		expect(await host!.invokeRoute("search", { q: "Half finished" })).toMatchObject({ total: 0 });
+		await settle();
+		expect(await host!.invokeRoute("search", { q: "Half finished" })).toMatchObject({ ok: true, items: [] });
 		expect(await host!.storage("claims").get(`claim-${a}-ana`)).toMatchObject({ status: "pending" });
 	});
 });
@@ -854,7 +911,8 @@ describe("listing expiry", () => {
 		const rt = await createPluginRuntimeTestHost();
 		await rt.fixtures.collection(listingsCollection as never);
 		host = { dispose: () => rt.dispose() } as unknown as PluginTestHost;
-		await rt.fixtures.content("listings", {
+		// Dates from 0.6.x, kept on the listing: the upgrade carries them into Listora's own record.
+		const old = await rt.fixtures.content("listings", {
 			data: { title: "Old Cafe", listing_type: "restaurant", listing_status: "live", expires_at: "2020-01-01T00:00:00.000Z" },
 			slug: "old-cafe",
 			status: "published",
@@ -864,10 +922,15 @@ describe("listing expiry", () => {
 			slug: "new-cafe",
 			status: "published",
 		} as never);
+		await upgraded(rt);
+		await rt.fixtures.plugin.setting("expiry_days", 30);
 		const titles = async () =>
 			((await rt.transport.invokeRoute("search", { q: "cafe" })) as { items: Array<{ title: string }> }).items.map((item) => item.title);
-		expect((await titles()).sort()).toEqual(["New Cafe", "Old Cafe"]);
-		await rt.transport.invokeHook("cron", { name: "expire", scheduledAt: new Date().toISOString() });
+		// Past its date: out of the directory routes at once, before the daily task runs.
+		expect(await titles()).toEqual(["New Cafe"]);
+		await cron(rt, "expire");
+		expect(((await rt.inspect.content.get("listings", old.id)) as unknown as { data: { listing_status: string } }).data.listing_status).toBe("expired");
+		expect(await rt.inspect.storage.get("directory", old.id)).toMatchObject({ vis: false, ls: "expired" });
 		expect(await titles()).toEqual(["New Cafe"]);
 	});
 });
@@ -974,6 +1037,7 @@ describe("ratings route", () => {
 		for (const item of [live, expired, draft]) {
 			await rt.fixtures.plugin.storage("ratings", item.id, { average: 4, count: 2, type: "Restaurant" });
 		}
+		await upgraded(rt);
 		const all = (await rt.transport.invokeRoute("ratings", { all: "1" })) as { ratings: Record<string, unknown> };
 		expect(Object.keys(all.ratings)).toEqual([live.id]);
 		const some = (await rt.transport.invokeRoute("ratings", { ids: [live.id, expired.id, draft.id].join(",") })) as { ratings: Record<string, unknown> };
@@ -982,10 +1046,11 @@ describe("ratings route", () => {
 });
 
 describe("long admin lists", () => {
-	it("shows 25 at a time, loads more, finds by text, and keeps the place after a decision", async () => {
+	it("shows 25 at a time, pages on and back, finds by text, and keeps the place after a decision", async () => {
 		const rt = await createPluginRuntimeTestHost();
 		await rt.fixtures.collection(listingsCollection as never);
 		host = { dispose: () => rt.dispose() } as unknown as PluginTestHost;
+		await upgraded(rt);
 		for (let index = 1; index <= 60; index += 1) {
 			await rt.fixtures.plugin.storage("submissions", `sub-${String(index).padStart(2, "0")}`, {
 				listingId: `sub-${String(index).padStart(2, "0")}`,
@@ -995,27 +1060,36 @@ describe("long admin lists", () => {
 				createdAt: new Date(Date.UTC(2026, 0, 1, 0, index)).toISOString(),
 			});
 		}
-		type Page = { blocks: Array<{ type: string; rows?: unknown[]; next_cursor?: string }> };
+		type Page = { blocks: Array<{ type: string; rows?: Array<{ title: string }>; next_cursor?: string; elements?: Array<{ action_id?: string }> }> };
 		const admin = (input: Record<string, unknown>) => rt.transport.invokeRoute("admin", input) as Promise<Page>;
 		const table = (page: Page) => page.blocks.find((block) => block.type === "table");
+		const titles = (page: Page) => table(page)?.rows?.map((row) => row.title) ?? [];
 
 		const first = await admin({ type: "page_load", page: "/queue" });
-		expect(table(first)?.rows).toHaveLength(25);
-		expect(table(first)?.next_cursor).toBe("50");
-		const more = await admin({ type: "block_action", action_id: "queue_page", value: { cursor: "50", sort: null }, page: "/queue" });
-		expect(table(more)?.rows).toHaveLength(50);
+		expect(titles(first)).toHaveLength(25);
+		expect(titles(first)[0]).toBe("Listing 60");
+		expect(JSON.stringify(first)).toContain("60 listings in all");
+		const cursor = table(first)!.next_cursor!;
+		expect(cursor).toBeTruthy();
+		const second = await admin({ type: "block_action", action_id: "queue_page", value: { cursor, sort: null }, page: "/queue" });
+		expect(titles(second)[0]).toBe("Listing 35");
+		expect(JSON.stringify(second)).toContain("queue_prev");
 
-		// A decision keeps the place: still 50 shown, one fewer waiting.
-		const afterReject = await admin({ type: "block_action", action_id: "review", value: "reject:sub-60", page: "/queue" });
-		expect(table(afterReject)?.rows).toHaveLength(50);
+		// A decision keeps the place: still the second page.
+		const afterReject = await admin({ type: "block_action", action_id: "review", value: "reject:sub-30", page: "/queue" });
+		expect(titles(afterReject)[0]).toBe("Listing 35");
+		expect(titles(afterReject)).not.toContain("Listing 30");
+		const back = await admin({ type: "block_action", action_id: "queue_prev", page: "/queue" });
+		expect(titles(back)[0]).toBe("Listing 60");
 
 		const found = await admin({ type: "form_submit", action_id: "queue_find", values: { find: "needle" }, page: "/queue" });
-		expect(table(found)?.rows).toHaveLength(1);
-		expect(JSON.stringify(found)).toContain("Needle Bakery");
+		expect(titles(found)).toEqual(["Needle Bakery"]);
 		const none = await admin({ type: "form_submit", action_id: "queue_find", values: { find: "zzzz" }, page: "/queue" });
 		expect(JSON.stringify(none)).toContain("Nothing matches");
 		// Opening the page again starts from the top with no filter.
-		expect(table(await admin({ type: "page_load", page: "/queue" }))?.rows).toHaveLength(25);
+		const again = await admin({ type: "page_load", page: "/queue" });
+		expect(titles(again)).toHaveLength(25);
+		expect(titles(again)[0]).toBe("Listing 60");
 	});
 });
 
@@ -1027,12 +1101,14 @@ describe("owner edits a live listing", () => {
 		const route = rt.transport.invokeRoute.bind(rt.transport);
 		const admin = (action_id: string, value: string) => route("admin", { type: "block_action", action_id, value, page: "/queue" }) as Promise<{ toast?: { type: string; message: string } }>;
 		const liveTitle = async () => ((await route("search", { q: "cafe" })) as { items: Array<{ title: string; phone: string }> }).items.map((item) => item.title);
+		await upgraded(rt);
 
 		await route("submit", { title: "Edit Cafe", listing_type: "restaurant", phone: "111", agree_terms: true }, { method: "POST", user: ana });
 		const id = (await rt.inspect.storage.list("submissions"))[0].id;
 		// Not public yet: nothing to edit.
 		expect(await route("edit", { listingId: id }, { method: "GET", user: ana })).toMatchObject({ ok: false });
 		await admin("review", `approve:${id}`);
+		await settle();
 
 		// Only the owner. Same answer for someone else's listing and a made-up id.
 		expect(await route("edit", { listingId: id }, { method: "GET", user: ben })).toMatchObject({ ok: false, error: { code: "NOT_FOUND" } });
@@ -1055,7 +1131,7 @@ describe("owner edits a live listing", () => {
 		expect(Object.keys(stored.fields).sort()).toEqual(["phone", "title"]);
 		// The public listing has not moved.
 		expect(await liveTitle()).toEqual(["Edit Cafe"]);
-		expect(((await route("dashboard", {}, { user: ana })) as { listings: Array<{ edit_pending: boolean }> }).listings[0].edit_pending).toBe(true);
+		expect(((await route("dashboard", { tab: "listings" }, { user: ana })) as { listings: Array<{ edit_pending: boolean }> }).listings[0].edit_pending).toBe(true);
 
 		// The owner rewrites the change after the admin loaded the page: the older click is refused.
 		const oldStamp = `approve|${stored.rev}|${id}`;
@@ -1065,6 +1141,7 @@ describe("owner edits a live listing", () => {
 
 		const fresh = (await rt.inspect.storage.get<{ rev: string }>("edits", id))!;
 		expect((await admin("edit_mod", `approve|${fresh.rev}|${id}`)).toast?.type).toBe("success");
+		await settle();
 		expect(await liveTitle()).toEqual(["Edit Cafe Supreme"]);
 		expect(await rt.inspect.storage.get("edits", id)).toBeNull();
 
@@ -1078,18 +1155,24 @@ describe("owner edits a live listing", () => {
 		expect(cleaned.fields.title).toBe("Edit Cafe Supreme!");
 		expect(JSON.parse(cleaned.fields.type_fields)).toEqual({ year_founded: "1999" });
 		// The approval screen shows every changed value, literally.
-		const screen = JSON.stringify(await route("admin", { type: "page_load", page: "/queue" }));
+		const screen = JSON.stringify(await route("admin", { type: "page_load", page: "/changes" }));
 		expect(screen).toContain("Edit Cafe Supreme!");
 		expect(screen).toContain("Year founded");
 		expect(screen).not.toContain("smuggled");
 
-		// Ownership moves to Ben through an approved claim: Ana's waiting change can no longer be approved.
-		await route("claims", { listingId: id, name: "Ben", email: "b@x.test", message: "Mine" }, { method: "POST", user: ben });
-		const claim = (await rt.inspect.storage.list<{ rev: string }>("claims"))[0];
-		await route("admin", { type: "block_action", action_id: "claim_mod", value: `approve|${claim.data.rev}|${claim.id}`, page: "/claims" });
+		// A listing a member added counts as theirs, so another member cannot claim it.
+		expect(await route("claims", { listingId: id, name: "Ben", email: "b@x.test", message: "Mine" }, { method: "POST", user: ben })).toMatchObject({ ok: false, error: { code: "ALREADY_CLAIMED" } });
+		expect(await route("claims", { listingId: id, name: "Ana" }, { method: "POST", user: ana })).toMatchObject({ ok: false, error: { code: "OWN_LISTING" } });
+		// Ownership moves to Ben (an admin's decision): Ana's waiting change can no longer be approved.
+		const row = (await rt.inspect.storage.get<Record<string, unknown>>("submissions", id))!;
+		await rt.fixtures.plugin.storage("submissions", id, { ...row, member_id: "ben" });
 		expect((await admin("edit_mod", `approve|${cleaned.rev}|${id}`)).toast?.type).toBe("error");
 		expect(await liveTitle()).toEqual(["Edit Cafe Supreme"]);
-		await admin("edit_mod", `reject|${cleaned.rev}|${id}`);
+		// The refused approval put it back with a new version: the admin sees it again and rejects it.
+		const back = (await rt.inspect.storage.get<{ rev: string; status: string }>("edits", id))!;
+		expect(back.status).toBe("pending");
+		expect(back.rev).not.toBe(cleaned.rev);
+		await admin("edit_mod", `reject|${back.rev}|${id}`);
 		expect(await rt.inspect.storage.get("edits", id)).toBeNull();
 	});
 
@@ -1100,9 +1183,11 @@ describe("owner edits a live listing", () => {
 		const route = rt.transport.invokeRoute.bind(rt.transport);
 		const admin = (action_id: string, value: string) => route("admin", { type: "block_action", action_id, value, page: "/queue" }) as Promise<{ toast?: { type: string; message: string } }>;
 		const liveTitle = async () => ((await route("search", { q: "cafe" })) as { items: Array<{ title: string }> }).items.map((item) => item.title);
+		await upgraded(rt);
 		await route("submit", { title: "Edit Cafe Supreme", listing_type: "restaurant", phone: "222", agree_terms: true }, { method: "POST", user: ana });
 		const id = (await rt.inspect.storage.list("submissions"))[0].id;
 		await admin("review", `approve:${id}`);
+		await settle();
 
 		// A rejected change leaves no trace.
 		await route("edit", { listingId: id, title: "Bad Name" }, { method: "POST", user: ana });
@@ -1125,6 +1210,7 @@ describe("owner reply to a review", () => {
 			route("admin", { type: "block_action", action_id, value, page }) as Promise<{ toast?: { type: string } }>;
 		type Public = { items: Array<Record<string, unknown>> };
 		const publicReviews = async (listingId: string) => ((await route("reviews", { listingId }, { method: "GET" })) as Public).items;
+		await upgraded(rt);
 
 		// The route is the gate: no tick, an unknown type or a bad website address is refused, with a plain reason.
 		for (const bad of [
@@ -1137,6 +1223,7 @@ describe("owner reply to a review", () => {
 		await route("submit", { title: "Reply Cafe", listing_type: "restaurant", agree_terms: true }, { method: "POST", user: ana });
 		const listingId = (await rt.inspect.storage.list("submissions"))[0].id;
 		await admin("review", `approve:${listingId}`, "/queue");
+		await settle();
 		// The owner cannot rate their own listing.
 		expect(await route("review", { listingId, stars: 5, body: "Best place in town." }, { method: "POST", user: ana })).toMatchObject({ ok: false, error: { code: "OWN_LISTING" } });
 		await route("review", { listingId, stars: 4, title: "Good", body: "Nice place.", email: "ben@private.test" }, { method: "POST", user: ben });
@@ -1150,7 +1237,7 @@ describe("owner reply to a review", () => {
 		// The owner is handed a handle for the review in their account. It is not the stored id,
 		// and it does not contain the reviewer's account id.
 		const ref = ((await route("dashboard", {}, { user: ana })) as { received: Array<{ ref: string }> }).received[0].ref;
-		expect(ref).toMatch(/^[0-9a-f]{32}$/);
+		expect(ref).toMatch(/^[A-Za-z0-9_-]{40,}$/);
 		expect(review.id).toContain("ben");
 		expect(ref).not.toContain("ben");
 		expect(await route("reply", { listingId, ref, text: "Mine" }, { method: "POST", user: ben })).toMatchObject({ ok: false, error: { code: "NOT_FOUND" } });
@@ -1171,8 +1258,10 @@ describe("owner reply to a review", () => {
 		expect(JSON.stringify(seen)).not.toContain("Thank you");
 
 		// The owner sees it as waiting; the admin approves it with the version they were shown.
-		const mine = (await route("dashboard", {}, { user: ana })) as { received: Array<{ reply: string; reply_waiting: string }> };
-		expect(mine.received[0]).toMatchObject({ reply: "", reply_waiting: "Thank you <b>Ben</b>", ref });
+		const mine = (await route("dashboard", {}, { user: ana })) as { received: Array<{ reply: string; reply_waiting: string; ref: string }> };
+		expect(mine.received[0]).toMatchObject({ reply: "", reply_waiting: "Thank you <b>Ben</b>" });
+		// Each load seals the id afresh; a handle from an earlier load still works.
+		expect(mine.received[0].ref).not.toBe(ref);
 		expect(JSON.stringify(mine.received)).not.toContain(review.id);
 		const waiting = (await rt.inspect.storage.get<{ reply_rev: string }>("reviews", review.id))!;
 		// A rewrite after the admin loaded the page: the old click is refused.
@@ -1200,18 +1289,23 @@ describe("owner reply to a review", () => {
 		// The review itself was never changed by any of this.
 		expect(await rt.inspect.storage.get("reviews", review.id)).toMatchObject({ status: "published", body: "Nice place.", stars: 4 });
 
-		// The dashboard shows the newest 10 reviews per listing and names the full count when there are more.
-		type Dash = { received: unknown[]; received_more: Array<Record<string, unknown>> };
-		expect(((await route("dashboard", {}, { user: ana })) as Dash).received_more).toEqual([]);
+		// The account shows the newest 20 reviews of the member's listings, with a cursor for the next 20.
+		type Dash = { received: Array<{ ref: string }>; received_more: unknown[]; received_cursor: string | null };
+		expect(((await route("dashboard", { tab: "reviews" }, { user: ana })) as Dash).received_cursor).toBeNull();
 		for (let i = 0; i < 25; i++) {
 			await rt.fixtures.plugin.storage("reviews", `extra-${i}`, { listingId, status: "published", stars: 5, body: `Visit ${i}`, author: "Guest", createdAt: `2026-02-${String(i + 1).padStart(2, "0")}T00:00:00.000Z` });
 		}
-		const busy = (await route("dashboard", {}, { user: ana })) as Dash;
-		expect(busy.received).toHaveLength(10);
-		expect(busy.received_more).toEqual([{ listing_title: "Reply Cafe", listing_url: expect.stringMatching(/^\/listings\/.+\/$/), shown: 10, total: 26 }]);
+		const busy = (await route("dashboard", { tab: "reviews" }, { user: ana })) as Dash;
+		expect(busy.received).toHaveLength(20);
+		expect(busy.received_more).toEqual([]);
+		const rest = (await route("dashboard", { tab: "reviews", cursor: busy.received_cursor }, { user: ana })) as Dash;
+		expect(rest.received).toHaveLength(6);
+		expect(rest.received_cursor).toBeNull();
+		// The 0.6.x kit asks with no tab and still gets the first page of everything.
+		expect(((await route("dashboard", {}, { user: ana })) as Dash).received).toHaveLength(20);
 
 		// Ana deletes her data: her public reply goes too, and the review stays.
-		await route("privacy", { action: "erase" }, { method: "POST", user: ana });
+		await eraseAll(rt, ana);
 		expect((await publicReviews(listingId))[0]).toMatchObject({ owner_reply: "", body: "Nice place." });
 		expect(await rt.inspect.storage.get("reviews", review.id)).toMatchObject({ reply_by: "", reply_draft: "" });
 	});
@@ -1238,10 +1332,12 @@ describe("owner photos", () => {
 		const route = rt.transport.invokeRoute.bind(rt.transport);
 		const admin = (action_id: string, value: unknown, page = "/queue") =>
 			route("admin", { type: "block_action", action_id, value, page }) as Promise<{ toast?: { type: string; message: string } }>;
+		await upgraded(rt);
 		await route("admin", { type: "form_submit", action_id: "save_photos", page: "/settings", values: { photo_limit: 2 } });
 		await route("submit", { title: "Photo Cafe", listing_type: "restaurant", agree_terms: true }, { method: "POST", user: ana });
 		const id = (await rt.inspect.storage.list("submissions"))[0].id;
 		await admin("review", `approve:${id}`);
+		await settle();
 		const send = (bytes: Uint8Array, user?: typeof ana, listingId = id) =>
 			route("photo", bytes, { method: "POST", user, query: { listingId }, url: `http://x.test/photo?listingId=${listingId}` } as never);
 
@@ -1260,14 +1356,14 @@ describe("owner photos", () => {
 		expect(photos).toHaveLength(2);
 
 		// The owner sees both as waiting; the admin sees both, with the picture.
-		const dash = (await route("dashboard", {}, { user: ana })) as { listings: Array<{ photos: Array<{ status: string }>; photo_limit: number }> };
+		const dash = (await route("dashboard", { tab: "listings" }, { user: ana })) as { listings: Array<{ photos: Array<{ status: string }>; photo_limit: number }> };
 		expect(dash.listings[0]).toMatchObject({ photo_limit: 2 });
 		expect(dash.listings[0].photos.map((photo) => photo.status)).toEqual(["pending", "pending"]);
 		// Where a waiting photo is stored is told to nobody but the admin.
 		expect(JSON.stringify(dash)).not.toContain(photos[0].data.mediaId);
 		expect((dash.listings[0].photos as Array<{ url?: string }>).every((photo) => !photo.url)).toBe(true);
-		const screen = JSON.stringify(await route("admin", { type: "page_load", page: "/queue" }));
-		expect(screen).toContain("Photos waiting");
+		const screen = JSON.stringify(await route("admin", { type: "page_load", page: "/photos" }));
+		expect(screen).toContain("Listing photos");
 		expect(screen).toContain('"type":"image"');
 
 		// The owner takes one back. Someone else cannot.
@@ -1282,28 +1378,33 @@ describe("owner photos", () => {
 		// A second click on the same decision is refused.
 		expect((await admin("photo_mod", `approve|${photos[0].data.rev}|${photos[0].id}`)).toast?.type).toBe("error");
 
-		// An approval cut off after the photo reached the listing is reopened; approving it again adds no second copy.
+		// An approval cut off after the photo reached the listing is reopened by the next click on it;
+		// approving it again adds no second copy.
 		const galleryOf = async () => ((await rt.inspect.content.get("listings", id)) as { data: { gallery?: unknown[] } }).data.gallery ?? [];
 		const inGallery = (await galleryOf()).length;
 		const cutOff = new Date(Date.now() - 10 * 60 * 1000).toISOString();
 		const approved = (await rt.inspect.storage.get<Record<string, unknown>>("photos", photos[0].id))!;
 		await rt.fixtures.plugin.storage("photos", photos[0].id, { ...approved, status: "approving", claimedAt: cutOff });
-		await route("admin", { type: "page_load", page: "/queue" });
+		expect((await admin("photo_mod", `approve|${photos[0].data.rev}|${photos[0].id}`, "/photos")).toast?.message).toContain("cut off part way");
 		const reopened = (await rt.inspect.storage.get<{ status: string; rev: string }>("photos", photos[0].id))!;
 		expect(reopened.status).toBe("pending");
-		expect((await admin("photo_mod", `approve|${reopened.rev}|${photos[0].id}`)).toast?.type).toBe("success");
+		expect(reopened.rev).not.toBe(photos[0].data.rev);
+		expect((await admin("photo_mod", `approve|${reopened.rev}|${photos[0].id}`, "/photos")).toast?.type).toBe("success");
 		expect((await galleryOf()).length).toBe(inGallery);
 		expect(await rt.inspect.storage.get("photos", photos[0].id)).toMatchObject({ status: "approved" });
-		// A reject cut off before the file was deleted waits in the queue again too.
+		// A reject cut off before the file was deleted waits in the list again too.
 		await rt.fixtures.plugin.storage("photos", photos[0].id, { ...approved, status: "rejecting", claimedAt: cutOff });
-		await route("admin", { type: "page_load", page: "/queue" });
+		await admin("photo_mod", `reject|${photos[0].data.rev}|${photos[0].id}`, "/photos");
 		expect(await rt.inspect.storage.get("photos", photos[0].id)).toMatchObject({ status: "pending" });
+		// One still running (not yet cut off) is left alone.
+		await rt.fixtures.plugin.storage("photos", photos[0].id, { ...approved, status: "approving", claimedAt: new Date().toISOString() });
+		expect((await admin("photo_mod", `approve|${photos[0].data.rev}|${photos[0].id}`, "/photos")).toast?.message).toContain("Someone else is deciding");
 		await rt.fixtures.plugin.storage("photos", photos[0].id, approved);
 
 		// Deleting her data unlinks the approved photo from her and removes anything still waiting.
 		await route("admin", { type: "form_submit", action_id: "save_photos", page: "/settings", values: { photo_limit: 5 } });
 		await send(png, ana);
-		await route("privacy", { action: "erase" }, { method: "POST", user: ana });
+		await eraseAll(rt, ana);
 		const left = await rt.inspect.storage.list<{ status: string; member_id: string; label: string }>("photos");
 		expect(left.map((row) => [row.data.status, row.data.member_id, row.data.label])).toEqual([["approved", "", ""]]);
 
@@ -1349,9 +1450,10 @@ describe("spreadsheet import and export", () => {
 		await rt.fixtures.collection(listingsCollection as never);
 		await rt.fixtures.content("listings", { data: { title: "Old Cafe", listing_type: "restaurant", city: "Paris", listing_status: "live" }, slug: "old-cafe", status: "published" } as never);
 		host = { dispose: () => rt.dispose() } as unknown as PluginTestHost;
+		await upgraded(rt);
 		const route = rt.transport.invokeRoute.bind(rt.transport);
-		const csv = [
-			"title,listing_type,city,lat,lng,website",
+		const header = "title,listing_type,city,lat,lng,website";
+		const lines = [
 			"New Bakery,Restaurant,Lyon,45.76,4.83,https://bakery.test",
 			"old cafe,restaurant,PARIS,,,",
 			",hotel,Nice,,,",
@@ -1359,7 +1461,8 @@ describe("spreadsheet import and export", () => {
 			"Bad Place,hotel,Nice,abc,4,",
 			"New Bakery,restaurant,Lyon,,,",
 			"Plain Shop,,Lille,,,javascript:alert(1)",
-		].join("\n");
+		];
+		const csv = [header, ...lines].join("\n");
 		type Check = { ok: boolean; valid: number; total: number; bad: Array<{ line: number; reason: string }>; duplicates: Array<{ line: number }>; imported?: number };
 		const checked = (await route("import", { csv, mode: "check" }, { method: "POST" })) as Check;
 		expect(checked).toMatchObject({ ok: true, total: 7, valid: 1 });
@@ -1370,21 +1473,41 @@ describe("spreadsheet import and export", () => {
 		// Checking writes nothing.
 		expect(await rt.inspect.storage.list("submissions")).toHaveLength(0);
 		// More rows than one request can safely create is refused whole, before anything is written.
+		// The 0.6.x kit sent the whole file at once: it is told to copy the kit again.
+		expect(await route("import", { csv, mode: "import" }, { method: "POST" })).toMatchObject({ ok: false, error: { code: "TOO_BIG", message: expect.stringContaining("kit again") } });
 		const big = ["title", ...Array.from({ length: 101 }, (_, index) => `Shop ${index}`)].join("\n");
-		expect(await route("import", { csv: big, mode: "import" }, { method: "POST" })).toMatchObject({ ok: false, error: { code: "TOO_BIG" } });
+		expect(await route("import", { csv: big, mode: "check" }, { method: "POST" })).toMatchObject({ ok: false, error: { code: "TOO_BIG" } });
 		expect(await rt.inspect.storage.list("submissions")).toHaveLength(0);
 		// A file with no title column gets one plain message, not a list of rows.
 		expect(await route("import", { csv: "name,city\nCafe,Lyon", mode: "check" }, { method: "POST" })).toMatchObject({ ok: false, error: { code: "VALIDATION_ERROR" } });
 
-		const done = (await route("import", { csv, mode: "import" }, { method: "POST" })) as Check;
-		expect(done).toMatchObject({ ok: true, imported: 1 });
+		// The kit sends the file three rows at a time, with each batch's first line number.
+		const batches = async () => {
+			let imported = 0;
+			const bad: number[] = [];
+			for (let at = 0; at < lines.length; at += 3) {
+				const part = (await route("import", { csv: [header, ...lines.slice(at, at + 3)].join("\n"), mode: "import", firstLine: at + 2 }, { method: "POST" })) as Check;
+				expect(part.ok).toBe(true);
+				imported += part.imported ?? 0;
+				bad.push(...part.bad.map((row) => row.line));
+			}
+			return { imported, bad };
+		};
+		expect(await batches()).toEqual({ imported: 1, bad: [4, 5, 6, 8] });
 		const waiting = await rt.inspect.storage.list<{ title: string; status: string }>("submissions");
 		expect(waiting.map((row) => [row.data.title, row.data.status]).sort()).toEqual([["New Bakery", "pending"]]);
 		// Nothing went live: the directory still has only the one that was there.
 		const live = (await route("search", { q: "" }, { method: "GET" })) as { items: Array<{ title: string }> };
 		expect(live.items.map((item) => item.title)).toEqual(["Old Cafe"]);
 		// The same file again adds nothing.
-		expect(await route("import", { csv, mode: "import" }, { method: "POST" })).toMatchObject({ imported: 0 });
+		expect((await batches()).imported).toBe(0);
+
+		// The export is a real file of the published listings that reads back as the same rows.
+		const file = (await rt.actions.routes.request("export", { method: "GET", url: "https://plugin.test/_emdash/api/plugins/listora/export?part=1", user: member("boss", 50), headers: { "X-EmDash-Request": "1" } } as never)) as Response;
+		expect(file.headers.get("Content-Type")).toContain("text/csv");
+		expect(file.headers.get("X-Listora-Cursor")).toBeNull();
+		const rows = parseCsv(new TextDecoder().decode(new Uint8Array(await file.arrayBuffer())));
+		expect(rows.map((row) => [row.title, row.city])).toEqual([["Old Cafe", "Paris"]]);
 
 		// Who may call this is enforced by EmDash over HTTP (the route asks for plugins:manage),
 		// which this in-process test does not exercise. scripts/prove-lab.sh checks it on a real
@@ -1395,42 +1518,54 @@ describe("spreadsheet import and export", () => {
 
 describe("more than 100 stored rows", () => {
 	// EmDash returns at most 100 rows per storage query, with no error. These read every row.
-	it("finds a pending listing past the first 100 rows, and the queue lists more than 100", async () => {
+	it("finds a pending listing past the first 100 rows, and the queue pages through more than 100", async () => {
 		const rt = await createPluginRuntimeTestHost();
 		await rt.fixtures.collection(listingsCollection as never);
 		host = { dispose: () => rt.dispose() } as unknown as PluginTestHost;
+		await upgraded(rt);
 		for (let i = 0; i < 150; i += 1) {
 			const n = String(i).padStart(3, "0");
 			await rt.fixtures.plugin.storage("submissions", `row-${n}`, { listingId: `row-${n}`, title: `Waiting ${n}`, city: `Town ${n}`, status: "pending", createdAt: `2026-01-01T00:00:00.${n}Z` });
 		}
-		// The CSV check knows every waiting listing, so the oldest (row 0, read last) is a duplicate.
+		// The CSV check knows every waiting listing, so the oldest (row 0) is a duplicate too.
 		const checked = (await rt.transport.invokeRoute("import", { csv: "title,city\nWaiting 000,Town 000\nWaiting 149,Town 149", mode: "check" }, { method: "POST" })) as { duplicates: unknown[] };
 		expect(checked.duplicates).toHaveLength(2);
 		// The queue shows 25 at a time and pages through all 150.
-		let page = JSON.stringify(await rt.transport.invokeRoute("admin", { type: "page_load", page: "/queue" }));
-		expect(page).toContain("Showing 25 of 150.");
-		for (let cursor = 25; cursor < 150; cursor += 25) page = JSON.stringify(await rt.transport.invokeRoute("admin", { type: "block_action", action_id: "queue_page", value: { cursor: cursor + 25 }, page: "/queue" }));
-		expect(page).toContain("Waiting 000");
+		type Page = { blocks: Array<{ type: string; next_cursor?: string }> };
+		let page = (await rt.transport.invokeRoute("admin", { type: "page_load", page: "/queue" })) as Page;
+		expect(JSON.stringify(page)).toContain("150 listings in all, 25 per page.");
+		let pages = 1;
+		for (let cursor = page.blocks.find((block) => block.type === "table")?.next_cursor; cursor; cursor = page.blocks.find((block) => block.type === "table")?.next_cursor) {
+			page = (await rt.transport.invokeRoute("admin", { type: "block_action", action_id: "queue_page", value: { cursor }, page: "/queue" })) as Page;
+			pages += 1;
+		}
+		expect(pages).toBe(6);
+		expect(JSON.stringify(page)).toContain("Waiting 000");
 	});
 
 	it("pages a listing's 120 reviews 20 at a time, with the full count and average", async () => {
-		const site = await directory();
+		const rt = await createPluginRuntimeTestHost();
+		await rt.fixtures.collection(listingsCollection as never);
+		host = { dispose: () => rt.dispose() } as unknown as PluginTestHost;
+		const made = await rt.fixtures.content("listings", { data: { title: "Busy Cafe" }, slug: "busy", status: "published" } as never);
 		for (let i = 0; i < 120; i += 1) {
 			const n = String(i).padStart(3, "0");
-			await site.rt.fixtures.plugin.storage("reviews", `rev-${n}`, { listingId: site.a, member_id: `m${n}`, author: `Reader ${n}`, stars: i % 2 ? 5 : 3, title: "", body: `Review ${n}`, status: "published", createdAt: `2026-01-01T00:00:00.${n}Z` });
+			await rt.fixtures.plugin.storage("reviews", `rev-${n}`, { listingId: made.id, member_id: `m${n}`, author: `Reader ${n}`, stars: i % 2 ? 5 : 3, title: "", body: `Review ${n}`, status: "published", createdAt: `2026-01-01T00:00:00.${n}Z` });
 		}
-		await site.rt.fixtures.plugin.storage("reviews", "rev-hidden", { listingId: site.a, member_id: "x", stars: 1, body: "Waiting", status: "pending", createdAt: "2026-02-01T00:00:00.000Z" });
-		// A decision recalculates the stored rating from every published review.
-		const pending = (await site.storage<{ rev?: string; createdAt: string }>("reviews").get("rev-hidden"))!;
-		await site.invokeRoute("admin", { type: "block_action", action_id: "review_mod", value: `reject|${pending.rev || pending.createdAt}|rev-hidden`, page: "/reviews" });
+		await rt.fixtures.plugin.storage("reviews", "rev-hidden", { listingId: made.id, member_id: "x", stars: 1, body: "Waiting", status: "pending", createdAt: "2026-02-01T00:00:00.000Z" });
+		// The rating 0.6.x kept for it, carried over by the upgrade.
+		await rt.fixtures.plugin.storage("ratings", made.id, { average: 4, count: 120, schema: "LocalBusiness" });
+		await upgraded(rt);
+		const pending = (await rt.inspect.storage.get<{ createdAt: string }>("reviews", "rev-hidden"))!;
+		await rt.transport.invokeRoute("admin", { type: "block_action", action_id: "review_mod", value: `reject|${pending.createdAt}|rev-hidden`, page: "/reviews" });
 		type Page = { items: Array<{ body: string }>; count: number; average: number; cursor: string | null };
-		let page = (await site.invokeRoute("reviews", { listingId: site.a }, { method: "GET" })) as Page;
+		let page = (await rt.transport.invokeRoute("reviews", { listingId: made.id }, { method: "GET" })) as Page;
 		expect(page.items).toHaveLength(20);
 		expect(page.items[0].body).toBe("Review 119");
 		expect(page).toMatchObject({ count: 120, average: 4 });
 		const seen = [...page.items];
 		while (page.cursor) {
-			page = (await site.invokeRoute("reviews", { listingId: site.a, cursor: page.cursor }, { method: "GET" })) as Page;
+			page = (await rt.transport.invokeRoute("reviews", { listingId: made.id, cursor: page.cursor }, { method: "GET" })) as Page;
 			seen.push(...page.items);
 		}
 		expect(seen).toHaveLength(120);
@@ -1442,17 +1577,24 @@ describe("more than 100 stored rows", () => {
 		const rt = await createPluginRuntimeTestHost();
 		await rt.fixtures.collection(listingsCollection as never);
 		host = { dispose: () => rt.dispose() } as unknown as PluginTestHost;
-		const ids: string[] = [];
 		for (let i = 0; i < 150; i += 1) {
 			const made = await rt.fixtures.content("listings", { data: { title: `Rated ${i}`, listing_type: "restaurant" }, slug: `rated-${i}`, status: "published" } as never);
-			ids.push(made.id);
 			await rt.fixtures.plugin.storage("ratings", made.id, { average: 4, count: 1, schema: "Restaurant" });
 		}
-		const all = (await rt.transport.invokeRoute("ratings", { all: "1" }, { method: "GET" })) as { ratings: Record<string, unknown> };
+		await upgraded(rt);
+		const all = (await rt.transport.invokeRoute("ratings", { all: "1" }, { method: "GET" })) as { ratings: Record<string, unknown>; cursor: string | null };
 		expect(Object.keys(all.ratings)).toHaveLength(150);
-		const cards = (await rt.transport.invokeRoute("listings", { per_page: 60, page: 3 })) as { items: Array<{ rating_count: number }>; total: number };
+		expect(all.cursor).toBeNull();
+		type Cards = { items: Array<{ rating_count: number }>; total: number; cursor: string | null };
+		let cards = (await rt.transport.invokeRoute("listings", { per_page: 60 })) as Cards;
 		expect(cards.total).toBe(150);
-		expect(cards.items.every((item) => item.rating_count === 1)).toBe(true);
+		const seen = [...cards.items];
+		while (cards.cursor) {
+			cards = (await rt.transport.invokeRoute("listings", { per_page: 60, cursor: cards.cursor })) as Cards;
+			seen.push(...cards.items);
+		}
+		expect(seen).toHaveLength(150);
+		expect(seen.every((item) => item.rating_count === 1)).toBe(true);
 	});
 });
 
@@ -1468,47 +1610,58 @@ describe("an approval that fails part way", () => {
 		return { rt, id: made.id, route, approve };
 	}
 
-	it("approves and publishes when the listings type has no expiry field", async () => {
-		// A listings type made by hand without expires_at: nothing is written to a field it lacks,
-		// the listing is published, and Settings, Lifetime says listings do not expire.
-		const { rt, id, route, approve } = await waitingOn((all) => all.filter((field) => field.slug !== "expires_at"));
+	it("approves and publishes when the listings type has no expiry or status field", async () => {
+		// A listings type made by hand without expires_at and listing_status: nothing is written to a
+		// field it lacks, the listing is published, and Settings, Lifetime says what that means.
+		const { rt, id, route, approve } = await waitingOn((all) => all.filter((field) => field.slug !== "expires_at" && field.slug !== "listing_status"));
+		await upgraded(rt);
 		await rt.fixtures.plugin.setting("expiry_days", 30);
 		expect(await approve()).toContain("Listing published.");
-		expect(await rt.inspect.storage.get("submissions", id)).toMatchObject({ status: "approved" });
+		expect(await rt.inspect.storage.get("submissions", id)).toMatchObject({ status: "approved", expires_at: expect.any(Number) });
 		expect(((await rt.inspect.content.get("listings", id)) as { status: string }).status).toBe("published");
+		await settle();
+		// Listora keeps the date itself, so the listing still has one.
+		expect(((await rt.inspect.storage.get<{ exp: number }>("directory", id))!.exp - Date.now()) / 86_400_000).toBeGreaterThan(29.9);
 		const settings = JSON.stringify(await route("admin", { type: "page_load", page: "/settings" }));
-		expect(settings).toContain("Your listings type has no expires_at field, so listings do not expire.");
+		expect(settings).toContain("Expired listings stay on your listing pages");
 	});
 
-	it("puts the row back when the listing cannot be published", async () => {
-		const { rt, id, approve } = await waitingOn((all) => all);
+	it("puts the row back when the listing cannot be published, and offers Remove when it is gone", async () => {
+		const { rt, id, route, approve } = await waitingOn((all) => all);
+		await upgraded(rt);
 		// Gone before the click: moved to Trash in another tab.
 		await (rt.actions.content.trash as (c: string, id: string) => Promise<unknown>)("listings", id);
-		expect(await approve()).toMatch(/Could not publish/);
-		expect(await rt.inspect.storage.get("submissions", id)).toMatchObject({ status: "pending" });
+		expect(await approve()).toContain("deleted or moved to Trash");
+		expect(await rt.inspect.storage.get("submissions", id)).toMatchObject({ status: "pending", gone: true });
+		expect(JSON.stringify(await route("admin", { type: "page_load", page: "/queue" }))).toContain(`forget:${id}`);
 	});
 
 	it("answers a click on a listing being approved right now", async () => {
 		const { rt, id, route } = await waitingOn((all) => all);
+		await upgraded(rt);
 		await rt.fixtures.plugin.storage("submissions", id, { listingId: id, title: "Fragile Cafe", status: "approving", claimedAt: new Date().toISOString(), createdAt: "2026-01-01T00:00:00.000Z" });
-		expect(JSON.stringify(await route("admin", { type: "block_action", action_id: "review", value: `reject:${id}`, page: "/queue" }))).toContain("Someone else is deciding this listing right now.");
-		expect(JSON.stringify(await route("admin", { type: "page_load", page: "/queue" }))).not.toContain("Fragile Cafe");
+		expect(JSON.stringify(await route("admin", { type: "block_action", action_id: "review", value: `reject:${id}`, page: "/queue" }))).toContain("Someone else is deciding this right now.");
+		expect(JSON.stringify(await route("admin", { type: "page_load", page: "/queue" }))).toContain("Fragile Cafe (being approved)");
 	});
 
-	it("puts a row left approving by a cut-off decision back in the queue, the counts and Approve", async () => {
+	it("puts a row left approving by a cut-off decision back in the queue on the next click on it", async () => {
 		const { rt, id, route, approve } = await waitingOn((all) => all);
+		await upgraded(rt);
 		const cutOff = new Date(Date.now() - 10 * 60 * 1000).toISOString();
 		await rt.fixtures.plugin.storage("submissions", id, { listingId: id, title: "Fragile Cafe", status: "approving", claimedAt: cutOff, createdAt: "2026-01-01T00:00:00.000Z" });
+		// Still listed and counted while it is stuck: it never drops out of sight.
 		const queue = JSON.stringify(await route("admin", { type: "page_load", page: "/queue" }));
-		expect(queue).toContain("Fragile Cafe");
-		expect(queue).toContain('{"label":"Pending","value":1}');
+		expect(queue).toContain("Fragile Cafe (being approved)");
+		expect(queue).toContain('{"label":"Waiting","value":1}');
+		expect(await approve()).toContain("cut off part way");
 		expect(await rt.inspect.storage.get("submissions", id)).toMatchObject({ status: "pending" });
 		// A claim taken after the stale row was read carries a new claim time and is left alone.
 		await rt.fixtures.plugin.storage("submissions", id, { listingId: id, title: "Fragile Cafe", status: "approving", claimedAt: new Date().toISOString(), createdAt: "2026-01-01T00:00:00.000Z" });
-		await route("admin", { type: "page_load", page: "/queue" });
+		expect(await approve()).toContain("Someone else is deciding");
 		expect(await rt.inspect.storage.get("submissions", id)).toMatchObject({ status: "approving" });
-		// Left over from 0.6.2, with no claim time at all: also stuck, also released, on the click itself.
+		// Left over from 0.6.2, with no claim time at all: also stuck, also released by a click.
 		await rt.fixtures.plugin.storage("submissions", id, { listingId: id, title: "Fragile Cafe", status: "approving", createdAt: "2026-01-01T00:00:00.000Z" });
+		expect(await approve()).toContain("cut off part way");
 		// Two admins click at once: one publishes, the other is told it is handled.
 		const both = await Promise.all([approve(), approve()]);
 		expect(both.filter((text) => text.includes("Listing published.")).length).toBe(1);

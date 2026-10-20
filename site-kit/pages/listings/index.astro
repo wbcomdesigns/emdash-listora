@@ -60,8 +60,15 @@ const typeChips = LISTING_TYPES.filter((item) => typesInUse.has(item.slug) || it
 // the list keeps its normal order: the page never breaks over a sort.
 let ratings: Record<string, { average: number }> = {};
 if (sort === "rating") {
-	const answer = await callListoraRoute(Astro.locals, "ratings?all=1").catch(() => null);
-	ratings = (answer?.ratings as Record<string, { average: number }> | undefined) ?? {};
+	// The plugin answers best rated first, in parts with a cursor (an engine before 0.7.0 answers
+	// in one part). A few parts cover the listings this page reads.
+	let cursor = "";
+	for (let part = 0; part < 4; part += 1) {
+		const answer = await callListoraRoute(Astro.locals, `ratings?all=1${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""}`).catch(() => null);
+		Object.assign(ratings, (answer?.ratings as Record<string, { average: number }> | undefined) ?? {});
+		cursor = typeof answer?.cursor === "string" ? answer.cursor : "";
+		if (!cursor) break;
+	}
 }
 
 const matching = sortListings(
@@ -448,7 +455,7 @@ function amenityList(value: unknown): string[] {
 		history.replaceState(null, "", url);
 		fillRatings();
 		drawMap();
-		markSaved();
+		askSaved();
 	}
 	// Back and forward bring the matching page.
 	window.addEventListener("popstate", () => location.reload());
@@ -504,19 +511,24 @@ function amenityList(value: unknown): string[] {
 		runSearch();
 	});
 
-	// The page is the same for every visitor, so which hearts are on is asked after it loads.
-	// Asked once: cards drawn later by a search are marked from the same answer.
+	// The page is the same for every visitor, so which hearts are on is asked after it loads, for
+	// the cards on the page. Cards a search draws later are asked about when they appear.
 	let saved = new Set<string>();
+	const asked = new Set<string>();
+	const askSaved = async () => {
+		const ids = [...document.querySelectorAll<HTMLButtonElement>("[data-favorite]")].map((button) => button.dataset.favorite || "").filter((id) => id && !asked.has(id));
+		if (!ids.length) return markSaved();
+		ids.forEach((id) => asked.add(id));
+		for (const id of await savedIds(ids)) saved.add(id);
+		markSaved();
+	};
 	const markSaved = () =>
 		document.querySelectorAll<HTMLButtonElement>("[data-favorite]").forEach((button) => {
 			const on = saved.has(button.dataset.favorite || "");
 			button.classList.toggle("is-on", on);
 			button.setAttribute("aria-pressed", String(on));
 		});
-	savedIds().then((ids) => {
-		saved = ids;
-		markSaved();
-	});
+	askSaved();
 
 	results?.addEventListener("click", async (event) => {
 		const button = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-favorite]");

@@ -95,7 +95,7 @@ export const S = {
 		heading: "Import and export",
 		intro: "Move listings in and out of the directory as a spreadsheet (CSV file).",
 		exportTitle: "Export",
-		exportBody: "Download your published listings (up to 500) as one spreadsheet, with the main details of each. Open it in Excel, Numbers or Google Sheets.",
+		exportBody: "Download every published listing as one spreadsheet, with the main details of each. Open it in Excel, Numbers or Google Sheets.",
 		download: "Download listings",
 		preparing: "Preparing...",
 		none: "There are no published listings to download yet.",
@@ -239,6 +239,13 @@ export const S = {
 		messageSent: "Message sent.",
 		couldNotSend: "Could not send.",
 		claimSent: "Claim sent for review.",
+		youManage: "You manage this listing",
+		youManageBody: "Change it, add photos, reply to reviews and read messages from your account.",
+		openAccount: "Open my listings",
+		signInReview: "Sign in to write a review",
+		signInReviewBody: "Reviews come from members of this site, so each one has a name behind it.",
+		signInClaim: "Sign in to claim this listing",
+		claimedByOwner: "This listing is managed by its owner.",
 	},
 	account: {
 		title: "Your listings",
@@ -300,7 +307,10 @@ export const S = {
 		aMember: "A member",
 		replyLabel: "Your reply (public, up to 1000 characters)",
 		sendReply: "Send for approval",
-		partial: "Showing the first 5000 of each list.",
+		partial: "Showing the newest 100 of each list.",
+		moreReceived: "More reviews",
+		moreMessages: "More messages",
+		deleting: "Deleting your data...",
 		allOnListing: "All of them are on the listing, under Reviews.",
 		noReviewsTitle: "No reviews yet",
 		noReviewsBody: "Reviews of your listings show here once they are published.",
@@ -455,4 +465,12 @@ const CODES: Record<string, string> = {
 /** Plain sentence for a server error code. A missing code uses the general fallback. */
 export function phrase(code?: string): string {
 	return CODES[code || ""] || S.common.fallback;
+}
+
+export function importProgress(done: number, total: number): string {
+	return `Importing ${done} of ${total}...`;
+}
+
+export function exportProgress(rows: number): string {
+	return rows === 1 ? "Preparing... 1 listing so far" : `Preparing... ${rows} listings so far`;
 }

@@ -61,6 +61,7 @@
       "folder": "whats-new",
       "description": "Registry versions, newest first.",
       "pages": [
+        { "slug": "0-7-0", "title": "0.7.0" },
         { "slug": "0-6-3", "title": "0.6.3" },
         { "slug": "0-6-2", "title": "0.6.2" },
         { "slug": "0-6-1", "title": "0.6.1" },
