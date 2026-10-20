@@ -1,7 +1,7 @@
 import type { PluginContext } from "emdash/plugin";
 
 import { budget, MAX_CALLS, spend } from "./lib/budget";
-import { setPluginFields } from "./lib/directory";
+import { onSite, setPluginFields } from "./lib/directory";
 import { clean, EDITABLE, editPatch, fieldValue, filled, webAddress } from "./lib/edits";
 import { parseHours } from "./lib/hours";
 import { fieldsOf, getListing, ownerOf, patchListing, publicListing, publishNow } from "./lib/listings-query";
@@ -656,7 +656,7 @@ export async function dashboard(routeCtx: { user?: unknown; input: unknown }, ct
 		items.map((row) => {
 			const listingId = asString(row.listingId) || row.id;
 			const ref = asRecord(index.get(listingId));
-			const pub = ref.pub === true || ref.vis === true;
+			const pub = onSite(ref);
 			const { member_id: _member, member_email: _email, owner_email: _owner, account_email: _account, rev: _rev, photo_n: _n, tl: _tl, ...shown } = row;
 			const exp = asNumber(ref.exp) ?? 0;
 			const expired = ref.ls === "expired" || (exp > 0 && exp < Date.now());

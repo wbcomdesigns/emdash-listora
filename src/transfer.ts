@@ -2,6 +2,7 @@ import { pluginResponse } from "emdash/plugin";
 import type { PluginContext } from "emdash/plugin";
 
 import { listingFromContent } from "./lib/catalog";
+import { onSite } from "./lib/directory";
 import { CSV_COLUMNS, parseCsv, toCsv, unguard } from "./lib/csv";
 import { clean, webAddress } from "./lib/edits";
 import { fieldsOf } from "./lib/listings-query";
@@ -135,7 +136,7 @@ export async function importCsv(input: unknown, ctx: Ctx) {
 			]);
 			for (const item of live.items) {
 				const row = asRecord(item.data);
-				if (row.vis === true || row.pub === true) known.add(key(asString(row.title), asString(row.city)));
+				if (onSite(row)) known.add(key(asString(row.title), asString(row.city)));
 			}
 			for (const item of [...waiting.items, ...older.items]) known.add(key(asString(asRecord(item.data).title), asString(asRecord(item.data).city)));
 		}

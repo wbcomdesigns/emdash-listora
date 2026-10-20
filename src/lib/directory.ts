@@ -74,9 +74,9 @@ export async function indexListing(ctx: Ctx, item: Item, expOf: () => Promise<nu
 	if (!made.applied) await ctx.storage.directory.updateIf(item.id, { where: {}, set: part }).catch(() => undefined);
 }
 
-/** Take a listing out of the directory (unpublished, trashed, deleted). One call. Never throws. */
+/** Take a listing out of the directory (unpublished, trashed, deleted): no longer listed, no longer a public page. One call. Never throws. */
 export async function hideListing(ctx: Ctx, id: string): Promise<void> {
-	if (id) await ctx.storage.directory.updateIf(id, { where: {}, set: { vis: false } }).catch(() => undefined);
+	if (id) await ctx.storage.directory.updateIf(id, { where: {}, set: { vis: false, pub: false } }).catch(() => undefined);
 }
 
 /** Set a plugin field on a row, creating a bare row when the listing has none yet. One or two calls. */
@@ -87,6 +87,13 @@ export async function setPluginFields(ctx: Ctx, id: string, set: Record<string, 
 	const bare = { vis: false, exp: 0, warned: 0, avg: 0, rc: 0, rseq: 0, ...set };
 	await ctx.storage.directory.compareAndSet(id, null, bare).catch(() => undefined);
 }
+
+/**
+ * A listing whose page is public: in the directory, or expired (its page stays and says so). A row
+ * that was unpublished, trashed or deleted is neither. Every "is it public" check goes through
+ * this or `visible`, never a single stored flag.
+ */
+export const onSite = (row: Record<string, unknown>, now = Date.now()) => visible(row, now) || (row.pub === true && (row.ls === "expired" || overdue(row, now)));
 
 /** A listing a visitor may see now: in the directory and not past its expiry time. */
 export const visible = (row: Record<string, unknown>, now = Date.now()) => row.vis === true && !overdue(row, now);

@@ -330,7 +330,7 @@ describe("bridge calls per entry point, worst case", () => {
 		// limit's longer path (count an existing row) whatever the clock says.
 		const writers: Array<[string, string]> = [
 			["submit", "sub1"], ["submit", "sub2"], ["submit", "sub3"], ["review", "ben"], ["review", "r001"], ["claim", "ben"],
-			["edit", "ana"], ["photo", "ana"], ["reply", "ana"], ["contact", await visitorKey("203.0.113.7")],
+			["edit", "ana"], ["photo", "ana"], ["reply", "ana"], ["contact", (await visitorKey("203.0.113.7"))!],
 		];
 		for (const [action, who] of writers) for (const w of [windowOf(), windowOf() + HOUR]) await put("rates", `${action}:${who}:${w}`, { who, w, c: 1 });
 		// The 0.6.x save log, deleted by the hourly upkeep.

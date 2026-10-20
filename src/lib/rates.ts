@@ -1,5 +1,7 @@
 import type { PluginContext } from "emdash/plugin";
 
+import { guestKey } from "../visitor-key";
+
 /**
  * Writes per person per hour, in `rates` rows (id = action, who and the hour): two calls at most.
  * The count moves in the database (a guarded increment), so requests arriving together cannot each
@@ -29,9 +31,14 @@ export async function rateLimited(ctx: Pick<PluginContext, "storage">, action: s
 	const counted = await ctx.storage.rates.updateIf(id, { where: { c: { lt: RATE_MAX } }, delta: { c: { inc: 1 } } }).catch(() => ({ applied: false as const }));
 	return counted.applied ? null : RATE_LIMITED;
 }
-/** A visitor address as a rate key: hashed, IPv6 by its /64, so the address itself is never stored. */
-export async function visitorKey(ip: string): Promise<string> {
-	const v6 = ip.includes(":") ? ip.split(":").slice(0, 4).join(":") : ip;
-	const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(`listora-visitor|${v6}`));
+/**
+ * A visitor address as a rate key: the shared guestKey (IPv6 by its /64 however it is written,
+ * IPv4 written as IPv6 as the IPv4 address), hashed, so the address itself is never stored. Null
+ * when there is no usable address: the caller refuses the guest write.
+ */
+export async function visitorKey(ip: string): Promise<string | null> {
+	const key = guestKey(ip);
+	if (!key) return null;
+	const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(`listora-visitor|${key}`));
 	return [...new Uint8Array(digest)].slice(0, 12).map((byte) => byte.toString(16).padStart(2, "0")).join("");
 }

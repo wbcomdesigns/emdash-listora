@@ -18,6 +18,7 @@ const REVIEWS_PER_PAGE = 20;
 /** Storage pages one directory request may read when a filter is checked row by row. */
 const SCAN_READS = 6;
 
+const GUEST_UNAVAILABLE = fail("GUEST_UNAVAILABLE", "This site cannot take messages from visitors yet: its host does not pass on visitor addresses. Call or email the listing instead.");
 const BUILDING = fail("INDEX_BUILDING", "The directory is being prepared after an update. Try again in a few minutes.");
 const READ_FAILED = fail("READ_FAILED", "The directory could not be read just now. Try again in a moment.");
 const BAD_POSITION = fail("VALIDATION_ERROR", "That page of results could not be read. Start the search again.");
@@ -201,9 +202,11 @@ export async function contact(input: unknown, request: { requestMeta?: unknown }
 	const listing = await publicListing(ctx, listingId);
 	if (!listing) return NO_LISTING;
 	const { owner } = await ownerOf(ctx, listingId);
-	// Per visitor address (hashed). With no address from the host every guest shares one bucket: fail closed.
-	const ip = asString(asRecord(request.requestMeta).ip);
-	const limited = await rateLimited(ctx, "contact", ip ? await visitorKey(ip) : "unknown");
+	// Per visitor address (hashed). A host that passes on no usable address gives no way to limit
+	// guests, so the guest write is refused (owner, 2026-10-16), never put in one shared bucket.
+	const who = await visitorKey(asString(asRecord(request.requestMeta).ip));
+	if (!who) return GUEST_UNAVAILABLE;
+	const limited = await rateLimited(ctx, "contact", who);
 	if (limited) return limited;
 	const id = `contact-${listingId}-${Date.now()}-${crypto.randomUUID().slice(0, 8)}`;
 	await ctx.storage.contacts.put(id, {
