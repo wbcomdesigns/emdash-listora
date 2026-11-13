@@ -101,12 +101,12 @@ WordPress Listora Free ships "custom listing types with a flexible custom-field 
 | 7 | Keyword search through core | Use EmDash core search (`search()`, with collection search on) for keywords. The index handles type, category and sort. Drop the description from the stored `card` to keep rows small (50 ms CPU limit) |
 | 8 | Outside-source sync | A developer guide: create, update and publish through the content API, throttle, retry REENTRANT and 409, check the index afterwards. Add a hook budget test and a 6,000-listing filter and sort test. The sweep gets a follow-on run ("sweep-more") so a full repair takes hours, not days |
 
-Open owner questions, asked one at a time:
+Owner decisions (2026-11-13):
 
-1. Can built-in types be edited and deleted, or only hidden?
-2. Are the field kinds text, number, select, link and date enough?
-3. Are three sortable number slots per type enough?
-4. #83 (for 0.7.0).
+1. Built-in types: edit and hide, never delete. Custom types can be deleted only while no listing uses them.
+2. Field kinds: six. Text, number, choice from a list, link, date, yes/no. No multi-choice (categories and tags cover it).
+3. Sort slots: three number or date fields per type (`n1` to `n3`), offered once a type is picked.
+4. #83 (0.7.0): a listing a member adds counts as theirs, fixed in code (`SUBMITTER_IS_OWNER`), no admin setting.
 
 Not in 0.8.0: per-type moderation, maps for software, paid features, a native (trusted) block.
 
