@@ -35,13 +35,13 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 		{user ? (
 		<div class="listora-dash">
 			<nav aria-label={S.account.nav}>
-				<a class:list={{ "listora-chip": true, "is-active": tab === "overview" }} href="/account/">{S.account.overview}</a>
-				<a class:list={{ "listora-chip": true, "is-active": tab === "listings" }} href="/account/?tab=listings">{S.account.myListings}</a>
-				<a class:list={{ "listora-chip": true, "is-active": tab === "reviews" }} href="/account/?tab=reviews">{S.account.reviews}</a>
-				<a class:list={{ "listora-chip": true, "is-active": tab === "messages" }} href="/account/?tab=messages">{S.account.messages}<span id="dash-messages-count" class="listora-chip__count" hidden></span></a>
-				<a class:list={{ "listora-chip": true, "is-active": tab === "claims" }} href="/account/?tab=claims">{S.account.claims}</a>
-				<a class:list={{ "listora-chip": true, "is-active": tab === "favorites" }} href="/account/?tab=favorites">{S.account.favorites}</a>
-				<a class:list={{ "listora-chip": true, "is-active": tab === "profile" }} href="/account/?tab=profile">{S.account.profile}</a>
+				<a class:list={{ "listora-chip": true, "is-active": tab === "overview" }} aria-current={tab === "overview" ? "page" : undefined} href="/account/">{S.account.overview}</a>
+				<a class:list={{ "listora-chip": true, "is-active": tab === "listings" }} aria-current={tab === "listings" ? "page" : undefined} href="/account/?tab=listings">{S.account.myListings}</a>
+				<a class:list={{ "listora-chip": true, "is-active": tab === "reviews" }} aria-current={tab === "reviews" ? "page" : undefined} href="/account/?tab=reviews">{S.account.reviews}</a>
+				<a class:list={{ "listora-chip": true, "is-active": tab === "messages" }} aria-current={tab === "messages" ? "page" : undefined} href="/account/?tab=messages">{S.account.messages}<span id="dash-messages-count" class="listora-chip__count" hidden></span></a>
+				<a class:list={{ "listora-chip": true, "is-active": tab === "claims" }} aria-current={tab === "claims" ? "page" : undefined} href="/account/?tab=claims">{S.account.claims}</a>
+				<a class:list={{ "listora-chip": true, "is-active": tab === "favorites" }} aria-current={tab === "favorites" ? "page" : undefined} href="/account/?tab=favorites">{S.account.favorites}</a>
+				<a class:list={{ "listora-chip": true, "is-active": tab === "profile" }} aria-current={tab === "profile" ? "page" : undefined} href="/account/?tab=profile">{S.account.profile}</a>
 			</nav>
 			<div id="dash-main" data-tab={tab} data-zone={zone}>
 				<section id="overview-panel">
@@ -281,61 +281,103 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 		);
 	});
 
+	// One tab per request, plus the overview for the counts and the new-messages badge. An engine
+	// before 0.7.0 ignores the tab and answers with everything, which draws the same way.
 	async function load() {
 		if (!document.getElementById("dash-main")) return;
-		const data = await api("dashboard");
-		if (!data.ok) {
-			fill("dash-counts", `<p class="listora-status" data-tone="error">${esc(data.error?.message || S.account.loadFailed)}</p>`);
+		const [overview, data] = await Promise.all([api("dashboard?tab=overview"), tab === "overview" || tab === "profile" ? null : api(`dashboard?tab=${encodeURIComponent(tab)}`)]);
+		if (!overview.ok || (data && !data.ok)) {
+			fill("dash-counts", `<p class="listora-status" data-tone="error">${esc((data && !data.ok ? data : overview).error?.message || S.account.loadFailed)}</p>`);
 			return;
 		}
 		fill(
 			"dash-counts",
-			Object.entries((data.counts ?? {}) as Record<string, number>)
+			Object.entries((overview.counts ?? {}) as Record<string, number>)
 				.map(([key, value]) => `<a class="listora-chip" href="/account/?tab=${esc(key)}">${esc(LABELS[key] ?? key)}: ${esc(value)}</a>`)
-				.join("") + (data.partial ? `<p class="listora-meta">${esc(S.account.partial)}</p>` : ""),
+				.join("") + (overview.partial ? `<p class="listora-meta">${esc(S.account.partial)}</p>` : ""),
 		);
-		const fresh = Number((data.counts as Record<string, number> | undefined)?.messages) || 0;
+		const fresh = Number((overview.counts as Record<string, number> | undefined)?.messages) || 0;
 		const badge = document.getElementById("dash-messages-count");
 		if (badge) {
 			badge.hidden = fresh === 0;
 			badge.textContent = String(fresh);
 			badge.setAttribute("aria-label", freshCount(fresh));
 		}
-		type Rows = Array<Record<string, unknown>>;
+		if (data) draw(data);
+	}
+
+	type Rows = Array<Record<string, unknown>>;
+	const receivedHtml = (item: Record<string, unknown>) => {
+		const stars = Number(item.stars) || 0;
+		const text = [item.title, item.body].filter(Boolean).join(": ");
+		const shown = item.reply ? `<div class="listora-reply"><p class="listora-reply__label">${esc(S.account.yourReply)}</p><p>${esc(item.reply)}</p></div>` : "";
+		const waiting = item.reply_waiting
+			? `<div class="listora-reply"><p class="listora-reply__label"><span class="listora-tag">${esc(S.account.waiting)}</span></p><p>${esc(item.reply_waiting)}</p></div>`
+			: "";
+		const id = esc(item.ref);
+		const label = item.reply || item.reply_waiting ? S.account.changeReply : S.account.reply;
+		return `<li class="listora-review listora-message" tabindex="-1">
+			<p class="listora-message__head"><strong>${esc(item.listing_title || S.account.aListing)}</strong></p>
+			<p class="listora-meta">${esc(item.author || S.account.aMember)} · <span aria-label="${esc(outOf5(stars))}">${"★".repeat(stars)}</span> · ${esc(day(item.createdAt))}</p>
+			${text ? `<p class="listora-message__body">${esc(text)}</p>` : ""}
+			${shown}${waiting}
+			<details class="listora-reply-form">
+				<summary class="listora-btn listora-btn--secondary">${esc(label)}</summary>
+				<form data-reply="${id}" data-listing="${esc(item.listingId)}" class="listora-form">
+					<label class="listora-label" for="reply-${id}">${esc(S.account.replyLabel)}</label>
+					<textarea id="reply-${id}" class="listora-input" name="text" rows="3" maxlength="1000" required>${esc(item.reply_waiting || item.reply || "")}</textarea>
+					<button type="submit" class="listora-btn">${esc(S.account.sendReply)}</button>
+				</form>
+			</details>
+		</li>`;
+	};
+	const messageHtml = (item: Record<string, unknown>) => {
+		const from = esc(item.name || S.account.noName);
+		const mail = item.email ? ` · <a href="mailto:${esc(item.email)}">${esc(item.email)}</a>` : "";
+		// "New" is said in words, not by colour alone.
+		const state = item.done ? "" : `<span class="listora-tag">${esc(S.account.fresh)}</span> `;
+		const button = `<button type="button" class="listora-btn listora-btn--secondary" data-message="${esc(item.id)}" data-done="${item.done ? "0" : "1"}">${esc(item.done ? S.account.markNew : S.account.markDone)}</button>`;
+		return `<li class="listora-review listora-message${item.done ? " is-done" : ""}" tabindex="-1">
+			<p class="listora-message__head">${state}<strong>${esc(item.listing_title || S.account.aListing)}</strong></p>
+			<p class="listora-meta">${esc(S.account.from)} ${from}${mail} · ${esc(day(item.createdAt))}</p>
+			<p class="listora-message__body">${esc(item.message)}</p>
+			${button}
+		</li>`;
+	};
+	const moreButton = (kind: string, cursor: unknown, label: string) =>
+		typeof cursor === "string" && cursor ? `<p class="listora-more"><button type="button" class="listora-btn listora-btn--secondary" data-more="${esc(kind)}" data-cursor="${esc(cursor)}">${esc(label)}</button></p>` : "";
+
+	// More reviews of the member's listings, or more messages: the next 20 (or 50) under the list.
+	document.addEventListener("click", async (event) => {
+		const button = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-more]");
+		if (!button) return;
+		const kind = button.dataset.more === "messages" ? "messages" : "reviews";
+		button.disabled = true;
+		const data = await api(`dashboard?tab=${kind}&cursor=${encodeURIComponent(button.dataset.cursor || "")}`);
+		if (!data.ok) {
+			button.disabled = false;
+			button.insertAdjacentHTML("afterend", ` <span class="listora-status" data-tone="error" role="alert">${esc(data.error?.message || S.account.loadFailed)}</span>`);
+			return;
+		}
+		const list = document.querySelector<HTMLElement>(`#${kind === "messages" ? "dash-messages" : "dash-received"} .listora-dash-list`);
+		const items = ((kind === "messages" ? data.messages : data.received) ?? []) as Rows;
+		const had = list?.children.length ?? 0;
+		list?.insertAdjacentHTML("beforeend", items.map(kind === "messages" ? messageHtml : receivedHtml).join(""));
+		const next = moreButton(kind, kind === "messages" ? data.messages_cursor : data.received_cursor, kind === "messages" ? S.account.moreMessages : S.account.moreReceived);
+		const holder = button.parentElement;
+		if (next) holder?.insertAdjacentHTML("afterend", next);
+		holder?.remove();
+		(list?.children[had] as HTMLElement | undefined)?.focus();
+	});
+
+	function draw(data: Record<string, unknown>) {
 		fill("dash-listings", list(data.listings as Rows, ["city", "status"]));
 		fill("dash-reviews", list(data.reviews as Rows, ["body", "status"]));
 		const received = (data.received ?? []) as Rows;
 		fill(
 			"dash-received",
 			received.length
-				? `<ul class="listora-dash-list">${received
-						.map((item) => {
-							const stars = Number(item.stars) || 0;
-							const text = [item.title, item.body].filter(Boolean).join(": ");
-							const shown = item.reply
-								? `<div class="listora-reply"><p class="listora-reply__label">${esc(S.account.yourReply)}</p><p>${esc(item.reply)}</p></div>`
-								: "";
-							const waiting = item.reply_waiting
-								? `<div class="listora-reply"><p class="listora-reply__label"><span class="listora-tag">${esc(S.account.waiting)}</span></p><p>${esc(item.reply_waiting)}</p></div>`
-								: "";
-							const id = esc(item.ref);
-							const label = item.reply || item.reply_waiting ? S.account.changeReply : S.account.reply;
-							return `<li class="listora-review listora-message">
-								<p class="listora-message__head"><strong>${esc(item.listing_title || S.account.aListing)}</strong></p>
-								<p class="listora-meta">${esc(item.author || S.account.aMember)} · <span aria-label="${esc(outOf5(stars))}">${"★".repeat(stars)}</span> · ${esc(day(item.createdAt))}</p>
-								${text ? `<p class="listora-message__body">${esc(text)}</p>` : ""}
-								${shown}${waiting}
-								<details class="listora-reply-form">
-									<summary class="listora-btn listora-btn--secondary">${esc(label)}</summary>
-									<form data-reply="${id}" data-listing="${esc(item.listingId)}" class="listora-form">
-										<label class="listora-label" for="reply-${id}">${esc(S.account.replyLabel)}</label>
-										<textarea id="reply-${id}" class="listora-input" name="text" rows="3" maxlength="1000" required>${esc(item.reply_waiting || item.reply || "")}</textarea>
-										<button type="submit" class="listora-btn">${esc(S.account.sendReply)}</button>
-									</form>
-								</details>
-							</li>`;
-						})
-						.join("")}</ul>`
+				? `<ul class="listora-dash-list">${received.map(receivedHtml).join("")}</ul>${moreButton("reviews", data.received_cursor, S.account.moreReceived)}`
 				: `<div class="listora-empty"><h2>${esc(S.account.noReviewsTitle)}</h2><p>${esc(S.account.noReviewsBody)}</p></div>`,
 		);
 		// A listing with more reviews than the newest 10 shown above: say how many there are.
@@ -353,21 +395,7 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 		fill(
 			"dash-messages",
 			messages.length
-				? `<ul class="listora-dash-list">${messages
-						.map((item) => {
-							const from = esc(item.name || S.account.noName);
-							const mail = item.email ? ` · <a href="mailto:${esc(item.email)}">${esc(item.email)}</a>` : "";
-							// "New" is said in words, not by colour alone.
-							const state = item.done ? "" : `<span class="listora-tag">${esc(S.account.fresh)}</span> `;
-							const button = `<button type="button" class="listora-btn listora-btn--secondary" data-message="${esc(item.id)}" data-done="${item.done ? "0" : "1"}">${esc(item.done ? S.account.markNew : S.account.markDone)}</button>`;
-							return `<li class="listora-review listora-message${item.done ? " is-done" : ""}">
-								<p class="listora-message__head">${state}<strong>${esc(item.listing_title || S.account.aListing)}</strong></p>
-								<p class="listora-meta">${esc(S.account.from)} ${from}${mail} · ${esc(day(item.createdAt))}</p>
-								<p class="listora-message__body">${esc(item.message)}</p>
-								${button}
-							</li>`;
-						})
-						.join("")}</ul>`
+				? `<ul class="listora-dash-list">${messages.map(messageHtml).join("")}</ul>${moreButton("messages", data.messages_cursor, S.account.moreMessages)}`
 				: `<div class="listora-empty"><h2>${esc(S.account.noMessagesTitle)}</h2><p>${esc(S.account.noMessagesBody)}</p></div>`,
 		);
 		fill("dash-favs", list(data.favorites as Rows, []));
@@ -408,11 +436,18 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 			return;
 		}
 		eraseBtn.setAttribute("aria-busy", "true");
-		const result = await api("privacy", { action: "erase" });
+		const status = document.getElementById("erase-status");
+		if (status) {
+			status.hidden = false;
+			status.dataset.tone = "info";
+			status.textContent = S.account.deleting;
+		}
+		// A member with a lot of data is deleted a part at a time: the site answers MORE until it is done.
+		let result = await api("privacy", { action: "erase" });
+		for (let part = 0; part < 60 && !result.ok && result.error?.code === "MORE"; part += 1) result = await api("privacy", { action: "erase" });
 		eraseBtn.removeAttribute("aria-busy");
 		eraseBtn.dataset.armed = "";
 		eraseBtn.textContent = S.account.delete;
-		const status = document.getElementById("erase-status");
 		if (status) {
 			status.hidden = false;
 			status.dataset.tone = result.ok ? "success" : "error";

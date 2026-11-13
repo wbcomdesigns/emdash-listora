@@ -320,6 +320,16 @@ const schema = {
 
 					<div id="tab-reviews" hidden role="tabpanel" aria-labelledby="tab-btn-reviews">
 						<div id="listora-reviews" class="listora-reviews"></div>
+					<div id="listora-review-signin" class="listora-form-section listora-empty" hidden>
+						<h2>{S.listing.signInReview}</h2>
+						<p>{S.listing.signInReviewBody}</p>
+						<a class="listora-btn" data-signin href="/_emdash/admin/login">{S.common.signIn}</a>
+					</div>
+					<div class="listora-form-section listora-empty" data-owner-note hidden>
+						<h2>{S.listing.youManage}</h2>
+						<p>{S.listing.youManageBody}</p>
+						<a class="listora-btn" href="/account/?tab=listings">{S.listing.openAccount}</a>
+					</div>
 					<form id="listora-review-form" class="listora-form listora-form-section">
 						<h2>{S.listing.writeReview}</h2>
 						<p class="listora-helper">{S.listing.writeHelp}</p>
@@ -495,6 +505,17 @@ const schema = {
 							</div>
 						) : (
 							<div class="listora-detail__claim-card">
+								<div data-owner-note hidden>
+									<h2>{S.listing.youManage}</h2>
+									<p class="listora-helper">{S.listing.youManageBody}</p>
+									<a class="listora-btn listora-btn--secondary" href="/account/?tab=listings">{S.listing.openAccount}</a>
+								</div>
+								<p class="listora-detail__claimed-badge" id="claim-taken" hidden>{S.listing.claimedByOwner}</p>
+								<div id="claim-signin" hidden>
+									<h2>{S.listing.claimTitle}</h2>
+									<p class="listora-helper">{S.listing.claimHelp}</p>
+									<a class="listora-btn" data-signin href="/_emdash/admin/login">{S.listing.signInClaim}</a>
+								</div>
 								<form id="claim-form" class="listora-form">
 									<h2>{S.listing.claimTitle}</h2>
 									<p class="listora-helper">{S.listing.claimHelp}</p>
@@ -535,7 +556,7 @@ const schema = {
 
 <link rel="stylesheet" href="/vendor/leaflet/leaflet.css" />
 <script>
-	import { api, day, esc, notify, savedIds } from "../../lib/listora";
+	import { api, day, esc, notify, signInUrl, viewer } from "../../lib/listora";
 	import { outOf5, photoPosition, reviewSummary, S } from "../../lib/listora-strings";
 
 	const favBtn = document.getElementById("fav-btn");
@@ -622,7 +643,7 @@ const schema = {
 
 	// Reviews come 20 at a time, newest first. "More reviews" asks for the next 20.
 	const reviewHtml = (item: Record<string, unknown>) =>
-		`<article class="listora-review"><strong>${esc(item.author || S.listing.member)}</strong> <span class="listora-stars" aria-label="${esc(outOf5(Number(item.stars) || 0))}">${"★".repeat(Number(item.stars) || 0)}</span><h3>${esc(item.title)}</h3><p>${esc(item.body)}</p>${item.owner_reply ? `<div class="listora-reply"><p class="listora-reply__label">${esc(S.listing.ownerReply)}${item.owner_reply_at ? ` · ${esc(day(item.owner_reply_at))}` : ""}</p><p>${esc(item.owner_reply)}</p></div>` : ""}</article>`;
+		`<article class="listora-review" tabindex="-1"><strong>${esc(item.author || S.listing.member)}</strong> <span class="listora-stars" aria-label="${esc(outOf5(Number(item.stars) || 0))}">${"★".repeat(Number(item.stars) || 0)}</span><h3>${esc(item.title)}</h3><p>${esc(item.body)}</p>${item.owner_reply ? `<div class="listora-reply"><p class="listora-reply__label">${esc(S.listing.ownerReply)}${item.owner_reply_at ? ` · ${esc(day(item.owner_reply_at))}` : ""}</p><p>${esc(item.owner_reply)}</p></div>` : ""}</article>`;
 	async function loadReviews(cursor = "") {
 		const box = document.getElementById("listora-reviews");
 		if (!box) return;
@@ -642,8 +663,11 @@ const schema = {
 		const next = typeof data.cursor === "string" ? data.cursor : "";
 		const button = next ? `<p class="listora-more"><button type="button" class="listora-btn listora-btn--secondary" data-more-reviews="${esc(next)}">${esc(S.listing.moreReviews)}</button></p>` : "";
 		if (cursor) {
+			const had = box.querySelectorAll(".listora-review").length;
 			more?.parentElement?.remove();
 			box.insertAdjacentHTML("beforeend", items.map(reviewHtml).join("") + button);
+			// The button is gone: keyboard focus moves to the first review it brought in.
+			box.querySelectorAll<HTMLElement>(".listora-review")[had]?.focus();
 			return;
 		}
 		const summary = document.getElementById("listora-rating");
@@ -719,8 +743,33 @@ const schema = {
 		favBtn.setAttribute("aria-pressed", String(saved));
 		(favBtn.querySelector("[data-label]") ?? favBtn).textContent = saved ? S.listing.saved : S.listing.save;
 	};
-	// The page is the same for every visitor, so whether this member saved it is asked after it loads.
-	if (favBtn) savedIds().then((ids) => showSaved(ids.has(listingId)));
+	// The page is the same for every visitor, so who is looking is asked after it loads: a guest gets
+	// a way to sign in in place of the forms, the member who manages the listing a way to their
+	// account instead of Claim and Write a review. Until the answer comes, nothing shows that might go.
+	const reviewForm = document.getElementById("listora-review-form");
+	const claimForm = document.getElementById("claim-form");
+	if (reviewForm) reviewForm.hidden = true;
+	if (claimForm) claimForm.hidden = true;
+	document.querySelectorAll<HTMLAnchorElement>("[data-signin]").forEach((link) => {
+		link.href = signInUrl();
+	});
+	if (listingId) {
+		viewer(listingId).then((who) => {
+			const show = (id: string, on: boolean) => {
+				const node = document.getElementById(id);
+				if (node) node.hidden = !on;
+			};
+			const guest = who.known && !who.signedIn;
+			const mine = who.owner === "you";
+			if (reviewForm) reviewForm.hidden = guest || mine;
+			if (claimForm) claimForm.hidden = guest || mine || who.owner === "other";
+			show("listora-review-signin", guest);
+			show("claim-signin", guest);
+			show("claim-taken", who.owner === "other");
+			document.querySelectorAll<HTMLElement>("[data-owner-note]").forEach((node) => (node.hidden = !mine));
+			if (favBtn && who.signedIn) showSaved(who.saved);
+		});
+	}
 
 	favBtn?.addEventListener("click", async () => {
 		const saved = favBtn.classList.contains("is-saved");

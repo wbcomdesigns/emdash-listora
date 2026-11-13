@@ -35,13 +35,16 @@
 	"allowedHosts": [],
 	"storage": {
 		"submissions": {
-			"indexes": ["status", "createdAt", "title", "member_id"]
+			"indexes": ["status", "createdAt", "title", "member_id", "tl", "gone", "owner_email"]
+		},
+		"directory": {
+			"indexes": ["vis", "pub", "type", "tl", "cl", "feat", "avg", "rc", "exp"]
 		},
 		"events": {
 			"indexes": ["savedAt", "contentId", "collection"]
 		},
 		"reviews": {
-			"indexes": ["status", "listingId", "member_id", "createdAt", "reply_status"]
+			"indexes": ["status", "listingId", "member_id", "createdAt", "reply_status", "reply_by", "stars"]
 		},
 		"claims": {
 			"indexes": ["status", "listingId", "member_id", "createdAt"]
@@ -56,13 +59,19 @@
 			"indexes": ["status", "listingId", "member_id", "createdAt"]
 		},
 		"contacts": {
-			"indexes": ["listingId", "createdAt", "status", "notice"]
+			"indexes": ["listingId", "createdAt", "status", "notice", "owner_done"]
 		},
-		"email_log": {
-			"indexes": ["template", "status", "createdAt"]
+		"notice_queue": {
+			"indexes": ["listingId"]
 		},
 		"ratings": {
-			"indexes": ["count"]
+			"indexes": ["count", "v"]
+		},
+		"rating_queue": {
+			"indexes": ["listingId"]
+		},
+		"rates": {
+			"indexes": ["w", "who"]
 		},
 		"blocked": {
 			"indexes": ["member_id", "createdAt"]
@@ -80,6 +89,18 @@
 				"path": "/queue",
 				"label": "Listings queue",
 				"icon": "buildings",
+				"group": "Listora"
+			},
+			{
+				"path": "/changes",
+				"label": "Listing changes",
+				"icon": "pencil",
+				"group": "Listora"
+			},
+			{
+				"path": "/photos",
+				"label": "Listing photos",
+				"icon": "image",
 				"group": "Listora"
 			},
 			{

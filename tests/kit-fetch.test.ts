@@ -88,3 +88,52 @@ describe("server-side calls", () => {
 		expect(seen).toHaveLength(0);
 	});
 });
+
+describe("kit words EmDash's own refusals", () => {
+	const reply = (status: number, error: { code: string; message: string }) =>
+		new Response(JSON.stringify({ success: false, error }), { status });
+
+	it("says try again in a moment while a plugin update builds its indexes (EmDash 1.5)", async () => {
+		inBrowser();
+		vi.stubGlobal("localStorage", { getItem: () => null, setItem() {}, removeItem() {} });
+		vi.resetModules();
+		const { api } = await import("../site-kit/lib/listora");
+		vi.stubGlobal("fetch", async () => reply(503, { code: "STORAGE_INDEXES_NOT_READY", message: "Plugin storage indexes are not ready" }));
+		const result = await api("submit", { title: "A" });
+		expect(result.error?.code).toBe("NOT_READY");
+		expect(result.error?.message).toBe("The directory is finishing an update. Try again in a moment.");
+	});
+
+	it("passes the plugin's own message through", async () => {
+		inBrowser();
+		vi.stubGlobal("localStorage", { getItem: () => null, setItem() {}, removeItem() {} });
+		vi.resetModules();
+		const { api } = await import("../site-kit/lib/listora");
+		vi.stubGlobal("fetch", async () => reply(400, { code: "INVALID", message: "Add a title." }));
+		expect((await api("submit", { title: "" })).error).toEqual({ code: "FAILED", message: "Add a title." });
+	});
+});
+
+describe("the guest note survives building sign-in links (walk finding M2)", () => {
+	it("signInUrl does not forget the guest, so the next page asks nothing", async () => {
+		const store = new Map<string, string>([["listora-guest", String(Date.now())]]);
+		vi.stubGlobal("localStorage", { getItem: (k: string) => store.get(k) ?? null, setItem: (k: string, v: string) => store.set(k, v), removeItem: (k: string) => store.delete(k) });
+		vi.stubGlobal("location", { pathname: "/listings/a/", search: "" });
+		vi.resetModules();
+		const kit = await import("../site-kit/lib/listora");
+		expect(kit.signInUrl()).toBe("/_emdash/admin/login?redirect=%2Flistings%2Fa%2F");
+		expect(kit.knownGuest()).toBe(true);
+	});
+
+	it("goSignIn (the directory heart) forgets the guest before leaving, so the member is asked after signing in", async () => {
+		const store = new Map<string, string>([["listora-guest", String(Date.now())]]);
+		const loc = { pathname: "/listings/", search: "?type=cafe", href: "/listings/?type=cafe" };
+		vi.stubGlobal("localStorage", { getItem: (k: string) => store.get(k) ?? null, setItem: (k: string, v: string) => store.set(k, v), removeItem: (k: string) => store.delete(k) });
+		vi.stubGlobal("location", loc);
+		vi.resetModules();
+		const kit = await import("../site-kit/lib/listora");
+		kit.goSignIn();
+		expect(kit.knownGuest()).toBe(false);
+		expect(loc.href).toBe("/_emdash/admin/login?redirect=%2Flistings%2F%3Ftype%3Dcafe");
+	});
+});

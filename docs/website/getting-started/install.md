@@ -7,7 +7,8 @@ This takes a developer about ten minutes. The plugin gives you the directory eng
 **1. Your site needs a sandbox runner.** Registry plugins run in a sandbox. Until the site has one, Admin, Plugins shows "No plugins configured" and there is no Registry in the menu.
 
 - **Node:** in your site, run `npm install @emdash-cms/sandbox-workerd workerd`, then add `sandboxRunner: "@emdash-cms/sandbox-workerd/sandbox",` inside `emdash({ ... })` in `astro.config.mjs`.
-- **Cloudflare: not supported yet.** On Cloudflare Workers EmDash gives each plugin call 10 requests to the site, and several of this plugin's pages and actions need more, so they fail. A release that fits is in progress. Node sites are not affected.
+- **Cloudflare: not supported yet.** On Cloudflare Workers EmDash gives each plugin call 10 requests to the site. From 0.7.0 every page, action and task of this plugin fits in that limit by its tests, but it has not yet passed a walk on a Cloudflare site, so treat Cloudflare as not supported until it does. Node sites are not affected.
+- **Messages from guests need the visitor's address.** Cloudflare passes it on. On Node behind a proxy, set `trustedProxyHeaders` in your EmDash config to a header the proxy overwrites (`["x-real-ip"]` behind nginx). Without one, the contact form tells guests to call or email the listing instead (0.7.0).
 
 Stop the dev server and start it again. **Registry** now shows in the admin menu.
 
@@ -25,7 +26,7 @@ Checked on EmDash 1.3.1 with the `blog` template on Node.
    ```bash
    kit="$(mktemp -d)" &&
      git clone --depth 1 \
-       --branch v0.6.3 \
+       --branch v0.7.0 \
        https://github.com/wbcomdesigns/emdash-listora \
        "$kit/emdash-listora" &&
      "$kit/emdash-listora/scripts/add-to-site.sh" .
@@ -57,7 +58,7 @@ Colours and fonts come from your site: the kit reads `--color-bg`, `--color-text
 
 ## A listings type made by hand
 
-If you created the `listings` type in the admin instead of with the seed command, it may lack optional fields. Listora only writes the fields your type has. Without an `expires_at` field, listings never expire, and Admin, Listora, Settings, Lifetime says so. To add it, run the seed command again (it adds missing fields and skips the rest), or add a field with the slug `expires_at` in Content Types, Listings.
+If you created the `listings` type in the admin instead of with the seed command, it may lack optional fields. Listora only writes the fields your type has. Listora keeps each listing's expiry date itself, so the `expires_at` field is no longer needed (0.7.0). Without a `listing_status` field an expired listing leaves Listora's directory routes but still shows on pages that read the listings directly, and Admin, Listora, Settings, Lifetime says so. To add it, run the seed command again (it adds missing fields and skips the rest), or add a field with the slug `listing_status` in Content Types, Listings.
 
 ## Check four addresses
 
