@@ -124,4 +124,16 @@ describe("the guest note survives building sign-in links (walk finding M2)", () 
 		expect(kit.signInUrl()).toBe("/_emdash/admin/login?redirect=%2Flistings%2Fa%2F");
 		expect(kit.knownGuest()).toBe(true);
 	});
+
+	it("goSignIn (the directory heart) forgets the guest before leaving, so the member is asked after signing in", async () => {
+		const store = new Map<string, string>([["listora-guest", String(Date.now())]]);
+		const loc = { pathname: "/listings/", search: "?type=cafe", href: "/listings/?type=cafe" };
+		vi.stubGlobal("localStorage", { getItem: (k: string) => store.get(k) ?? null, setItem: (k: string, v: string) => store.set(k, v), removeItem: (k: string) => store.delete(k) });
+		vi.stubGlobal("location", loc);
+		vi.resetModules();
+		const kit = await import("../site-kit/lib/listora");
+		kit.goSignIn();
+		expect(kit.knownGuest()).toBe(false);
+		expect(loc.href).toBe("/_emdash/admin/login?redirect=%2Flistings%2F%3Ftype%3Dcafe");
+	});
 });

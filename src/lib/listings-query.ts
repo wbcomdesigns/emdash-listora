@@ -19,8 +19,11 @@ export async function publicListing(ctx: Ctx, id: string): Promise<Item | null> 
 	return item?.status === "published" ? item : null;
 }
 
-/** Refusals EmDash 1.4+ gives when another save of the same entry is in flight; worth one retry. */
-const RETRYABLE = new Set(["CONFLICT", "CONTENT_ACTION_REENTRANT"]);
+/**
+ * EmDash 1.4+ answers CONFLICT when another save of the same entry landed first: worth one retry.
+ * CONTENT_ACTION_REENTRANT is not retried: the action it collides with is still running in this call.
+ */
+const RETRYABLE = new Set(["CONFLICT"]);
 
 /**
  * Publish a listing's current state, right after this same call created or changed it, or to approve

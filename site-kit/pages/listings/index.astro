@@ -390,7 +390,7 @@ function amenityList(value: unknown): string[] {
 
 <link rel="stylesheet" href="/vendor/leaflet/leaflet.css" />
 <script>
-	import { api, esc, savedIds, signInUrl } from "../../lib/listora";
+	import { api, esc, goSignIn, savedIds } from "../../lib/listora";
 	import { rated, S } from "../../lib/listora-strings";
 
 	const form = document.getElementById("listora-search-form") as HTMLFormElement | null;
@@ -539,7 +539,7 @@ function amenityList(value: unknown): string[] {
 		const on = button.classList.contains("is-on");
 		const result = await api("favorites", { listingId }, on ? "DELETE" : "POST");
 		if (!result.ok) {
-			if (result.error?.code === "SIGN_IN_REQUIRED") location.href = signInUrl();
+			if (result.error?.code === "SIGN_IN_REQUIRED") goSignIn();
 			return;
 		}
 		if (on) saved.delete(listingId);

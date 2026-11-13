@@ -312,26 +312,35 @@ export function esc(value: unknown): string {
 	return String(value ?? "").replace(/[&<>"']/g, (char) => ESCAPES[char]);
 }
 
-const SIGN_IN = "/_emdash/admin/login";
-
 /** The sign-in page, coming back here. No side effects: pages build their links with it on load. */
 export function signInUrl(): string {
-	return `${SIGN_IN}?redirect=${encodeURIComponent(location.pathname + location.search)}`;
+	return `/_emdash/admin/login?redirect=${encodeURIComponent(location.pathname + location.search)}`;
 }
 
-// Following a sign-in link forgets that this browser was last seen as a guest, so the next page
-// asks again. Only the click does: clearing it while building the link (as 0.7.0 first did) made
-// every page ask, and be refused, again.
+/** About to sign in: forget that this browser was last seen as a guest, so the next page asks again. */
+function forgetGuest(): void {
+	try {
+		localStorage.removeItem("listora-guest");
+	} catch {
+		// Storage can be blocked.
+	}
+}
+
+/** Send the visitor to sign in from code (a heart, a form), forgetting the guest note first. */
+export function goSignIn(): void {
+	forgetGuest();
+	location.href = signInUrl();
+}
+
+// Following a sign-in link forgets the guest note too. Only the click does: clearing it while
+// building the link (as 0.7.0 first did) made every page ask, and be refused, again. The page is
+// whatever signInUrl() points at, so a site that moves its sign-in page changes it in one place.
 if (typeof document !== "undefined") {
 	document.addEventListener(
 		"click",
 		(event) => {
-			if (!(event.target as Element | null)?.closest?.(`a[href^="${SIGN_IN}"]`)) return;
-			try {
-				localStorage.removeItem("listora-guest");
-			} catch {
-				// Storage can be blocked.
-			}
+			const link = (event.target as Element | null)?.closest?.("a[href]") as HTMLAnchorElement | null;
+			if (link && link.href.split("?")[0] === new URL(signInUrl(), location.href).href.split("?")[0]) forgetGuest();
 		},
 		true,
 	);

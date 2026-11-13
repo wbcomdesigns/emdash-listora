@@ -50,10 +50,10 @@ describe("publishNow", () => {
 		expect(calls).toEqual(["publish", "publish"]);
 	});
 
-	it("retries once after a re-entrant action", async () => {
+	it("does not retry a re-entrant action: the one it collides with is still running", async () => {
 		const { ctx, calls } = host(["CONTENT_ACTION_REENTRANT"]);
-		expect(await publishNow(ctx, "l1")).toBe(true);
-		expect(calls).toHaveLength(2);
+		expect(await publishNow(ctx, "l1")).toBe(false);
+		expect(calls).toEqual(["publish"]);
 	});
 
 	it("gives up after the second conflict", async () => {
