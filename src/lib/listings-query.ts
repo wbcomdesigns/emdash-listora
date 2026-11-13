@@ -20,12 +20,6 @@ export async function publicListing(ctx: Ctx, id: string): Promise<Item | null> 
 }
 
 /**
- * EmDash 1.4+ answers CONFLICT when another save of the same entry landed first: worth one retry.
- * CONTENT_ACTION_REENTRANT is not retried: the action it collides with is still running in this call.
- */
-const RETRYABLE = new Set(["CONFLICT"]);
-
-/**
  * Publish a listing's current state, right after this same call created or changed it, or to approve
  * a draft as it is now. One call on Cloudflare, which publishes without a revision. A refusal with no
  * error code reads the revision and tries once with it: the Node sandbox (sandbox-workerd) requires
@@ -41,7 +35,9 @@ export async function publishNow(ctx: Ctx, id: string): Promise<boolean> {
 			return true;
 		} catch (error) {
 			const code = asString((error as { code?: unknown })?.code);
-			if (RETRYABLE.has(code)) continue;
+			// EmDash 1.4+: another save of the entry landed first. CONTENT_ACTION_REENTRANT is not
+			// retried: the action it collides with is still running in this call.
+			if (code === "CONFLICT") continue;
 			// EmDash's own refusals carry a code. The Node sandbox's "revision required" has none.
 			if (code || rev !== undefined || !ctx.content.getVersioned) return false;
 			const versioned = await ctx.content.getVersioned(LISTINGS, id).catch(() => null);
