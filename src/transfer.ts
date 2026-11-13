@@ -15,8 +15,17 @@ const fail = (code: string, message: string) => ({ ok: false, error: { code, mes
 
 /** Listings per export request: seven pages of 100, one call each. */
 const EXPORT_PAGES = 7;
-/** Listings per import request. Each is one write to the site, and the request has 10 calls in all. */
-export const IMPORT_BATCH = 3;
+/**
+ * Listings per import request. Each is one write to the site, and the request has 10 calls in all.
+ * Creating a listing runs EmDash's whole save (every plugin's beforeSave hook, revisions, search):
+ * about 3.5 seconds a row on Cloudflare, where a request may run 30 seconds. Two rows keep a request
+ * near 10 seconds, with room for a slow moment.
+ */
+export const IMPORT_BATCH = 2;
+/** No new row is started after this long, so a slow site cannot run a request into the 30 s limit. */
+const IMPORT_SECONDS = 15_000;
+/** A draft this new with the same name and city, and no queue row, came from a cut-off import request. */
+const ADOPT_WITHIN = 60 * 60_000;
 /** Rows one check request looks at, and the size of a file the page sends to be checked. */
 const IMPORT_MAX_ROWS = 100;
 const IMPORT_MAX_CHARS = 900_000;
@@ -79,8 +88,13 @@ const key = (title: string, city: string) => `${title.trim().toLowerCase()}|${ci
  * `mode: "check"` reads up to 100 rows and says which are good, which are bad and which are already in
  * the directory or waiting (same name and city): up to nine calls (three reads per 45 titles).
  * `mode: "import"` takes at most IMPORT_BATCH rows (the kit sends them in batches): the three duplicate
- * reads, settings, the schema when settings has no field list yet, one write per row and the queue
- * rows, nine calls.
+ * reads, the newest drafts, settings, the schema when settings has no field list yet, one write per
+ * row and the queue rows, nine calls.
+ *
+ * Sending a batch again is safe. A row already waiting in the queue is a duplicate. A draft a cut-off
+ * request created before it wrote its queue row (the host stops a request at 30 seconds, and the
+ * create may still land) is found among the newest drafts by name and city and given its queue row,
+ * never created twice. When time runs short the answer carries `next`, the line to send again from.
  */
 export async function importCsv(input: unknown, ctx: Ctx) {
 	const raw = asRecord(input);
@@ -152,11 +166,43 @@ export async function importCsv(input: unknown, ctx: Ctx) {
 	const summary = { total: parsed.length, valid: good.length, bad, duplicates };
 	if (!importing) return { ok: true, checked: true, ...summary };
 	if (!ctx.content?.create) return fail("CONTENT_UNAVAILABLE", "The listings collection is not set up on this site.");
-	const settings = await loadSettings(ctx);
+	const started = Date.now();
+	const [settings, recent] = await Promise.all([
+		loadSettings(ctx),
+		good.length ? ctx.content.list(LISTINGS, { where: { status: "draft" }, limit: 100 }).catch(() => null) : null,
+	]);
 	const fields = await fieldsOf(ctx, settings.fields);
+	const orphans = new Map<string, string>();
+	for (const item of recent?.items ?? []) {
+		const data = asRecord(item.data);
+		if (started - Date.parse(asString((item as { createdAt?: unknown }).createdAt)) < ADOPT_WITHIN) orphans.set(key(asString(data.title), asString(data.city)), item.id);
+	}
 	let imported = 0;
+	let next: number | undefined;
 	const queued: Array<{ id: string; data: Record<string, unknown> }> = [];
+	const queueRow = (listingId: string, item: (typeof good)[number]) => ({
+		listingId,
+		title: item.data.title,
+		tl: item.data.title.toLowerCase(),
+		listing_type: item.type,
+		city: item.data.city,
+		status: "pending",
+		photo_n: 0,
+		createdAt: nowIso(),
+	});
 	for (const item of good) {
+		if (Date.now() - started > IMPORT_SECONDS) {
+			next = item.line;
+			break;
+		}
+		const orphan = orphans.get(key(item.data.title, item.data.city));
+		if (orphan) {
+			// Created by a request that was cut off: it gets its queue row now, unless it has one.
+			const adopted = await ctx.storage.submissions.compareAndSet(orphan, null, queueRow(orphan, item)).catch(() => ({ applied: false }));
+			if (adopted.applied) imported += 1;
+			else duplicates.push({ line: item.line, title: item.data.title, city: item.data.city });
+			continue;
+		}
 		// Each row on its own, so one refused row does not stop the rest.
 		try {
 			const created = await ctx.content.create(
@@ -180,10 +226,7 @@ export async function importCsv(input: unknown, ctx: Ctx) {
 					listing_status: "live",
 				}),
 			);
-			queued.push({
-				id: created.id,
-				data: { listingId: created.id, title: item.data.title, tl: item.data.title.toLowerCase(), listing_type: item.type, city: item.data.city, status: "pending", photo_n: 0, createdAt: nowIso() },
-			});
+			queued.push({ id: created.id, data: queueRow(created.id, item) });
 			imported += 1;
 		} catch {
 			bad.push({ line: item.line, title: item.data.title, reason: "The site refused this row." });
@@ -192,6 +235,9 @@ export async function importCsv(input: unknown, ctx: Ctx) {
 	// ponytail: one write for the batch's queue rows. A request cut off between the drafts and this
 	// write leaves those drafts in Content, Listings with no queue row (at most IMPORT_BATCH).
 	if (queued.length) await ctx.storage.submissions.putMany(queued);
-	bad.sort((x, y) => x.line - y.line);
-	return { ok: true, imported, ...summary, valid: imported };
+	// Rows from `next` on are sent again, so they are reported then, not now.
+	const before = (row: { line: number }) => next === undefined || row.line < next;
+	bad.sort(byLine);
+	duplicates.sort(byLine);
+	return { ok: true, imported, ...summary, bad: bad.filter(before), duplicates: duplicates.filter(before), valid: imported, ...(next === undefined ? {} : { next }) };
 }

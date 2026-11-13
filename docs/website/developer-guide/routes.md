@@ -21,10 +21,10 @@ Every route makes 9 calls to the site or fewer (Cloudflare allows 10 per plugin 
 | `claims` | member | Claim a listing |
 | `favorites` | member | GET: your saved listings, 100 per request with a cursor; `ids` (100 max): which of those are saved; `listingId`: whether it is saved and who manages it (`owner`: you, other or empty). POST saves, DELETE removes |
 | `dashboard` | member | One tab per request: `tab` is overview (counts), listings, reviews (20 reviews of your listings per request, `received_cursor`), messages (50 per request, `messages_cursor`), claims or favorites. With no tab (the 0.6.x kit) every list comes back without photos and change marks |
-| `privacy` | member | Your own rows. `action=erase` deletes them a part per request and answers `MORE` until `erased: true` |
+| `privacy` | member | GET: your own rows. POST with `action=erase` deletes them a part per request and answers `MORE` until `erased: true` (a GET never erases) |
 | `renew` | member | Owner or admin only |
 | `export` | admin | CSV of published listings, 700 per request: `part=1` and the `X-Listora-Cursor` header for the next part |
-| `import` | admin | `mode=check` reads up to 100 rows; `mode=import` takes 3 rows per request (the kit sends a file in batches, with `firstLine`) |
+| `import` | admin | `mode=check` reads up to 100 rows; `mode=import` takes 2 rows per request (the kit sends a file in batches, with `firstLine`). Sending a batch again is safe: rows already waiting are duplicates, and a draft a cut-off request created gets its queue row instead of a second copy. When time runs short the answer carries `next`, the file line to send again from |
 | `admin` | admin | Block Kit pages |
 
 "Member" is a private route with `permission: "content:read"`, the lowest signed-in role. The host verifies the session and passes `routeCtx.user`. Never read a member id from the request. "Admin" is a private route with no permission set, which the host treats as `plugins:manage`. A public route gets no user at all.

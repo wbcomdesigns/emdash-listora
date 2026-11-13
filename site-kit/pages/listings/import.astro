@@ -54,8 +54,9 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 </Layout>
 
 <script>
-	import { api, esc, listoraFetch, notify } from "../../lib/listora";
-	import { exportProgress, importDrafts, importedDrafts, importProgress, rowDup, rowLine, rowsCannot, rowsReady, rowsSkipped, S } from "../../lib/listora-strings";
+	import { api, esc, notify } from "../../lib/listora";
+	import { pluginFetch } from "../../lib/wbcom-kit";
+	import { exportProgress, importDrafts, importedDrafts, importProgress, importStopped, rowDup, rowLine, rowsCannot, rowsReady, rowsSkipped, S } from "../../lib/listora-strings";
 
 	type Bad = { line: number; title: string; reason: string };
 	type Dup = { line: number; title: string; city: string };
@@ -73,7 +74,7 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 			let name = "listings.csv";
 			let rows = 0;
 			for (let part = 0; part < 200; part += 1) {
-				const response = await listoraFetch(`export?part=1${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""}`, { credentials: "same-origin", headers: { "X-EmDash-Request": "1" } });
+				const response = await pluginFetch("listora", `export?part=1${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""}`, { credentials: "same-origin", headers: { "X-EmDash-Request": "1" } });
 				if (!response.ok) throw new Error();
 				if (!part) name = /filename="([^"]+)"/.exec(response.headers.get("Content-Disposition") || "")?.[1] || name;
 				const text = await response.text();
@@ -171,30 +172,63 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 				skipped(bad, duplicates) +
 				(valid ? `<button class="listora-btn" type="button" id="import-btn">${esc(importDrafts(valid))}</button>` : ""),
 		);
-		document.getElementById("import-btn")?.addEventListener("click", async (click) => {
-			const button = click.currentTarget as HTMLButtonElement;
+		// The site creates two listings per request, so the file goes in batches of two rows, each with
+		// the line it starts at in the file. A batch sent again is safe: the site skips rows it already
+		// has, including drafts a request created just before the host stopped it.
+		const [head, ...records] = csvRecords(csv);
+		const done = { imported: 0, bad: [] as Bad[], duplicates: [] as Dup[] };
+		let at = 0;
+		const run = async (button: HTMLButtonElement) => {
 			button.disabled = true;
 			button.textContent = S.transfer.importing;
-			// The site creates a few listings per request, so the file goes in batches of three rows,
-			// each with the line it starts at in the file.
-			const [head, ...records] = csvRecords(csv);
-			const done = { ok: true, imported: 0, bad: [] as Bad[], duplicates: [] as Dup[] };
-			for (let at = 0; at < records.length; at += 3) {
-				button.textContent = importProgress(Math.min(at + 3, records.length), records.length);
-				const part = await api("import", { csv: [head, ...records.slice(at, at + 3)].join("\n"), mode: "import", firstLine: at + 2 });
-				if (!part.ok) return failed(part.error?.message);
+			let tries = 0;
+			while (at < records.length) {
+				button.textContent = importProgress(Math.min(at + 2, records.length), records.length);
+				const part = await api("import", { csv: [head, ...records.slice(at, at + 2)].join("\n"), mode: "import", firstLine: at + 2 });
+				// The plugin's own refusal (a code it chose) is shown as it is. Anything else is the site
+				// not answering in time: wait, and send the same rows again, twice at most.
+				if (!part.ok && part.error?.code !== "FAILED" && part.error?.code !== "OFFLINE") return failed(part.error?.message);
+				if (!part.ok) {
+					if (tries >= 2) return stopped();
+					tries += 1;
+					button.textContent = S.transfer.waitingSite;
+					await new Promise((resolve) => setTimeout(resolve, 8000));
+					continue;
+				}
 				done.imported += Number(part.imported) || 0;
 				done.bad.push(...((part.bad as Bad[]) || []));
 				done.duplicates.push(...((part.duplicates as Dup[]) || []));
+				// Time ran short on the site: it says which row to send again from.
+				const next = Number(part.next) - 2;
+				const to = Number.isInteger(next) && next >= at && next < at + 2 ? next : at + 2;
+				if (to === at) {
+					// Not one row fitted: the same as no answer.
+					if (tries >= 2) return stopped();
+					tries += 1;
+					continue;
+				}
+				tries = 0;
+				at = to;
 			}
-			const count = Number(done.imported);
-			form.reset();
+			const count = done.imported;
+			form?.reset();
 			show(
 				count ? "success" : "error",
 				`<p><strong>${esc(importedDrafts(count))}</strong> ${esc(S.transfer.nothingLive)}</p>` +
-					skipped((done.bad as Bad[]) || [], (done.duplicates as Dup[]) || []) +
+					skipped(done.bad, done.duplicates) +
 					`<a class="listora-btn" href="/_emdash/admin/plugins/listora/queue">${esc(S.transfer.queue)}</a>`,
 			);
-		});
+		};
+		/** Stopped part way: how many landed, the row it stopped at, and a button that goes on from there. */
+		const stopped = () => {
+			show(
+				"error",
+				`<p>${esc(importStopped(done.imported, at + 2))}</p>` +
+					skipped(done.bad, done.duplicates) +
+					`<button class="listora-btn" type="button" id="import-continue">${esc(S.transfer.continueImport)}</button>`,
+			);
+			document.getElementById("import-continue")?.addEventListener("click", (again) => run(again.currentTarget as HTMLButtonElement));
+		};
+		document.getElementById("import-btn")?.addEventListener("click", (click) => run(click.currentTarget as HTMLButtonElement));
 	});
 </script>

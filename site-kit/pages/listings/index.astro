@@ -6,7 +6,6 @@ import {
 	LISTING_TYPES,
 	placeholderHtml,
 	isOpenNow,
-	callListoraRoute,
 	siteZone,
 	matchesPlace,
 	parseHours,
@@ -15,6 +14,7 @@ import {
 	typeName,
 } from "../../lib/listora";
 import { listingCount, pageOf, resultCount, saveNamed, S } from "../../lib/listora-strings";
+import { callPluginRoute } from "../../lib/wbcom-kit";
 import "../../styles/listora-ui.css";
 
 const type = Astro.url.searchParams.get("type") || "";
@@ -64,7 +64,7 @@ if (sort === "rating") {
 	// in one part). A few parts cover the listings this page reads.
 	let cursor = "";
 	for (let part = 0; part < 4; part += 1) {
-		const answer = await callListoraRoute(Astro.locals, `ratings?all=1${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""}`).catch(() => null);
+		const answer = await callPluginRoute(Astro.locals, "listora", `ratings?all=1${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""}`).catch(() => null);
 		Object.assign(ratings, (answer?.ratings as Record<string, { average: number }> | undefined) ?? {});
 		cursor = typeof answer?.cursor === "string" ? answer.cursor : "";
 		if (!cursor) break;

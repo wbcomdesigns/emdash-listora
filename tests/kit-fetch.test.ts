@@ -1,14 +1,20 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { listoraFetch, REGISTRY_ID } from "../site-kit/lib/listora";
+import { registryPluginId } from "../site-kit/lib/wbcom-kit";
+
+// The id EmDash gives Listora on every registry install (publisher DID + slug).
+const REGISTRY_ID = "r_2oeji6rfeg7ovdex";
+type Fetch = (path: string, init?: RequestInit) => Promise<Response>;
 
 const missing = () => new Response(JSON.stringify({ success: false, error: { code: "NOT_FOUND", message: "Plugin route not found" } }), { status: 404 });
 const ok = () => new Response(JSON.stringify({ success: true, data: { ok: true } }), { status: 200 });
 
-// Each case loads a fresh copy of the kit, so what one case remembered cannot leak into the next.
-async function fresh() {
+// Each case loads a fresh copy of the shared kit helper, so what one case remembered cannot leak
+// into the next. Listora's kit calls it as pluginFetch("listora", path).
+async function fresh(): Promise<Fetch> {
 	vi.resetModules();
-	return (await import("../site-kit/lib/listora")).listoraFetch as typeof listoraFetch;
+	const { pluginFetch } = await import("../site-kit/lib/wbcom-kit");
+	return (path, init) => pluginFetch("listora", path, init);
 }
 
 afterEach(() => vi.unstubAllGlobals());
@@ -17,6 +23,10 @@ afterEach(() => vi.unstubAllGlobals());
 const inBrowser = () => vi.stubGlobal("window", {});
 
 describe("kit finds Listora's routes on any install", () => {
+	it("works out Listora's registry id the way EmDash does", async () => {
+		expect(await registryPluginId("listora")).toBe(REGISTRY_ID);
+	});
+
 	it("uses the registry id on a registry install and remembers it", async () => {
 		inBrowser();
 		const call = await fresh();
@@ -64,7 +74,7 @@ describe("kit finds Listora's routes on any install", () => {
 });
 
 describe("server-side calls", () => {
-	it("listoraFetch refuses every server-side call, so no address is ever fetched from server code", async () => {
+	it("pluginFetch refuses every server-side call, so no address is ever fetched from server code", async () => {
 		const call = await fresh();
 		const seen: string[] = [];
 		vi.stubGlobal("fetch", async (url: string) => (seen.push(url), ok()));
@@ -72,9 +82,9 @@ describe("server-side calls", () => {
 		expect(seen).toHaveLength(0);
 	});
 
-	it("callListoraRoute uses EmDash's in-process handler, registry id first, then the name", async () => {
+	it("callPluginRoute uses EmDash's in-process handler, registry id first, then the name", async () => {
 		vi.resetModules();
-		const { callListoraRoute } = await import("../site-kit/lib/listora");
+		const { callPluginRoute } = await import("../site-kit/lib/wbcom-kit");
 		const seen: string[] = [];
 		vi.stubGlobal("fetch", async (url: string) => (seen.push(url), ok()));
 		const routed: string[] = [];
@@ -82,9 +92,9 @@ describe("server-side calls", () => {
 			routed.push(`${pluginId}/${path}`),
 			pluginId === installed ? { success: true, data: { ratings: { a: { average: 4 } } } } : { success: false, error: { code: "NOT_FOUND", message: "Plugin route not found" } }
 		);
-		expect(await callListoraRoute({ emdash: { handlePublicPluginApiRoute: handler("listora") } }, "ratings?all=1")).toMatchObject({ ratings: { a: { average: 4 } } });
+		expect(await callPluginRoute({ emdash: { handlePublicPluginApiRoute: handler("listora") } }, "listora", "ratings?all=1")).toMatchObject({ ratings: { a: { average: 4 } } });
 		expect(routed).toEqual([`${REGISTRY_ID}/ratings`, "listora/ratings"]);
-		expect(await callListoraRoute({}, "ratings")).toBeNull();
+		expect(await callPluginRoute({}, "listora", "ratings")).toMatchObject({ ok: false });
 		expect(seen).toHaveLength(0);
 	});
 });
@@ -102,6 +112,16 @@ describe("kit words EmDash's own refusals", () => {
 		const result = await api("submit", { title: "A" });
 		expect(result.error?.code).toBe("NOT_READY");
 		expect(result.error?.message).toBe("The directory is finishing an update. Try again in a moment.");
+	});
+
+	it("never shows the runtime's own text for a server error (walk: import stopped by the 30 s limit)", async () => {
+		inBrowser();
+		vi.stubGlobal("localStorage", { getItem: () => null, setItem() {}, removeItem() {} });
+		vi.resetModules();
+		const { api } = await import("../site-kit/lib/listora");
+		vi.stubGlobal("fetch", async () => reply(500, { code: "INTERNAL_ERROR", message: "Plugin r_2oeji6rfeg7ovdex exceeded wall-time limit of 30000ms during route:import" }));
+		const result = await api("import", { csv: "title\nA", mode: "import" });
+		expect(result.error).toEqual({ code: "FAILED", message: "Something went wrong. Try again." });
 	});
 
 	it("passes the plugin's own message through", async () => {

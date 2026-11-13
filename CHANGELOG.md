@@ -2,7 +2,25 @@
 
 Versions match `package.json`, the git tag, and the EmDash registry release. Newest first. Never publish a version that is not on `origin/main`.
 
-## [0.7.0] - 2026-10-20
+## [0.7.1] - 2026-11-13
+
+Fixes from the first walk of 0.7.0 on a Cloudflare site. Copy the kit again after you update, with the new tag.
+
+- Fix      - After an update, the first visitor to the directory starts the data upgrade, so it no longer waits for an admin to open a Listora page.
+- Fix      - Importing a spreadsheet on a slow site goes on from where it stopped, never adds a row twice, and says how many rows were added.
+- Fix      - A request the site could not finish shows a plain message instead of the server's own technical text.
+- Fix      - Turning on listing expiry in the plugin's settings form in Plugins now expires listings on the daily schedule.
+- Fix      - Messages says plainly when the site has no email provider and the owner was not told, and the notice goes out once a provider is set up.
+- Fix      - After Send changes for approval, the edit page says the changes are waiting.
+- Fix      - Listing reviews counts owner replies waiting for approval, not only reviews.
+- Fix      - Publishing a listing reads its current revision first, as EmDash requires, on every approval and every scheduled change.
+- Dev      - The site kit uses the shared Wbcom helper (src/lib/wbcom-kit.ts) to reach the plugin, and the setup script never replaces a newer copy of it.
+- Dev      - Delete my data erases only on a POST request, and the route declares GET and POST.
+- Dev      - The settings form limits expiry days to 0 to 3650 and photos per listing to 0 to 20.
+- Dev      - Tests wait for EmDash's deferred tasks with the test host's own waitForDeferredTasks.
+- Compat   - Needs EmDash 1.2.0 or later.
+
+## [0.7.0] - 2026-11-13
 
 Every page, action, hook and scheduled task now fits Cloudflare's limit of 10 requests per plugin call, on a directory of 2000 listings. Copy the kit again after you update, with the new tag. A 0.6.x site's data comes over by itself, a step a minute, after the update.
 
@@ -15,7 +33,7 @@ Every page, action, hook and scheduled task now fits Cloudflare's limit of 10 re
 - Improve  - Owner notices, expiry, the sample directory and Delete my data run in small steps that carry on by themselves.
 - Improve  - Listora keeps each listing's expiry date itself, so a listings type without an expires_at field still expires listings.
 - Fix      - The listing owner sees You manage this listing instead of Claim and Write a review, and the claim route refuses the owner.
-- Fix      - A listing a member adds counts as theirs, so it shows as claimed and nobody else can claim it (one setting in the code, SUBMITTER_IS_OWNER).
+- Fix      - A listing a member adds counts as theirs, so it shows as claimed and nobody else can claim it.
 - Fix      - Guests see Sign in in place of the review and claim forms, and a guest's browser no longer asks for saved listings on every page.
 - Fix      - After More reviews, keyboard focus moves to the first new review.
 - Fix      - The open account tab is marked for screen readers, and the Profile and Delete my data cards no longer touch.

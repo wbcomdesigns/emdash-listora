@@ -10,7 +10,8 @@ import { asRecord, asString } from "./util";
 /**
  * Bringing a 0.6.x site's data over to 0.7.0, one step per plugin call (Cloudflare allows 10 requests
  * per call, so it cannot run in one go). Driven by a one-shot scheduled task that sets the next one
- * while work is left; an admin page load starts the chain again when it stopped. Admin screens keep
+ * while work is left; an admin page load or a visitor reaching the directory starts the chain again
+ * when it stopped (nudgeUpgrade). Admin screens keep
  * working while it runs; only the public directory routes wait for the index (step 2).
  *
  * The state is the kv key STATE, read with its revision. A step claims its next state with a
@@ -125,11 +126,17 @@ export async function upgradeStep(ctx: PluginContext, settings: Settings, b: Bud
 	return after;
 }
 
-/** Start the chain again when it stopped (no step for two minutes). One call, two when it restarts. */
+/**
+ * Start the chain again when it stopped (no step for two minutes), or start it after an update (EmDash
+ * runs no hook then). Admin page loads and the public directory routes call it, so the first visitor
+ * after an update starts the upgrade. The task is due at once: a later time would let a stream of
+ * visitors push it back on every request, and EmDash runs any due task on its next pass. One call,
+ * two when it restarts.
+ */
 export async function nudgeUpgrade(ctx: PluginContext, settings: Settings, b: Budget): Promise<State | null> {
 	if (upgradeDone(settings) || !spend(b)) return null;
-	const state = parseState(await ctx.kv.get(STATE));
-	if (Date.now() - state.at > 120_000 && spend(b)) await ctx.cron?.schedule("upgrade", { schedule: soon() }).catch(() => undefined);
+	const state = parseState(await ctx.kv.get(STATE).catch(() => null));
+	if (Date.now() - state.at > 120_000 && spend(b)) await ctx.cron?.schedule("upgrade", { schedule: new Date().toISOString() }).catch(() => undefined);
 	return state;
 }
 

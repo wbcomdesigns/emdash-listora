@@ -1,6 +1,6 @@
 import { phrase, S } from "./listora-strings";
 
-import { getPublicPluginApiRouteHandler } from "emdash/plugin-utils";
+import { pluginFetch } from "./wbcom-kit";
 
 export type HourRow = { day: number; open: string; close: string };
 
@@ -346,94 +346,20 @@ if (typeof document !== "undefined") {
 	);
 }
 
-/*
- * Where Listora's routes live. Installed from the EmDash registry, a plugin does not keep its
- * name in the address: EmDash gives it the id "r_" + the first 16 base32 characters of
- * SHA-256(publisher DID + "\n" + slug), which for Listora is the value below on every site.
- * Installed from local files (a lab, a trusted install), it keeps the name "listora". The kit
- * tries the registry id, falls back to the name when EmDash says the route does not exist, and
- * remembers the answer for the visit. (Same logic as pluginFetch in the shared wbcom-kit.ts.)
- */
-export const REGISTRY_ID = "r_2oeji6rfeg7ovdex";
-let chosenId = "";
-
-function rememberedId(): string {
-	try {
-		return typeof sessionStorage === "undefined" ? "" : sessionStorage.getItem("wb-plugin-id:listora") || "";
-	} catch {
-		return "";
-	}
-}
-
-/** EmDash's own answer for an address with no plugin behind it (not Listora's answer). */
-async function routeMissing(response: Response): Promise<boolean> {
-	if (response.status !== 404) return false;
-	const body = await response.clone().json().catch(() => null);
-	return /route not found/i.test(String(body?.error?.message ?? ""));
-}
-
-function rememberId(id: string): void {
-	chosenId = id;
-	try {
-		if (typeof sessionStorage === "undefined") return;
-		if (id) sessionStorage.setItem("wb-plugin-id:listora", id);
-		else sessionStorage.removeItem("wb-plugin-id:listora");
-	} catch {
-		// Storage can be blocked. Nothing is lost but one extra request.
-	}
-}
-
-/**
- * Call a Listora public route from an Astro page's server code (pass Astro.locals). EmDash runs
- * the route inside the server: there is no HTTP request, so a visitor's Host header or any other
- * address can never be called. Tries the registry id, then the name. Returns the route's data,
- * or null when Listora is not installed or the route fails.
- */
-export async function callListoraRoute(locals: unknown, path: string): Promise<Record<string, unknown> | null> {
-	const handler = getPublicPluginApiRouteHandler(locals as Parameters<typeof getPublicPluginApiRouteHandler>[0]);
-	if (!handler) return null;
-	const [route, query] = path.split("?");
-	for (const id of [REGISTRY_ID, "listora"]) {
-		const request = new Request(`http://localhost/_emdash/api/plugins/${id}/${route}${query ? `?${query}` : ""}`, { method: "GET" });
-		const result = await handler(id, "GET", route, request).catch(() => null);
-		if (!result || (!result.success && result.error?.code === "NOT_FOUND" && /plugin|route/i.test(result.error.message))) continue;
-		return result.success && result.data && typeof result.data === "object" ? (result.data as Record<string, unknown>) : null;
-	}
-	return null;
-}
-
-/**
- * fetch() for a Listora route from the browser. Browser only: an Astro page's server code uses
- * callListoraRoute, which runs the route inside the server, so no address a visitor could
- * influence is ever called. Only an address Listora itself answered on is remembered, and a
- * remembered address that stops answering is forgotten.
- */
-export async function listoraFetch(path: string, init: RequestInit = {}): Promise<Response> {
-	if (typeof window === "undefined") {
-		return new Response(null, { status: 503, statusText: "Server code calls Listora with callListoraRoute" });
-	}
-	const known = chosenId || rememberedId();
-	if (known) {
-		const response = await fetch(`/_emdash/api/plugins/${known}/${path}`, init);
-		if (!(await routeMissing(response))) return response;
-		rememberId("");
-	}
-	let response: Response | null = null;
-	for (const id of [REGISTRY_ID, "listora"]) {
-		response = await fetch(`/_emdash/api/plugins/${id}/${path}`, init);
-		if (await routeMissing(response)) continue;
-		rememberId(id);
-		return response;
-	}
-	return response as Response;
-}
+/** Listora's name. Its routes are found through the shared pluginFetch (wbcom-kit.ts), which tries
+ * the id EmDash gives a registry install, then this name (a local install). */
+const PLUGIN = "listora";
 
 export type ApiResult = { ok: boolean; error?: { code?: string; message?: string }; [key: string]: unknown };
 
-/** A refused request as a result. EmDash's own refusals get plain words; the plugin's messages pass through. */
-function failure(json: ApiResult | null, fallback: string): ApiResult {
+/**
+ * A refused request as a result. EmDash's own refusals get plain words; a refusal's message passes
+ * through. A server error (5xx) never does: its text is the runtime's ("exceeded wall-time limit..."),
+ * written for a log, not for a person.
+ */
+function failure(json: ApiResult | null, fallback: string, status = 400): ApiResult {
 	if (json?.error?.code === "STORAGE_INDEXES_NOT_READY") return { ok: false, error: { code: "NOT_READY", message: phrase("STORAGE_INDEXES_NOT_READY") } };
-	return { ok: false, error: { code: "FAILED", message: json?.error?.message || fallback } };
+	return { ok: false, error: { code: "FAILED", message: (status < 500 && json?.error?.message) || fallback } };
 }
 
 /** What an owner may upload as a listing photo. Checked again on the server from the file itself. */
@@ -445,7 +371,7 @@ export async function uploadPhoto(listingId: string, file: File): Promise<ApiRes
 	if (!PHOTO_TYPES.includes(file.type)) return { ok: false, error: { code: "WRONG_TYPE", message: phrase("WRONG_TYPE") } };
 	if (file.size > PHOTO_MAX_BYTES) return { ok: false, error: { code: "TOO_BIG", message: phrase("TOO_BIG") } };
 	try {
-		const response = await listoraFetch(`photo?listingId=${encodeURIComponent(listingId)}&name=${encodeURIComponent(file.name)}`, {
+		const response = await pluginFetch(PLUGIN, `photo?listingId=${encodeURIComponent(listingId)}&name=${encodeURIComponent(file.name)}`, {
 			method: "POST",
 			credentials: "same-origin",
 			headers: { "Content-Type": "application/octet-stream", "X-EmDash-Request": "1" },
@@ -454,7 +380,7 @@ export async function uploadPhoto(listingId: string, file: File): Promise<ApiRes
 		if (response.status === 401) return { ok: false, error: { code: "SIGN_IN_REQUIRED", message: phrase("SIGN_IN_REQUIRED") } };
 		if (response.status === 413) return { ok: false, error: { code: "TOO_BIG", message: phrase("TOO_BIG") } };
 		const json = await response.json().catch(() => null);
-		if (!response.ok || !json) return failure(json, S.account.photoFailed);
+		if (!response.ok || !json) return failure(json, S.account.photoFailed, response.status);
 		return json.data ?? { ok: false };
 	} catch {
 		return { ok: false, error: { code: "OFFLINE", message: phrase("OFFLINE") } };
@@ -489,7 +415,7 @@ export function knownGuest(): boolean {
 export async function api(path: string, body?: unknown, method = body ? "POST" : "GET"): Promise<ApiResult> {
 	// Never throws: a dropped connection or a server error comes back as a result the page can show.
 	try {
-		const response = await listoraFetch(path, {
+		const response = await pluginFetch(PLUGIN, path, {
 			method,
 			credentials: "same-origin",
 			headers: { "Content-Type": "application/json", "X-EmDash-Request": "1" },
@@ -502,7 +428,7 @@ export async function api(path: string, body?: unknown, method = body ? "POST" :
 		}
 		if (member && response.ok) remember(false);
 		const json = await response.json().catch(() => null);
-		if (!response.ok || !json) return failure(json, phrase("FAILED"));
+		if (!response.ok || !json) return failure(json, phrase("FAILED"), response.status);
 		return json.data ?? { ok: false };
 	} catch {
 		return { ok: false, error: { code: "OFFLINE", message: phrase("OFFLINE") } };

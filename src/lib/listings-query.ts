@@ -21,28 +21,22 @@ export async function publicListing(ctx: Ctx, id: string): Promise<Item | null> 
 
 /**
  * Publish a listing's current state, right after this same call created or changed it, or to approve
- * a draft as it is now. One call on Cloudflare, which publishes without a revision. A refusal with no
- * error code reads the revision and tries once with it: the Node sandbox (sandbox-workerd) requires
- * one, and Node has no request limit. A save of the same entry in flight gets one more try. False when the
- * host cannot publish or refused; the listing then keeps its draft and the caller reports a failure.
+ * a draft as it is now. As the docs require (capabilities page), the publish carries the `_rev` read
+ * with getVersioned just before it: two calls. Another save of the same entry landing in between
+ * (CONFLICT) reads the revision again and tries once more. False when the host cannot publish or
+ * refused; the listing then keeps its draft and the caller reports a failure.
  */
 export async function publishNow(ctx: Ctx, id: string): Promise<boolean> {
-	if (!ctx.content?.publish) return false;
-	let rev: string | undefined;
+	if (!ctx.content?.publish || !ctx.content.getVersioned) return false;
 	for (let attempt = 0; attempt < 2; attempt++) {
+		const versioned = await ctx.content.getVersioned(LISTINGS, id).catch(() => null);
+		if (!versioned?._rev) return false;
 		try {
-			await ctx.content.publish(LISTINGS, id, { _rev: rev as string });
+			await ctx.content.publish(LISTINGS, id, { _rev: versioned._rev });
 			return true;
 		} catch (error) {
-			const code = asString((error as { code?: unknown })?.code);
-			// EmDash 1.4+: another save of the entry landed first. CONTENT_ACTION_REENTRANT is not
-			// retried: the action it collides with is still running in this call.
-			if (code === "CONFLICT") continue;
-			// EmDash's own refusals carry a code. The Node sandbox's "revision required" has none.
-			if (code || rev !== undefined || !ctx.content.getVersioned) return false;
-			const versioned = await ctx.content.getVersioned(LISTINGS, id).catch(() => null);
-			if (!versioned?._rev) return false;
-			rev = versioned._rev;
+			// CONTENT_ACTION_REENTRANT is not retried: the action it collides with is still running in this call.
+			if (asString((error as { code?: unknown })?.code) !== "CONFLICT") return false;
 		}
 	}
 	return false;
@@ -52,7 +46,7 @@ export async function publishNow(ctx: Ctx, id: string): Promise<boolean> {
  * Change fields on a published listing and keep it live. Updating a published entry saves a draft,
  * so this publishes again. If the listing already has unpublished edits, publishing would push
  * someone's unfinished work live, so nothing is written and "busy" is returned. Only fields the
- * listings type has are written. Three calls (one when it stops early).
+ * listings type has are written. Four calls (one when it stops early).
  */
 export async function patchListing(
 	ctx: Ctx,

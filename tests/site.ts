@@ -1,22 +1,28 @@
-import type { PluginRuntimeTestHost } from "@emdash-cms/plugin-test";
+import { createPluginRuntimeTestHost as createHost, type PluginRuntimeTestHost } from "@emdash-cms/plugin-test";
+
+/** Every test host still open, so settle() can ask one of them. */
+const live = new Set<PluginRuntimeTestHost>();
+
+/** EmDash's test host, remembered while it is open. Tests create hosts through this. */
+export async function createPluginRuntimeTestHost(...args: Parameters<typeof createHost>): Promise<PluginRuntimeTestHost> {
+	const rt = await createHost(...args);
+	live.add(rt);
+	const dispose = rt.dispose.bind(rt);
+	rt.dispose = async () => {
+		live.delete(rt);
+		await dispose();
+	};
+	return rt;
+}
 
 /**
  * Content hooks (afterPublish, afterDelete...) run after the plugin call that caused them, as
- * deferred tasks EmDash keeps in one set for the whole test run. Wait for the ones still running,
- * and for any they start in turn. A task that has not finished within two seconds belongs to a site
- * an earlier test closed (it never will finish) and is left out from then on.
+ * deferred tasks. Wait for them and for any they start, with the test host's own
+ * waitForDeferredTasks() (plugin-test 0.2.12).
  */
-const stale = new WeakSet<Promise<unknown>>();
 export async function settle(): Promise<void> {
-	const tasks = (globalThis as unknown as Record<symbol, Set<Promise<unknown>> | undefined>)[Symbol.for("emdash:deferred-tasks")];
-	for (let round = 0; round < 10; round += 1) {
-		const live = [...(tasks ?? [])].filter((task) => !stale.has(task));
-		if (!live.length) return;
-		const finished = new WeakSet<Promise<unknown>>();
-		const watched = live.map((task) => task.then(() => finished.add(task), () => finished.add(task)));
-		await Promise.race([Promise.all(watched), new Promise((resolve) => setTimeout(resolve, 2000))]);
-		for (const task of live) if (!finished.has(task)) stale.add(task);
-	}
+	const [rt] = live;
+	await rt?.waitForDeferredTasks();
 }
 
 const tick = (rt: PluginRuntimeTestHost, name: string) => rt.transport.invokeHook("cron", { name, scheduledAt: new Date().toISOString() });

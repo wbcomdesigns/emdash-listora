@@ -9,8 +9,9 @@
 #       "$kit/emdash-listora" &&
 #     "$kit/emdash-listora/scripts/add-to-site.sh" .
 #
-# Safe to run again after every plugin update: it replaces Listora's own files, never touches
-# src/layouts/ListoraLayout.astro once it exists, and backs up a wording file you changed.
+# Safe to run again after every plugin update: it replaces Listora's own files, never replaces a
+# newer shared Wbcom file another plugin copied (src/lib/wbcom-kit.ts), never touches
+# src/layouts/ListoraLayout.astro once it exists, and backs up a kit file you changed.
 set -euo pipefail
 
 PLUGIN="$(cd "$(dirname "$0")/.." && pwd)"
@@ -49,6 +50,8 @@ backups=""
 while read -r from to; do
 	target="$SITE/$to"
 	[[ -f "$target" ]] || continue
+	# Shared Wbcom files are never backed up: apply-kit.sh copies one only over an older copy.
+	[[ "$(basename "$from")" == wbcom-* ]] && continue
 	sum="$(sha "$target")"
 	[[ "$sum" == "$(sha "$PLUGIN/$from")" ]] && continue
 	grep -qxF "$sum  $to" "$PLUGIN/site-kit/kit.sums" && continue
@@ -72,6 +75,7 @@ Copied the Listora $VERSION site kit into $SITE
   Pages    src/pages/listings/ (directory, one listing, add a listing, calendar, import and export)
            src/pages/account/  (owner dashboard)
   Styles   src/styles/listora-ui.css, src/lib/listora.ts, public/vendor/
+  Shared   src/lib/wbcom-kit.ts (used by every Wbcom plugin kit; a newer copy is kept)
   Wording  src/lib/listora-strings.ts
   Layout   src/layouts/ListoraLayout.astro $([[ $first_run == 1 ]] && echo "(new)" || echo "(yours, left as it is)")
   Block    src/listora-block/ (optional Listings block for post text, off until you add it to astro.config.mjs)

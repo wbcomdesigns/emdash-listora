@@ -165,7 +165,8 @@ const plugin: SandboxedPlugin = {
 		reply: { permission: MEMBER, methods: ["POST"], handler: async (routeCtx, ctx) => reply(routeCtx, ctx) },
 		edit: { permission: MEMBER, methods: ["GET", "POST"], handler: async (routeCtx, ctx) => edit(routeCtx, ctx) },
 		message: { permission: MEMBER, methods: ["POST"], handler: async (routeCtx, ctx) => message(routeCtx, ctx) },
-		privacy: { permission: MEMBER, handler: async (routeCtx, ctx) => privacy(routeCtx, ctx) },
+		// GET shows a member what Listora keeps about them; POST with action "erase" removes it.
+		privacy: { permission: MEMBER, methods: ["GET", "POST"], handler: async (routeCtx, ctx) => privacy(routeCtx, ctx) },
 		renew: { permission: MEMBER, methods: ["POST"], handler: async (routeCtx, ctx) => renew(routeCtx, ctx) },
 		// Admin only: a real spreadsheet file. The kit's import page fetches it in parts and joins them.
 		export: { permission: ADMIN, methods: ["GET"], response: "raw", handler: async (routeCtx, ctx) => exportCsv(routeCtx.input, ctx) },

@@ -26,46 +26,40 @@ function host(refusals: string[], { node = false, versioned = true } = {}) {
 }
 
 describe("publishNow", () => {
-	it("publishes in one call where no revision is needed (Cloudflare)", async () => {
-		const { ctx, calls } = host([]);
-		expect(await publishNow(ctx, "l1")).toBe(true);
-		expect(calls).toEqual(["publish"]);
-	});
-
-	it("reads the revision once when the Node sandbox asks for it", async () => {
+	it("reads the revision, then publishes with it (the docs' rule, which the Node sandbox enforces)", async () => {
 		const { ctx, calls } = host([], { node: true });
 		expect(await publishNow(ctx, "l1")).toBe(true);
-		expect(calls).toEqual(["publish", "getVersioned", "publish:rev-1"]);
+		expect(calls).toEqual(["getVersioned", "publish:rev-1"]);
 	});
 
 	it("gives up when the listing cannot be read", async () => {
-		const { ctx, calls } = host([], { node: true, versioned: false });
+		const { ctx, calls } = host([], { versioned: false });
 		expect(await publishNow(ctx, "l1")).toBe(false);
-		expect(calls).toEqual(["publish", "getVersioned"]);
+		expect(calls).toEqual(["getVersioned"]);
 	});
 
-	it("retries once after a 409 conflict (EmDash 1.4+ concurrent saves)", async () => {
+	it("reads the revision again and retries once after a 409 conflict", async () => {
 		const { ctx, calls } = host(["CONFLICT"]);
 		expect(await publishNow(ctx, "l1")).toBe(true);
-		expect(calls).toEqual(["publish", "publish"]);
+		expect(calls).toEqual(["getVersioned", "publish:rev-1", "getVersioned", "publish:rev-1"]);
 	});
 
 	it("does not retry a re-entrant action: the one it collides with is still running", async () => {
 		const { ctx, calls } = host(["CONTENT_ACTION_REENTRANT"]);
 		expect(await publishNow(ctx, "l1")).toBe(false);
-		expect(calls).toEqual(["publish"]);
+		expect(calls).toEqual(["getVersioned", "publish:rev-1"]);
 	});
 
 	it("gives up after the second conflict", async () => {
 		const { ctx, calls } = host(["CONFLICT", "CONFLICT"]);
 		expect(await publishNow(ctx, "l1")).toBe(false);
-		expect(calls).toHaveLength(2);
+		expect(calls).toHaveLength(4);
 	});
 
-	it("stops at EmDash's own refusal without reading the revision", async () => {
+	it("stops at EmDash's own refusal", async () => {
 		const { ctx, calls } = host(["NOT_FOUND"]);
 		expect(await publishNow(ctx, "l1")).toBe(false);
-		expect(calls).toEqual(["publish"]);
+		expect(calls).toEqual(["getVersioned", "publish:rev-1"]);
 	});
 
 	it("patchListing keeps a published listing live on the Node sandbox", async () => {
@@ -73,6 +67,6 @@ describe("publishNow", () => {
 		const listing = { id: "l1", slug: "l1", status: "published", data: { title: "A" }, draftRevisionId: null };
 		const result = await patchListing(ctx, "l1", { title: "B" }, ["title"], listing);
 		expect(result).toEqual({ state: "done", data: { title: "B" } });
-		expect(calls).toEqual(["update", "publish", "getVersioned", "publish:rev-1"]);
+		expect(calls).toEqual(["update", "getVersioned", "publish:rev-1"]);
 	});
 });

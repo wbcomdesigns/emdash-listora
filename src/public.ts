@@ -5,8 +5,9 @@ import { clean } from "./lib/edits";
 import { ownerOf, publicListing } from "./lib/listings-query";
 import { rateLimited, visitorKey } from "./lib/rates";
 import { readRating } from "./lib/ratings";
-import { loadSettings } from "./lib/settings";
-import { indexReady } from "./lib/upgrade";
+import { loadSettings, type Settings } from "./lib/settings";
+import { budget } from "./lib/budget";
+import { indexReady, nudgeUpgrade } from "./lib/upgrade";
 import { asNumber, asRecord, asString, nowIso, readCursor } from "./lib/util";
 import { NO_LISTING, plainEmail } from "./member";
 
@@ -20,6 +21,15 @@ const SCAN_READS = 6;
 
 const GUEST_UNAVAILABLE = fail("GUEST_UNAVAILABLE", "This site cannot take messages from visitors yet: its host does not pass on visitor addresses. Call or email the listing instead.");
 const BUILDING = fail("INDEX_BUILDING", "The directory is being prepared after an update. Try again in a few minutes.");
+
+/**
+ * The directory index is still being built after an update. EmDash runs no hook on an update, so the
+ * visitor's request starts the upgrade when nothing has run it for two minutes. Up to two calls.
+ */
+async function building(ctx: Ctx, settings: Settings) {
+	await nudgeUpgrade(ctx, settings, budget(1));
+	return BUILDING;
+}
 const READ_FAILED = fail("READ_FAILED", "The directory could not be read just now. Try again in a moment.");
 const BAD_POSITION = fail("VALIDATION_ERROR", "That page of results could not be read. Start the search again.");
 
@@ -33,7 +43,7 @@ const BAD_POSITION = fail("VALIDATION_ERROR", "That page of results could not be
 export async function listings(input: unknown, ctx: Ctx) {
 	const raw = asRecord(input);
 	const settings = await loadSettings(ctx);
-	if (!indexReady(settings)) return BUILDING;
+	if (!indexReady(settings)) return building(ctx, settings);
 	if ((asNumber(raw.page) ?? 1) > 1 && !raw.cursor) return fail("VALIDATION_ERROR", "Ask for the next page with the cursor from the previous answer.");
 	const from = readPosition(raw.cursor);
 	if (from === null) return BAD_POSITION;
@@ -59,7 +69,7 @@ export async function listings(input: unknown, ctx: Ctx) {
 export async function suggest(input: unknown, ctx: Ctx) {
 	const q = asString(asRecord(input).q).toLowerCase();
 	const settings = await loadSettings(ctx);
-	if (!indexReady(settings)) return BUILDING;
+	if (!indexReady(settings)) return building(ctx, settings);
 	if (!q) return { ok: true, items: [] };
 	try {
 		const page = await ctx.storage.directory.query({ where: { vis: true, tl: { startsWith: q.slice(0, 80) } }, orderBy: { tl: "asc" }, limit: 8 });
@@ -80,7 +90,7 @@ export async function suggest(input: unknown, ctx: Ctx) {
 export async function mapPoints(input: unknown, ctx: Ctx) {
 	const raw = asRecord(input);
 	const settings = await loadSettings(ctx);
-	if (!indexReady(settings)) return BUILDING;
+	if (!indexReady(settings)) return building(ctx, settings);
 	const from = readPosition(raw.cursor);
 	if (from === null) return BAD_POSITION;
 	const f = readFilters(raw);
@@ -110,7 +120,7 @@ export async function duplicate(input: unknown, ctx: Ctx) {
 	const title = asString(asRecord(input).title).toLowerCase();
 	if (!title) return { ok: true, matches: [] };
 	const settings = await loadSettings(ctx);
-	if (!indexReady(settings)) return BUILDING;
+	if (!indexReady(settings)) return building(ctx, settings);
 	try {
 		const page = await ctx.storage.directory.query({ where: { vis: true, tl: title.slice(0, 200) }, limit: 5 });
 		return { ok: true, matches: page.items.map((item) => ({ id: item.id, slug: asString(asRecord(item.data).slug), title: asString(asRecord(item.data).title) })) };
@@ -130,7 +140,7 @@ export async function ratings(input: unknown, ctx: Ctx) {
 	const now = Date.now();
 	try {
 		if (asString(raw.all) === "1") {
-			if (!indexReady(settings)) return BUILDING;
+			if (!indexReady(settings)) return building(ctx, settings);
 			const from = readPosition(raw.cursor);
 			if (from === null) return BAD_POSITION;
 			const page = await readRows(ctx, { vis: true, rc: { gt: 0 } }, { avg: "desc" }, (row) => visible(row, now), 800, from, 7);
