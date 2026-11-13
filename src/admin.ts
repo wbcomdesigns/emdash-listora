@@ -728,7 +728,8 @@ async function renderMessages(ctx: Ctx, settings: Settings, b: Budget, extra: Ex
 	const notice = (row: Row) =>
 		row.notice === "none"
 			? "Owner not notified"
-			: row.notice === "sent" || (row.notice === "waiting" && !queued.has(row.id))
+			: // A waiting row off the queue was sent, once the upgrade has queued every 0.6.x message.
+				row.notice === "sent" || (row.notice === "waiting" && !queued.has(row.id) && upgradeDone(settings))
 				? settings.emailMessages
 					? "Owner notified"
 					: "Email notices are off"

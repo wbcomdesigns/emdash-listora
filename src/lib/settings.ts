@@ -26,6 +26,8 @@ export type Settings = {
 	ready: boolean;
 	/** Where the 0.6.x to 0.7.0 data upgrade is (src/lib/upgrade.ts). */
 	upgrade: Record<string, unknown>;
+	/** Which version last scheduled every task (tasks.ts TASKS). */
+	tasksFor: string;
 	views: Record<string, View>;
 	raw: Map<string, unknown>;
 };
@@ -37,6 +39,7 @@ export const KEY = {
 	kit: "kit_pages_done",
 	ready: "state_ready",
 	upgrade: "upgrade_0_7",
+	tasks: "state_tasks",
 	view: (list: string) => `view_${list}`,
 } as const;
 
@@ -79,6 +82,7 @@ export async function loadSettings(ctx: PluginContext): Promise<Settings> {
 		kitDone: all.get(KEY.kit) === true || all.get(KEY.kit) === "1",
 		ready: all.get(KEY.ready) === true,
 		upgrade: asRecord(all.get(KEY.upgrade)),
+		tasksFor: asString(all.get(KEY.tasks)),
 		views,
 		raw: all,
 	};

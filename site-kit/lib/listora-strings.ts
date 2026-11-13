@@ -170,6 +170,8 @@ export const S = {
 		unchanged: "Nothing was different, so there is nothing to approve.",
 		changesWaiting: "Thanks. Your changes are waiting for approval. Your listing stays as it is until then.",
 		backListings: "Back to your listings",
+		yourListings: "View your listings",
+		addAnother: "Add another listing",
 		thanksReview: "Thanks. Your listing is in review and will appear after it is published.",
 		thanksLive: "Thanks. Your listing was submitted.",
 		couldNot: "Could not submit.",

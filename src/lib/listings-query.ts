@@ -23,19 +23,27 @@ export async function publicListing(ctx: Ctx, id: string): Promise<Item | null> 
 const RETRYABLE = new Set(["CONFLICT", "CONTENT_ACTION_REENTRANT"]);
 
 /**
- * Publish a listing's current state. No revision is passed: this is only called right after this
- * same call created or changed the listing, or to approve a draft as it is now. One call, two when
- * EmDash refuses because another save of the entry was in flight. False when the host cannot
- * publish or refused twice; the listing then keeps its draft and the caller reports a failure.
+ * Publish a listing's current state, right after this same call created or changed it, or to approve
+ * a draft as it is now. One call on Cloudflare, which publishes without a revision. A refusal with no
+ * error code reads the revision and tries once with it: the Node sandbox (sandbox-workerd) requires
+ * one, and Node has no request limit. A save of the same entry in flight gets one more try. False when the
+ * host cannot publish or refused; the listing then keeps its draft and the caller reports a failure.
  */
 export async function publishNow(ctx: Ctx, id: string): Promise<boolean> {
 	if (!ctx.content?.publish) return false;
+	let rev: string | undefined;
 	for (let attempt = 0; attempt < 2; attempt++) {
 		try {
-			await ctx.content.publish(LISTINGS, id, { _rev: undefined as unknown as string });
+			await ctx.content.publish(LISTINGS, id, { _rev: rev as string });
 			return true;
 		} catch (error) {
-			if (!RETRYABLE.has(asString((error as { code?: unknown })?.code))) return false;
+			const code = asString((error as { code?: unknown })?.code);
+			if (RETRYABLE.has(code)) continue;
+			// EmDash's own refusals carry a code. The Node sandbox's "revision required" has none.
+			if (code || rev !== undefined || !ctx.content.getVersioned) return false;
+			const versioned = await ctx.content.getVersioned(LISTINGS, id).catch(() => null);
+			if (!versioned?._rev) return false;
+			rev = versioned._rev;
 		}
 	}
 	return false;

@@ -128,8 +128,10 @@ const MEASURED: Record<string, number> = {
 	"admin message_mod close": 5,
 	"admin message_mod done": 5,
 	"admin message_mod delete (opened)": 7,
-	"hook plugin:install": 4,
-	"hook plugin:activate": 5,
+	"hook plugin:install": 5,
+	"hook plugin:activate": 6,
+	// Plus one (the upgrade task) on a site whose 0.7.0 upgrade has not finished: 8.
+	"cron notify (first run after an update)": 7,
 	"hook content:afterPublish (listing in the index)": 1,
 	"hook content:afterPublish (listing new to the index)": 4,
 	"hook content:afterSave (published, no draft)": 1,
@@ -561,6 +563,10 @@ describe("bridge calls per entry point, worst case", () => {
 	it("hooks", async () => {
 		await measure("hook plugin:install", () => hook("plugin:install", {}), { hook: true });
 		await measure("hook plugin:activate", () => hook("plugin:activate", {}), { hook: true });
+		// EmDash runs no hook on an update: the first hourly notice run schedules every task.
+		await rt.fixtures.plugin.setting("state_tasks", "0.6.3");
+		await measure("cron notify (first run after an update)", () => hook("cron", cronEvent("notify")), { hook: true });
+		expect(await rt.inspect.setting("state_tasks")).toBe("0.7.0");
 		const known = await rt.inspect.content.get("listings", L[7]!);
 		await measure("hook content:afterPublish (listing in the index)", () => hook("content:afterPublish", { collection: "listings", content: known }), { hook: true });
 		// A listing new to the index whose submission row has a starting expiry date.

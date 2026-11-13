@@ -1826,6 +1826,10 @@ textarea.listora-input {
 	padding-inline-start: var(--listora-space-5);
 }
 
+.listora-status > p {
+	margin: 0 0 var(--listora-space-3);
+}
+
 .listora-status h3 {
 	margin: var(--listora-space-3) 0 var(--listora-space-1);
 	font-size: var(--listora-text-size-base);

@@ -21,6 +21,12 @@ Every page, action, hook and scheduled task now fits Cloudflare's limit of 10 re
 - Fix      - The open account tab is marked for screen readers, and the Profile and Delete my data cards no longer touch.
 - Fix      - A failed directory read answers with an error instead of an empty list.
 - Fix      - A new listing's queue row is written right after the listing, and a photo is uploaded only when the rest of the request fits.
+- Fix      - After an update from 0.6.x, every scheduled task is set up within the hour and the data comes over by itself, a step a minute, with no admin visit needed.
+- Fix      - Approving a listing, a claim or a change publishes on sites that run plugins in the Node sandbox, and a member's listing goes live when moderation is off.
+- Fix      - The Grid and List links keep the type picked with a chip.
+- Fix      - A guest's browser asks for saved listings once, not again on every listing page.
+- Fix      - After Submit for review, the form makes way for View your listings and Add another listing.
+- Fix      - During the update, a 0.6.x message whose notice has not gone out says so in Messages.
 - Fix      - Approving a change publishes the listing again once when EmDash refuses a save made at the same moment, so the listing does not stay marked as edited.
 - Fix      - While an update builds Listora's storage indexes, forms say to try again in a moment instead of showing a technical message.
 - Fix      - A scheduling error while Listora is activated is logged instead of switching the plugin off.

@@ -113,3 +113,15 @@ describe("kit words EmDash's own refusals", () => {
 		expect((await api("submit", { title: "" })).error).toEqual({ code: "FAILED", message: "Add a title." });
 	});
 });
+
+describe("the guest note survives building sign-in links (walk finding M2)", () => {
+	it("signInUrl does not forget the guest, so the next page asks nothing", async () => {
+		const store = new Map<string, string>([["listora-guest", String(Date.now())]]);
+		vi.stubGlobal("localStorage", { getItem: (k: string) => store.get(k) ?? null, setItem: (k: string, v: string) => store.set(k, v), removeItem: (k: string) => store.delete(k) });
+		vi.stubGlobal("location", { pathname: "/listings/a/", search: "" });
+		vi.resetModules();
+		const kit = await import("../site-kit/lib/listora");
+		expect(kit.signInUrl()).toBe("/_emdash/admin/login?redirect=%2Flistings%2Fa%2F");
+		expect(kit.knownGuest()).toBe(true);
+	});
+});

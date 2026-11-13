@@ -5,7 +5,7 @@ import { listingPart, setPluginFields } from "./lib/directory";
 import { getListing, patchListing } from "./lib/listings-query";
 import { HOUR, windowOf } from "./lib/rates";
 import { drainRatingQueue, readRating } from "./lib/ratings";
-import { loadSettings, type Settings } from "./lib/settings";
+import { KEY, loadSettings, type Settings } from "./lib/settings";
 import { LISTINGS, NOTIFY_CRON } from "./lib/types";
 import { upgradeDone, upgradeStep } from "./lib/upgrade";
 import { asNumber, asRecord, asString } from "./lib/util";
@@ -15,15 +15,29 @@ type Ctx = PluginContext;
 
 /** One minute from now, as a one-shot task time: work left over carries on without waiting an hour. */
 const soon = () => new Date(Date.now() + 60_000).toISOString();
+
+/**
+ * The name for the next one-shot step. EmDash deletes a one-shot task's row when the run ends (by
+ * id, 1.5 and later), so a step that schedules itself under its own name is lost with it. Steps
+ * alternate between two names instead.
+ */
+export const nextStep = (running: string | undefined, base: string) => (running === base ? `${base}-2` : base);
+
+/**
+ * Bumped when the set of tasks changes. EmDash runs no hook when a plugin is updated (registry or
+ * file), so the hourly notice task, which every earlier version scheduled, schedules the rest.
+ */
+export const TASKS = "0.7.0";
 const DAY = 86_400_000;
 
-/** Every task Listora runs. Two calls each time (plus one when expiry is on). */
+/** Every task Listora runs, and the version that scheduled them. Up to six calls. */
 export async function scheduleAll(ctx: Ctx, settings: Settings | null): Promise<void> {
 	await ctx.cron?.schedule("notify", { schedule: NOTIFY_CRON });
 	await ctx.cron?.schedule("tidy", { schedule: "23 * * * *" });
 	await ctx.cron?.schedule("sweep", { schedule: "41 * * * *" });
 	if (settings?.expiryDays) await ctx.cron?.schedule("expire", { schedule: "0 3 * * *" });
 	if (!settings || !upgradeDone(settings)) await ctx.cron?.schedule("upgrade", { schedule: soon() });
+	await ctx.settings.set(KEY.tasks, TASKS);
 }
 
 const siteName = (ctx: Ctx) => asString(ctx.site?.name).replace(/\s+/g, " ").trim().slice(0, 80);
@@ -46,9 +60,15 @@ async function ownerAddress(ctx: Ctx, b: Budget, owner: string, row: Record<stri
  * 100, claims the rows of up to two owners by deleting them (one statement, so of two runs only one
  * sends), sends, and marks the listing's submission row with the time. Nine calls at most.
  */
-export async function notifyOwners(ctx: Ctx): Promise<void> {
+export async function notifyOwners(ctx: Ctx, running?: string): Promise<void> {
 	const b = budget(1);
 	const settings = await loadSettings(ctx);
+	if (running === "notify" && settings.tasksFor !== TASKS) {
+		// First hourly run after an update: schedule every task, and send the notices a minute later.
+		await scheduleAll(ctx, settings);
+		await ctx.cron?.schedule("notify-more", { schedule: soon() }).catch(() => undefined);
+		return;
+	}
 	spend(b);
 	const page = await ctx.storage.notice_queue.query({ limit: 100 });
 	if (!page.items.length) return;
@@ -119,7 +139,7 @@ export async function notifyOwners(ctx: Ctx): Promise<void> {
 		}
 	}
 	if (back.length && spend(b)) await ctx.storage.notice_queue.putMany(back).catch(() => undefined);
-	if ((due.length > picked.length || page.hasMore) && spend(b)) await ctx.cron?.schedule("notify-more", { schedule: soon() }).catch(() => undefined);
+	if ((due.length > picked.length || page.hasMore) && spend(b)) await ctx.cron?.schedule(nextStep(running, "notify-more"), { schedule: soon() }).catch(() => undefined);
 }
 
 /**
@@ -129,7 +149,7 @@ export async function notifyOwners(ctx: Ctx): Promise<void> {
  * calls); the content hook takes it out of the index. Two per run. A listing with unpublished edits
  * is tried again a day later. Nine calls at most.
  */
-export async function expireAndWarn(ctx: Ctx): Promise<void> {
+export async function expireAndWarn(ctx: Ctx, running?: string): Promise<void> {
 	const b = budget(1);
 	const settings = await loadSettings(ctx);
 	if (!settings.expiryDays) return;
@@ -150,7 +170,7 @@ export async function expireAndWarn(ctx: Ctx): Promise<void> {
 		if (patched.state === "busy") await setPluginFields(ctx, item.id, { exp: now + DAY });
 	}
 	if (due.items.length > worked || (due.items.length && due.hasMore)) {
-		if (spend(b)) await ctx.cron?.schedule("expire-more", { schedule: soon() }).catch(() => undefined);
+		if (spend(b)) await ctx.cron?.schedule(nextStep(running, "expire-more"), { schedule: soon() }).catch(() => undefined);
 		return;
 	}
 	if (due.items.length || !settings.emailExpiry || !ctx.email) return;
@@ -199,7 +219,7 @@ export async function expireAndWarn(ctx: Ctx): Promise<void> {
 			await ctx.storage.directory.updateIf(id, { where: { exp }, set: { warned: exp } }).catch(() => undefined);
 		}
 	}
-	if ((left || soonPage.hasMore) && spend(b)) await ctx.cron?.schedule("expire-more", { schedule: soon() }).catch(() => undefined);
+	if ((left || soonPage.hasMore) && spend(b)) await ctx.cron?.schedule(nextStep(running, "expire-more"), { schedule: soon() }).catch(() => undefined);
 }
 
 /**
@@ -265,8 +285,8 @@ export async function sweep(ctx: Ctx): Promise<void> {
 	if (fixed) await ctx.kv.set(SWEEP, page.hasMore && page.cursor ? page.cursor : "");
 }
 
-export async function runUpgrade(ctx: Ctx): Promise<void> {
+export async function runUpgrade(ctx: Ctx, running?: string): Promise<void> {
 	const b = budget(1);
 	const settings = await loadSettings(ctx);
-	await upgradeStep(ctx, settings, b);
+	await upgradeStep(ctx, settings, b, nextStep(running, "upgrade"));
 }

@@ -421,12 +421,21 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 				}
 				return;
 			}
+			// Done: the form and its steps go away, and the member gets the next things to do.
 			form.reset();
-			showStep(1);
+			form.hidden = true;
+			const steps = document.getElementById("wizard-steps");
+			if (steps) steps.hidden = true;
 			if (status) {
 				status.hidden = false;
 				status.dataset.tone = "success";
-				status.textContent = result.pendingReview ? S.submit.thanksReview : S.submit.thanksLive;
+				status.innerHTML =
+					`<p>${esc(result.pendingReview ? S.submit.thanksReview : S.submit.thanksLive)}</p>` +
+					`<div class="listora-actions"><a class="listora-btn" href="/account/?tab=listings">${esc(S.submit.yourListings)}</a>` +
+					`<a class="listora-btn listora-btn--secondary" href="/listings/submit/">${esc(S.submit.addAnother)}</a></div>`;
+				status.tabIndex = -1;
+				status.focus();
+				status.scrollIntoView({ block: "center" });
 			}
 		} catch (error) {
 			if (status) {

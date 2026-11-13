@@ -15,7 +15,7 @@ Your 0.6.x data comes over by itself, a step a minute, after the update. Meanwhi
 
 - New: Listing changes and Listing photos admin pages; Next and Previous on every admin list.
 - Improve: a stored directory index, exact ratings, the account one tab at a time, export of every listing, import a few rows at a time.
-- Fix: the owner sees their own view of a listing; a member's listing counts as theirs; guests get Sign in in place of the forms; plain words while an update builds indexes.
+- Fix: the owner sees their own view of a listing; a member's listing counts as theirs; guests get Sign in in place of the forms; plain words while an update builds indexes; the update runs by itself; approvals publish on Node sites.
 - Security: guest messages limited per visitor address, refused when the host gives none.
 - Compat: tested on EmDash 1.3.1 and 1.5.0.
 

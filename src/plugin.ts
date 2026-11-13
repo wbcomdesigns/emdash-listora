@@ -58,11 +58,13 @@ const plugin: SandboxedPlugin = {
 		"plugin:activate": { handler: async (_event, ctx) => setUp(ctx, true) },
 		cron: {
 			handler: async (event, ctx) => {
-				if (event.name === "notify" || event.name === "notify-more") await notifyOwners(ctx);
-				else if (event.name === "expire" || event.name === "expire-more") await expireAndWarn(ctx);
-				else if (event.name === "tidy") await tidy(ctx);
-				else if (event.name === "sweep") await sweep(ctx);
-				else if (event.name === "upgrade") await runUpgrade(ctx);
+				// One-shot steps alternate between two names (tasks.ts nextStep).
+				const task = event.name.replace(/-2$/, "");
+				if (task === "notify" || task === "notify-more") await notifyOwners(ctx, event.name);
+				else if (task === "expire" || task === "expire-more") await expireAndWarn(ctx, event.name);
+				else if (task === "tidy") await tidy(ctx);
+				else if (task === "sweep") await sweep(ctx);
+				else if (task === "upgrade") await runUpgrade(ctx, event.name);
 				else if (event.name === "sample") await sampleStep(ctx);
 			},
 		},

@@ -312,14 +312,29 @@ export function esc(value: unknown): string {
 	return String(value ?? "").replace(/[&<>"']/g, (char) => ESCAPES[char]);
 }
 
+const SIGN_IN = "/_emdash/admin/login";
+
+/** The sign-in page, coming back here. No side effects: pages build their links with it on load. */
 export function signInUrl(): string {
-	// About to sign in: forget that this browser was last seen as a guest.
-	try {
-		localStorage.removeItem("listora-guest");
-	} catch {
-		// Storage can be blocked.
-	}
-	return `/_emdash/admin/login?redirect=${encodeURIComponent(location.pathname + location.search)}`;
+	return `${SIGN_IN}?redirect=${encodeURIComponent(location.pathname + location.search)}`;
+}
+
+// Following a sign-in link forgets that this browser was last seen as a guest, so the next page
+// asks again. Only the click does: clearing it while building the link (as 0.7.0 first did) made
+// every page ask, and be refused, again.
+if (typeof document !== "undefined") {
+	document.addEventListener(
+		"click",
+		(event) => {
+			if (!(event.target as Element | null)?.closest?.(`a[href^="${SIGN_IN}"]`)) return;
+			try {
+				localStorage.removeItem("listora-guest");
+			} catch {
+				// Storage can be blocked.
+			}
+		},
+		true,
+	);
 }
 
 /*

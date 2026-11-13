@@ -296,7 +296,7 @@ function amenityList(value: unknown): string[] {
 					<option value="rating" selected={sort === "rating"}>{S.directory.rating}</option>
 					<option value="title" selected={sort === "title"}>{S.directory.titleSort}</option>
 				</select>
-				<div class="listora-view-toggle">
+				<div class="listora-view-toggle" id="listora-view-toggle">
 					<a class:list={{ "is-active": view !== "list" }} href={withQuery("view=grid")}>{S.directory.grid}</a>
 					<a class:list={{ "is-active": view === "list" }} href={withQuery("view=list")}>{S.directory.list}</a>
 				</div>
@@ -405,7 +405,7 @@ function amenityList(value: unknown): string[] {
 
 	// The parts of the page a search changes. Live search loads this same page for the new
 	// query and swaps them in, so there is one way a card is drawn: the server's.
-	const LIVE = ["listora-count", "listora-featured-slot", "listora-toolbar-count", "listora-results", "listora-pager-slot"];
+	const LIVE = ["listora-count", "listora-featured-slot", "listora-toolbar-count", "listora-view-toggle", "listora-results", "listora-pager-slot"];
 
 	function searchUrl(extra: Record<string, string> = {}): string {
 		const params = new URLSearchParams({

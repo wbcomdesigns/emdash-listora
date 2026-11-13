@@ -575,6 +575,15 @@ describe("contact messages", () => {
 		expect(await host!.storage("contacts").get(rows[0].id)).toMatchObject({ status: "handled" });
 	});
 
+	it("a 0.6.x message not yet queued by the upgrade says its notice is still to go (walk finding M4)", async () => {
+		const { a, rt } = await directory();
+		await rt.fixtures.plugin.storage("contacts", "old-1", { listingId: a, name: "Vee", message: "Hello", status: "new", notice: "waiting", createdAt: "2026-10-01T00:00:00.000Z" });
+		await rt.fixtures.plugin.setting("upgrade_0_7", { index: true });
+		const during = JSON.stringify(await rt.admin.loadPage("/messages"));
+		expect(during).not.toContain("Owner notified");
+		expect(during).toContain("Notice goes out within the hour");
+	});
+
 	it("opens a message before delete, and only the confirm button removes it", async () => {
 		const { a } = await directory();
 		await host!.invokeRoute(
@@ -1683,5 +1692,42 @@ describe("install and activate on EmDash 1.5", () => {
 		expect(new Set(after).size).toBe(after.length);
 		expect(after.filter((name) => name !== "upgrade")).toEqual(before.filter((name) => name !== "upgrade"));
 		expect((await rt.inspect.storage.list("directory")).length).toBe(index);
+	});
+});
+
+describe("scheduled tasks on EmDash 1.5's own scheduler", () => {
+	// EmDash deletes a one-shot task's row when its run ends, so these drive the real scheduler
+	// (rt.scheduled.run) instead of calling the cron hook by name.
+	it("the 0.7.0 upgrade carries on by itself, a step a minute, to the end", async () => {
+		const rt = await createPluginRuntimeTestHost();
+		host = { dispose: () => rt.dispose() } as unknown as PluginTestHost;
+		await rt.fixtures.collection(listingsCollection as never);
+		for (let i = 0; i < 5; i += 1) await rt.fixtures.content("listings", { data: { title: `Cafe ${i}`, listing_type: "restaurant" }, slug: `cafe-${i}`, status: "published" } as never);
+		const names = new Set<string>();
+		let clock = Date.now();
+		for (let minute = 0; minute < 40; minute += 1) {
+			if ((await rt.inspect.setting<{ done?: boolean }>("upgrade_0_7"))?.done) break;
+			for (const task of await rt.inspect.scheduledTasks()) names.add(String(task.name));
+			clock += 61_000;
+			rt.scheduled.setTime(new Date(clock));
+			await rt.scheduled.run();
+			await settle();
+		}
+		expect((await rt.inspect.setting<{ done?: boolean }>("upgrade_0_7"))?.done).toBe(true);
+		// More than one step ran, under both names.
+		expect(names).toContain("upgrade");
+		expect(names).toContain("upgrade-2");
+	});
+
+	it("the first hourly run after an update schedules every task (no hook runs on an update)", async () => {
+		const rt = await createPluginRuntimeTestHost();
+		host = { dispose: () => rt.dispose() } as unknown as PluginTestHost;
+		await rt.fixtures.collection(listingsCollection as never);
+		await rt.fixtures.plugin.setting("state_tasks", "0.6.3");
+		await rt.fixtures.plugin.setting("expiry_days", 30);
+		await rt.transport.invokeHook("cron", { name: "notify", scheduledAt: new Date().toISOString() });
+		const tasks = (await rt.inspect.scheduledTasks()).map((task) => String(task.name));
+		expect(tasks).toEqual(expect.arrayContaining(["notify", "tidy", "sweep", "expire", "notify-more"]));
+		expect(await rt.inspect.setting("state_tasks")).toBe("0.7.0");
 	});
 });

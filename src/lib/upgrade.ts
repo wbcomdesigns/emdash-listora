@@ -49,7 +49,8 @@ const soon = (now = Date.now()) => new Date(now + 60_000).toISOString();
  * Run one step with what is left of the budget. Returns the state after it, or null when the
  * upgrade is done. A step needs at most 6 calls (index), plus 1 to set the next run.
  */
-export async function upgradeStep(ctx: PluginContext, settings: Settings, b: Budget, schedule = true): Promise<State | null> {
+/** `next` names the one-shot task for the next step (tasks.ts nextStep); "" schedules none. */
+export async function upgradeStep(ctx: PluginContext, settings: Settings, b: Budget, next = "upgrade"): Promise<State | null> {
 	if (upgradeDone(settings)) return null;
 	if (!spend(b)) return null;
 	const seen = await ctx.kv.getVersioned<Record<string, unknown>>(STATE);
@@ -120,7 +121,7 @@ export async function upgradeStep(ctx: PluginContext, settings: Settings, b: Bud
 		}
 		return after;
 	}
-	if (schedule && spend(b)) await ctx.cron?.schedule("upgrade", { schedule: soon() }).catch(() => undefined);
+	if (next && spend(b)) await ctx.cron?.schedule(next, { schedule: soon() }).catch(() => undefined);
 	return after;
 }
 
