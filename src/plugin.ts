@@ -37,10 +37,25 @@ async function indexFromHook(ctx: PluginContext, content: unknown): Promise<void
 	await indexListing(ctx, item, async () => asNumber(asRecord(await ctx.storage.submissions.get(item.id).catch(() => null)).expires_at) ?? 0);
 }
 
+/**
+ * Schedule the hourly and daily tasks. Since EmDash 1.5 a throw from plugin:activate leaves the
+ * plugin disabled, which would take the whole directory down over a missed schedule. So an error is
+ * logged for the admin instead; the routes keep working and activating again schedules the tasks.
+ */
+async function setUp(ctx: PluginContext, activate: boolean): Promise<void> {
+	try {
+		await scheduleAll(ctx, activate ? await loadSettings(ctx) : null);
+	} catch (error) {
+		ctx.log.error("Listora could not schedule its tasks. Deactivate and activate it again.", {
+			error: error instanceof Error ? error.message : String(error),
+		});
+	}
+}
+
 const plugin: SandboxedPlugin = {
 	hooks: {
-		"plugin:install": { handler: async (_event, ctx) => scheduleAll(ctx, null) },
-		"plugin:activate": { handler: async (_event, ctx) => scheduleAll(ctx, await loadSettings(ctx)) },
+		"plugin:install": { handler: async (_event, ctx) => setUp(ctx, false) },
+		"plugin:activate": { handler: async (_event, ctx) => setUp(ctx, true) },
 		cron: {
 			handler: async (event, ctx) => {
 				if (event.name === "notify" || event.name === "notify-more") await notifyOwners(ctx);

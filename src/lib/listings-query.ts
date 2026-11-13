@@ -19,19 +19,26 @@ export async function publicListing(ctx: Ctx, id: string): Promise<Item | null> 
 	return item?.status === "published" ? item : null;
 }
 
+/** Refusals EmDash 1.4+ gives when another save of the same entry is in flight; worth one retry. */
+const RETRYABLE = new Set(["CONFLICT", "CONTENT_ACTION_REENTRANT"]);
+
 /**
  * Publish a listing's current state. No revision is passed: this is only called right after this
- * same call created or changed the listing, or to approve a draft as it is now. One call. False when
- * the host cannot publish or refused.
+ * same call created or changed the listing, or to approve a draft as it is now. One call, two when
+ * EmDash refuses because another save of the entry was in flight. False when the host cannot
+ * publish or refused twice; the listing then keeps its draft and the caller reports a failure.
  */
 export async function publishNow(ctx: Ctx, id: string): Promise<boolean> {
 	if (!ctx.content?.publish) return false;
-	try {
-		await ctx.content.publish(LISTINGS, id, { _rev: undefined as unknown as string });
-		return true;
-	} catch {
-		return false;
+	for (let attempt = 0; attempt < 2; attempt++) {
+		try {
+			await ctx.content.publish(LISTINGS, id, { _rev: undefined as unknown as string });
+			return true;
+		} catch (error) {
+			if (!RETRYABLE.has(asString((error as { code?: unknown })?.code))) return false;
+		}
 	}
+	return false;
 }
 
 /**

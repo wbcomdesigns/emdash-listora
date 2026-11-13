@@ -406,7 +406,12 @@ export async function listoraFetch(path: string, init: RequestInit = {}): Promis
 
 export type ApiResult = { ok: boolean; error?: { code?: string; message?: string }; [key: string]: unknown };
 
-/** Call a Listora plugin route. Member routes answer SIGN_IN_REQUIRED for guests. */
+/** A refused request as a result. EmDash's own refusals get plain words; the plugin's messages pass through. */
+function failure(json: ApiResult | null, fallback: string): ApiResult {
+	if (json?.error?.code === "STORAGE_INDEXES_NOT_READY") return { ok: false, error: { code: "NOT_READY", message: phrase("STORAGE_INDEXES_NOT_READY") } };
+	return { ok: false, error: { code: "FAILED", message: json?.error?.message || fallback } };
+}
+
 /** What an owner may upload as a listing photo. Checked again on the server from the file itself. */
 export const PHOTO_TYPES = ["image/jpeg", "image/png", "image/webp"];
 export const PHOTO_MAX_BYTES = 5 * 1024 * 1024;
@@ -425,9 +430,7 @@ export async function uploadPhoto(listingId: string, file: File): Promise<ApiRes
 		if (response.status === 401) return { ok: false, error: { code: "SIGN_IN_REQUIRED", message: phrase("SIGN_IN_REQUIRED") } };
 		if (response.status === 413) return { ok: false, error: { code: "TOO_BIG", message: phrase("TOO_BIG") } };
 		const json = await response.json().catch(() => null);
-		if (!response.ok || !json) {
-			return { ok: false, error: { code: "FAILED", message: json?.error?.message || S.account.photoFailed } };
-		}
+		if (!response.ok || !json) return failure(json, S.account.photoFailed);
 		return json.data ?? { ok: false };
 	} catch {
 		return { ok: false, error: { code: "OFFLINE", message: phrase("OFFLINE") } };
@@ -458,6 +461,7 @@ export function knownGuest(): boolean {
 	}
 }
 
+/** Call a Listora plugin route. Member routes answer SIGN_IN_REQUIRED for guests. */
 export async function api(path: string, body?: unknown, method = body ? "POST" : "GET"): Promise<ApiResult> {
 	// Never throws: a dropped connection or a server error comes back as a result the page can show.
 	try {
@@ -474,9 +478,7 @@ export async function api(path: string, body?: unknown, method = body ? "POST" :
 		}
 		if (member && response.ok) remember(false);
 		const json = await response.json().catch(() => null);
-		if (!response.ok || !json) {
-			return { ok: false, error: { code: "FAILED", message: json?.error?.message || phrase("FAILED") } };
-		}
+		if (!response.ok || !json) return failure(json, phrase("FAILED"));
 		return json.data ?? { ok: false };
 	} catch {
 		return { ok: false, error: { code: "OFFLINE", message: phrase("OFFLINE") } };

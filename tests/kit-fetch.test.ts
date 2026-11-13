@@ -88,3 +88,28 @@ describe("server-side calls", () => {
 		expect(seen).toHaveLength(0);
 	});
 });
+
+describe("kit words EmDash's own refusals", () => {
+	const reply = (status: number, error: { code: string; message: string }) =>
+		new Response(JSON.stringify({ success: false, error }), { status });
+
+	it("says try again in a moment while a plugin update builds its indexes (EmDash 1.5)", async () => {
+		inBrowser();
+		vi.stubGlobal("localStorage", { getItem: () => null, setItem() {}, removeItem() {} });
+		vi.resetModules();
+		const { api } = await import("../site-kit/lib/listora");
+		vi.stubGlobal("fetch", async () => reply(503, { code: "STORAGE_INDEXES_NOT_READY", message: "Plugin storage indexes are not ready" }));
+		const result = await api("submit", { title: "A" });
+		expect(result.error?.code).toBe("NOT_READY");
+		expect(result.error?.message).toBe("The directory is finishing an update. Try again in a moment.");
+	});
+
+	it("passes the plugin's own message through", async () => {
+		inBrowser();
+		vi.stubGlobal("localStorage", { getItem: () => null, setItem() {}, removeItem() {} });
+		vi.resetModules();
+		const { api } = await import("../site-kit/lib/listora");
+		vi.stubGlobal("fetch", async () => reply(400, { code: "INVALID", message: "Add a title." }));
+		expect((await api("submit", { title: "" })).error).toEqual({ code: "FAILED", message: "Add a title." });
+	});
+});

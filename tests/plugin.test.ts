@@ -1668,3 +1668,20 @@ describe("an approval that fails part way", () => {
 		expect(await rt.inspect.storage.get("submissions", id)).toMatchObject({ status: "approved" });
 	});
 });
+
+describe("install and activate on EmDash 1.5", () => {
+	it("install can run again without doubling schedules or data", async () => {
+		const { rt } = await directory();
+		const names = async () => (await rt.inspect.scheduledTasks()).map((task) => String(task.name)).sort();
+		const before = await names();
+		const index = (await rt.inspect.storage.list("directory")).length;
+		await rt.transport.invokeHook("plugin:install", {});
+		await rt.transport.invokeHook("plugin:install", {});
+		await rt.transport.invokeHook("plugin:activate", {});
+		await settle();
+		const after = await names();
+		expect(new Set(after).size).toBe(after.length);
+		expect(after.filter((name) => name !== "upgrade")).toEqual(before.filter((name) => name !== "upgrade"));
+		expect((await rt.inspect.storage.list("directory")).length).toBe(index);
+	});
+});

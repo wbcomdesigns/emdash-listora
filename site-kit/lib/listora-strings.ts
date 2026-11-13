@@ -460,6 +460,8 @@ const CODES: Record<string, string> = {
 	TOO_BIG: S.account.tooBig,
 	OFFLINE: S.common.offline,
 	FAILED: S.common.fallback,
+	// EmDash 1.5 refuses writes with this while a plugin update builds its storage indexes.
+	STORAGE_INDEXES_NOT_READY: "The directory is finishing an update. Try again in a moment.",
 };
 
 /** Plain sentence for a server error code. A missing code uses the general fallback. */
