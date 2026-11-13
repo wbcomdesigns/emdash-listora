@@ -21,10 +21,14 @@ Every page, action, hook and scheduled task now fits Cloudflare's limit of 10 re
 - Fix      - The open account tab is marked for screen readers, and the Profile and Delete my data cards no longer touch.
 - Fix      - A failed directory read answers with an error instead of an empty list.
 - Fix      - A new listing's queue row is written right after the listing, and a photo is uploaded only when the rest of the request fits.
+- Fix      - Approving a change publishes the listing again once when EmDash refuses a save made at the same moment, so the listing does not stay marked as edited.
+- Fix      - While an update builds Listora's storage indexes, forms say to try again in a moment instead of showing a technical message.
+- Fix      - A scheduling error while Listora is activated is logged instead of switching the plugin off.
 - Security - Guest messages are limited per visitor address however it is written, and refused when the host passes on no address.
 - Dev      - Owner changes and photos approve from their own pages; a decision cut off part way comes back on the next click instead of a timer.
 - Dev      - Routes listings and search page by cursor, dashboard takes a tab, privacy erase answers MORE until done (see the routes guide).
-- Dev      - Tested against EmDash 1.3.1, with every entry point's request count pinned in tests/bridge-budget.test.ts.
+- Dev      - Every entry point's request count is pinned in tests/bridge-budget.test.ts, counting the runtime bridge EmDash 1.5 added.
+- Compat   - Tested on EmDash 1.3.1 and 1.5.0.
 
 ## [0.6.3] - 2026-10-19
 
