@@ -207,6 +207,12 @@ export function slotsOf(type: ListingType, values: Record<string, unknown>): Par
 	return out;
 }
 
+/**
+ * A listing's place: what a type without a location neither takes nor shows. A listing keeps what it
+ * stored here when its type later loses its location; nothing shows it while the type has none.
+ */
+export const PLACE_FIELDS = ["address", "city", "state", "country", "postal_code", "lat", "lng", "hours"] as const;
+
 /** The types offered for a new listing. */
 export const shownTypes = (types: readonly ListingType[]) => types.filter((type) => !type.hidden);
 

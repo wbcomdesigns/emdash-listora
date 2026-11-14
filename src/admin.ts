@@ -1,7 +1,7 @@
 import type { PluginContext } from "emdash/plugin";
 
 import { budget, spend, type Budget } from "./lib/budget";
-import { editPatch } from "./lib/edits";
+import { anyType, editPatch } from "./lib/edits";
 import { getListing, ownerOf, patchListing, publishNow } from "./lib/listings-query";
 import { mirrorRating, moveRating, partOf } from "./lib/ratings";
 import { KEY, loadSettings, PAGE, photosOn, type Settings, type View } from "./lib/settings";
@@ -318,7 +318,7 @@ async function renderChanges(ctx: Ctx, settings: Settings, b: Budget, extra: Ext
 		}
 		// The values the change replaces were kept with it, so this page reads nothing else. The same
 		// function the approval uses, so this screen cannot show one thing and apply another.
-		const { changes } = editPatch(asRecord(row.was), asRecord(row.fields));
+		const { changes } = editPatch(asRecord(row.was), asRecord(row.fields), row.listing_type ? typeBySlug(settings.types, row.listing_type) : anyType(settings.types));
 		blocks.push(
 			{ type: "section", text: `${asString(row.listing_title) || "A listing"}  ·  sent ${day(ctx, row.createdAt)}${row.status === "approving" ? "  ·  being approved" : ""}` },
 			...(changes.length === 0
@@ -386,7 +386,7 @@ async function decideChange(ctx: Ctx, settings: Settings, b: Budget, action: str
 	}
 	b.used -= 1;
 	// Built by the same function that drew the screen, from the same stored row.
-	const { patch } = editPatch(live, asRecord(edit.fields));
+	const { patch } = editPatch(live, asRecord(edit.fields), typeBySlug(settings.types, live.listing_type));
 	if (Object.keys(patch).length > 0) {
 		spend(b, 3);
 		const patched = await patchListing(ctx, listingId, patch, settings.fields, listing);

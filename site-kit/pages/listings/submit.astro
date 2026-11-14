@@ -1,7 +1,7 @@
 ---
 import { getTaxonomyTerms } from "emdash";
 import Layout from "../../layouts/ListoraLayout.astro";
-import { loadTypes, shownTypes, typeHint } from "../../lib/listora";
+import { jsonForScript, loadTypes, typeHint } from "../../lib/listora";
 import { S } from "../../lib/listora-strings";
 import "../../styles/listora-ui.css";
 
@@ -10,8 +10,12 @@ Astro.response.headers.set("Cache-Control", "private, no-store");
 const user = Astro.locals.user;
 // The site's own categories. A site with none still gets a working form.
 const categories = await getTaxonomyTerms("listing_category").catch(() => []);
-// The types offered for a new listing, as the owner has set them up in the admin.
-const types = user ? shownTypes(await loadTypes(Astro.locals)) : [];
+// The types as the owner has set them up in the admin. Hidden ones are not offered for a new listing,
+// but an owner editing a listing of a hidden type still sees its card and its fields.
+const types = user ? await loadTypes(Astro.locals) : [];
+const firstShown = types.find((item) => !item.hidden)?.slug;
+// What the form needs to draw each type's own fields and to know whether it has a place.
+const typeData = types.map((item) => ({ slug: item.slug, location: item.location !== false, fields: item.fields ?? [] }));
 const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.pathname)}`;
 ---
 
@@ -57,13 +61,14 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 				<p class="listora-helper" id="type-help">{S.submit.typeHelp}</p>
 				<div class="listora-type-grid" role="radiogroup" aria-labelledby="type-help">
 					{
-						types.map((item, index) => (
-							<label class="listora-type-card">
+						types.map((item) => (
+							<label class="listora-type-card" hidden={item.hidden} data-hidden-type={item.hidden ? "" : undefined}>
 								<input
 									type="radio"
 									name="listing_type"
 									value={item.slug}
-									checked={index === 0}
+									checked={item.slug === firstShown}
+									disabled={item.hidden}
 								/>
 								<span class="listora-type-card__name">{item.name}</span>
 								{typeHint(item.slug) ? <span class="listora-type-card__hint">{typeHint(item.slug)}</span> : null}
@@ -103,7 +108,7 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 					<textarea id="description" class="listora-input" name="description" rows="5" aria-describedby="description-help"></textarea>
 					<p class="listora-helper" id="description-help">{S.submit.descriptionHelp}</p>
 				</div>
-				<div class="listora-form-grid">
+				<div class="listora-form-grid" data-place>
 					<div class="listora-field">
 						<label class="listora-label" for="city">{S.submit.city}</label>
 						<input id="city" class="listora-input" name="city" autocomplete="address-level2" />
@@ -157,7 +162,7 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 						{categories.map((term) => <option value={term.slug}>{term.label}</option>)}
 					</select>
 				</div>
-				<div class="listora-form-grid">
+				<div class="listora-form-grid" data-place>
 					<div class="listora-field">
 						<label class="listora-label" for="country">{S.submit.country}</label>
 						<input id="country" class="listora-input" name="country" autocomplete="country" />
@@ -188,13 +193,14 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 				<button class="listora-btn" type="submit" id="submit-btn" hidden>{S.submit.send}</button>
 			</div>
 		</form>
+		<script type="application/json" id="listora-type-data" set:html={jsonForScript(typeData)} />
 		</Fragment>
 		) : null}
 	</div>
 </Layout>
 
 <script>
-	import { api, esc, TYPE_FIELDS } from "../../lib/listora";
+	import { api, esc, type TypeFieldInfo } from "../../lib/listora";
 	import { S } from "../../lib/listora-strings";
 
 	const form = document.getElementById("listora-submit") as HTMLFormElement | null;
@@ -202,6 +208,19 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 
 	function wizard(form: HTMLFormElement) {
 	let step = 1;
+	type TypeData = { slug: string; location: boolean; fields: TypeFieldInfo[] };
+	const typeData: TypeData[] = (() => {
+		try {
+			return JSON.parse(document.getElementById("listora-type-data")?.textContent || "[]");
+		} catch {
+			return [];
+		}
+	})();
+	const chosenType = (): TypeData => {
+		const slug = String(new FormData(form).get("listing_type") || "");
+		return typeData.find((item) => item.slug === slug) ?? { slug, location: true, fields: [] };
+	};
+	const PLACE_KEYS = ["address", "city", "state", "country"];
 	// /listings/submit/?edit=<listing> opens the same form for a listing the member already owns.
 	const editId = new URLSearchParams(location.search).get("edit") || "";
 	function setFieldError(id: string, errorId: string, show: boolean) {
@@ -234,16 +253,52 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 		if (step === 5) renderPreview();
 	}
 
+	/** One of the type's own fields, with the input its kind needs. Every owner-written word is escaped. */
+	function fieldHtml(field: TypeFieldInfo): string {
+		const id = `tf-${field.key}`;
+		const help = (S.fieldHelp as Record<string, string>)[field.key] ?? "";
+		const required = field.required ? ` required aria-required="true"` : "";
+		const marker = field.required ? ` <span class="listora-req">${esc(S.common.required)}</span>` : "";
+		const described = help ? ` aria-describedby="${id}-help"` : "";
+		const helpHtml = help ? `<p class="listora-helper" id="${id}-help">${esc(help)}</p>` : "";
+		if (field.kind === "yesno") {
+			return `<div class="listora-field"><div class="listora-check"><input id="${id}" name="${id}" type="checkbox" value="true"${required}${described} /><label class="listora-label" for="${id}">${esc(field.label)}${marker}</label></div>${helpHtml}</div>`;
+		}
+		const label = `<label class="listora-label" for="${id}">${esc(field.label)}${marker}</label>`;
+		const input =
+			field.kind === "choice"
+				? `<select id="${id}" class="listora-input" name="${id}"${required}${described}><option value="">${esc(S.common.choose)}</option>${(field.options ?? []).map((option) => `<option value="${esc(option)}">${esc(option)}</option>`).join("")}</select>`
+				: `<input id="${id}" class="listora-input" name="${id}" ${
+						field.kind === "number"
+							? 'type="number" step="any" inputmode="decimal"'
+							: field.kind === "link"
+								? 'type="url" maxlength="200" placeholder="https://"'
+								: field.kind === "date"
+									? 'type="date"'
+									: 'type="text" maxlength="200"'
+					}${required}${described} />`;
+		return `<div class="listora-field">${label}${input}${helpHtml}</div>`;
+	}
+
 	function renderTypeFields() {
-		const type = String(new FormData(form).get("listing_type") || "business");
+		const type = chosenType();
 		const box = document.getElementById("type-fields");
-		if (!box) return;
-		box.innerHTML = (TYPE_FIELDS[type] ?? [])
-			.map(
-				(field) =>
-					`<div class="listora-field"><label class="listora-label" for="${field.key}">${field.label}</label><input id="${field.key}" class="listora-input" name="${field.key}" type="${field.type || "text"}" aria-describedby="${field.key}-help" /><p class="listora-helper" id="${field.key}-help">${field.help}</p></div>`,
-			)
-			.join("");
+		if (box) box.innerHTML = type.fields.map(fieldHtml).join("");
+		// A type without a location asks for no address, city, state or country.
+		form.querySelectorAll<HTMLElement>("[data-place]").forEach((node) => {
+			node.hidden = !type.location;
+		});
+	}
+
+	/** The chosen type's own fields as the form has them. */
+	function typeFields(): Record<string, string | boolean> {
+		const out: Record<string, string | boolean> = {};
+		for (const field of chosenType().fields) {
+			const input = form.elements.namedItem(`tf-${field.key}`);
+			if (input instanceof HTMLInputElement && input.type === "checkbox") out[field.key] = input.checked;
+			else if (input instanceof HTMLInputElement || input instanceof HTMLSelectElement) out[field.key] = input.value;
+		}
+		return out;
 	}
 
 	function renderPreview() {
@@ -252,7 +307,8 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 		// The name shown on the chosen type's card, as the page drew it from the plugin's types.
 		const typeLabel = form.querySelector('input[name="listing_type"]:checked')?.closest("label")?.querySelector(".listora-type-card__name")?.textContent || "";
 		if (preview) {
-			preview.innerHTML = `<article class="listora-card"><div class="listora-card-body"><p class="listora-meta"><span class="listora-badge listora-badge--type">${esc(typeLabel)}</span></p><h2>${esc(data.title || S.submit.untitled)}</h2><p class="listora-meta">${esc(data.city || S.submit.cityMissing)}</p><p>${esc(data.excerpt || S.submit.noSummary)}</p></div></article>`;
+			const place = chosenType().location ? `<p class="listora-meta">${esc(data.city || S.submit.cityMissing)}</p>` : "";
+			preview.innerHTML = `<article class="listora-card"><div class="listora-card-body"><p class="listora-meta"><span class="listora-badge listora-badge--type">${esc(typeLabel)}</span></p><h2>${esc(data.title || S.submit.untitled)}</h2>${place}<p>${esc(data.excerpt || S.submit.noSummary)}</p></div></article>`;
 		}
 	}
 
@@ -294,7 +350,7 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 		setFieldError("title", "title-error", false);
 		// A field the browser can check (an email, a web address) is checked on its own step,
 		// with the browser's own message next to it, not at the very end.
-		const wrong = [...form.querySelectorAll<HTMLInputElement>(`[data-panel="${step}"] input`)].find((input) => !input.checkValidity());
+		const wrong = [...form.querySelectorAll<HTMLInputElement | HTMLSelectElement>(`[data-panel="${step}"] input, [data-panel="${step}"] select`)].find((input) => !input.checkValidity());
 		if (wrong) {
 			wrong.reportValidity();
 			return;
@@ -336,6 +392,8 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 		form.querySelectorAll<HTMLInputElement>('input[name="listing_type"]').forEach((input) => {
 			input.checked = input.value === data.listing_type;
 			input.disabled = input.value !== data.listing_type;
+			// A type the owner hid since: its card still shows, for this listing.
+			if (input.checked) input.closest<HTMLElement>("label")?.removeAttribute("hidden");
 		});
 		renderTypeFields();
 		const set = (name: string, value: unknown) => {
@@ -345,8 +403,13 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 			}
 		};
 		for (const [key, value] of Object.entries(values)) {
-			if (key === "type_fields") for (const [inner, text] of Object.entries((value ?? {}) as Record<string, unknown>)) set(inner, text);
-			else set(key, value);
+			if (key !== "type_fields") set(key, value);
+			else
+				for (const [inner, stored] of Object.entries((value ?? {}) as Record<string, unknown>)) {
+					const field = form.elements.namedItem(`tf-${inner}`);
+					if (field instanceof HTMLInputElement && field.type === "checkbox") field.checked = stored === true || stored === "true";
+					else set(`tf-${inner}`, stored);
+				}
 		}
 		// The category is set by the site's admin, so it is not part of an edit.
 		document.getElementById("category")?.closest<HTMLElement>(".listora-field")?.setAttribute("hidden", "");
@@ -375,42 +438,26 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 		button.disabled = true;
 		form.setAttribute("aria-busy", "true");
 		try {
+			const located = chosenType().location;
+			const text = (name: string) => String(data.get(name) ?? "");
 			const result = await api(editId ? "edit" : "submit", {
-					...(editId ? { listingId: editId } : {}),
-					title,
-					listing_type: String(data.get("listing_type") ?? "business"),
-					category: String(data.get("category") ?? ""),
-					excerpt: String(data.get("excerpt") ?? ""),
-					description: String(data.get("description") ?? ""),
-					phone: String(data.get("phone") ?? ""),
-					email: String(data.get("email") ?? ""),
-					website: String(data.get("website") ?? ""),
-					address: String(data.get("address") ?? ""),
-					city: String(data.get("city") ?? ""),
-					state: String(data.get("state") ?? ""),
-					country: String(data.get("country") ?? ""),
-					owner_name: String(data.get("owner_name") ?? ""),
-					amenities: String(data.get("amenities") ?? ""),
-					cuisine: String(data.get("cuisine") ?? ""),
-					price_range: String(data.get("price_range") ?? ""),
-					event_start: String(data.get("event_start") ?? ""),
-					event_end: String(data.get("event_end") ?? ""),
-					agree_terms: data.get("agree_terms") === "true",
-					company_website: String(data.get("company_website") ?? ""),
-					type_fields: {
-						year_founded: String(data.get("year_founded") ?? ""),
-						star_rating: String(data.get("star_rating") ?? ""),
-						beds: String(data.get("beds") ?? ""),
-						baths: String(data.get("baths") ?? ""),
-						price: String(data.get("price") ?? ""),
-						salary: String(data.get("salary") ?? ""),
-						job_type: String(data.get("job_type") ?? ""),
-						specialty: String(data.get("specialty") ?? ""),
-						program: String(data.get("program") ?? ""),
-						asking_price: String(data.get("asking_price") ?? ""),
-						place_kind: String(data.get("place_kind") ?? ""),
-					},
-				});
+				...(editId ? { listingId: editId } : {}),
+				title,
+				listing_type: chosenType().slug,
+				category: text("category"),
+				excerpt: text("excerpt"),
+				description: text("description"),
+				phone: text("phone"),
+				email: text("email"),
+				website: text("website"),
+				// Left out for a type without a location, so an edit keeps the address the listing has.
+				...(located ? Object.fromEntries(PLACE_KEYS.map((key) => [key, text(key)])) : {}),
+				owner_name: text("owner_name"),
+				amenities: text("amenities"),
+				agree_terms: data.get("agree_terms") === "true",
+				company_website: text("company_website"),
+				type_fields: typeFields(),
+			});
 			if (!result.ok) throw new Error(result.error?.message || S.submit.couldNot);
 			// Done: the form and its steps go away, and the member reads what happens next where the
 			// form was (an edit sent from the Preview step left the page looking unchanged).

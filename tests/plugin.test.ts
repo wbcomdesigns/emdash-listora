@@ -970,12 +970,10 @@ describe("types store", () => {
 		for (const sample of SAMPLE_LISTINGS) expect(builtins.has(sample.listing_type), sample.key).toBe(true);
 	});
 
-	it("keeps the form's extra fields in step with the built-in types", () => {
-		// Software's fields are rendered from the types route in step 5 (SCOPE.md item 4); the rest are
-		// still drawn by the kit's own field list until then.
-		for (const type of BUILTIN_TYPES.filter((item) => item.slug !== "software")) {
-			for (const field of type.fields) expect(kitLib, `${type.slug}.${field.key}`).toContain(`key: "${field.key}"`);
-		}
+	it("draws every type's own fields from the types route, with no field list of the kit's own", () => {
+		// 0.8.0 step 5: the form and the listing page read each type's fields from the plugin.
+		expect(kitLib).not.toContain("TYPE_FIELDS");
+		for (const type of BUILTIN_TYPES) for (const field of type.fields) expect(kitLib, `${type.slug}.${field.key}`).not.toContain(`key: "${field.key}"`);
 	});
 });
 
@@ -1417,19 +1415,19 @@ describe("owner edits a live listing", () => {
 		expect(await liveTitle()).toEqual(["Edit Cafe Supreme"]);
 		expect(await rt.inspect.storage.get("edits", id)).toBeNull();
 
-		// Hidden characters and unknown extra details never reach the stored change.
+		// Hidden characters and details the listing's type does not have never reach the stored change.
 		await route(
 			"edit",
-			{ listingId: id, title: "Edit Cafe\u200B\u202E Supreme!", type_fields: { year_founded: "1999", secret_key: "hidden", cuisine: "smuggled" } },
+			{ listingId: id, title: "Edit Cafe\u200B\u202E Supreme!", type_fields: { cuisine: "Thai", secret_key: "hidden", year_founded: "smuggled" } },
 			{ method: "POST", user: ana },
 		);
 		const cleaned = (await rt.inspect.storage.get<{ fields: Record<string, string>; rev: string }>("edits", id))!;
 		expect(cleaned.fields.title).toBe("Edit Cafe Supreme!");
-		expect(JSON.parse(cleaned.fields.type_fields)).toEqual({ year_founded: "1999" });
+		expect(JSON.parse(cleaned.fields.type_fields)).toEqual({ cuisine: "Thai" });
 		// The approval screen shows every changed value, literally.
 		const screen = JSON.stringify(await route("admin", { type: "page_load", page: "/changes" }));
 		expect(screen).toContain("Edit Cafe Supreme!");
-		expect(screen).toContain("Year founded");
+		expect(screen).toContain("Cuisine");
 		expect(screen).not.toContain("smuggled");
 
 		// A listing a member added counts as theirs, so another member cannot claim it.

@@ -1378,6 +1378,15 @@ ul.listora-chips {
 	font-weight: var(--listora-weight-semibold);
 }
 
+/* A listing's details on its page: two or three to a row on wide screens, one under another on a phone. */
+.listora-facts--details {
+	grid-template-columns: repeat(auto-fill, minmax(min(100%, 14rem), 1fr));
+}
+
+.listora-facts--details dd {
+	overflow-wrap: anywhere;
+}
+
 .listora-map {
 	min-height: 200px;
 	border-radius: var(--listora-radius-md);

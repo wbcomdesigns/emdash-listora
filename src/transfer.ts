@@ -3,11 +3,11 @@ import type { PluginContext } from "emdash/plugin";
 
 import { listingFromContent } from "./lib/catalog";
 import { onSite } from "./lib/directory";
-import { CSV_COLUMNS, parseCsv, toCsv, unguard } from "./lib/csv";
-import { clean, webAddress } from "./lib/edits";
+import { CSV_COLUMNS, csvName, parseCsv, toCsv, unguard } from "./lib/csv";
+import { clean, detailOf, detailText, LINK_RULE, storedDetails, typeValues, webAddress } from "./lib/edits";
 import { fieldsOf } from "./lib/listings-query";
 import { loadSettings, onlyKnown } from "./lib/settings";
-import { LISTINGS } from "./lib/types";
+import { LISTINGS, typeBySlug, type ListingType } from "./lib/types";
 import { asRecord, asString, nowIso, readCursor } from "./lib/util";
 
 type Ctx = PluginContext;
@@ -57,7 +57,11 @@ export async function exportCsv(input: unknown, ctx: Ctx) {
 			if (!page) break;
 			for (const item of page.items) {
 				const card = listingFromContent(item);
-				rows.push({ ...card, lat: card.lat ?? "", lng: card.lng ?? "" });
+				const data = asRecord(item.data);
+				const stored = storedDetails(data.type_fields);
+				// The listing's own type's details, each under its field's label.
+				const details = typeBySlug(settings.types, card.listing_type).fields.map((field) => [csvName(field.label), detailText(field, detailOf(data, stored, field.key))]);
+				rows.push({ ...card, lat: card.lat ?? "", lng: card.lng ?? "", details: Object.fromEntries(details) });
 			}
 			more = Boolean(page.hasMore && page.cursor);
 			if (!more) break;
@@ -67,7 +71,7 @@ export async function exportCsv(input: unknown, ctx: Ctx) {
 		return text(503, "The listings could not be read just now. Try again in a moment.");
 	}
 	if (more && !parts) return text(409, "This directory has more listings than one download holds. Copy the Listora site kit again: its import page downloads them all.");
-	const csv = toCsv(rows);
+	const csv = toCsv(rows, detailColumns(settings.types));
 	return pluginResponse({
 		headers: {
 			"Content-Type": "text/csv; charset=utf-8",
@@ -78,6 +82,24 @@ export async function exportCsv(input: unknown, ctx: Ctx) {
 		// no column names and no byte order mark.
 		body: { kind: "bytes", value: new TextEncoder().encode(start ? csv.slice(csv.indexOf("\r\n") + 2) : csv) },
 	});
+}
+
+/**
+ * One spreadsheet column per field label across the site's types, in type order. Two types with a
+ * field of the same label share its column. A label that reads as a standard column ("City") is
+ * left to the standard column.
+ */
+const STANDARD = new Set<string>(CSV_COLUMNS);
+export function detailColumns(types: readonly ListingType[]): string[] {
+	const taken = new Set<string>(STANDARD);
+	const out: string[] = [];
+	for (const field of types.flatMap((type) => type.fields)) {
+		const name = csvName(field.label);
+		if (taken.has(name)) continue;
+		taken.add(name);
+		out.push(field.label);
+	}
+	return out;
 }
 
 const key = (title: string, city: string) => `${title.trim().toLowerCase()}|${city.trim().toLowerCase()}`;
@@ -114,7 +136,7 @@ export async function importCsv(input: unknown, ctx: Ctx) {
 	// The line each row had in the file the admin chose, when the kit sends it a batch at a time.
 	const first = Math.max(2, Math.floor(Number(raw.firstLine) || 2));
 
-	const good: Array<{ line: number; data: Record<string, string>; type: string }> = [];
+	const good: Array<{ line: number; data: Record<string, string>; type: string; details: Record<string, unknown> }> = [];
 	const bad: Array<{ line: number; title: string; reason: string }> = [];
 	const duplicates: Array<{ line: number; title: string; city: string }> = [];
 	const seen = new Set<string>();
@@ -126,15 +148,20 @@ export async function importCsv(input: unknown, ctx: Ctx) {
 		const data: Record<string, string> = {};
 		for (const column of CSV_COLUMNS) data[column] = clean(unguard(source[column] ?? ""), column === "description" ? 5000 : column === "excerpt" ? 280 : 200);
 		if (!data.title) return bad.push({ line, title: "", reason: "It has no title." });
-		if (data.website && !webAddress(data.website)) return bad.push({ line, title: data.title, reason: "Website must be a full address starting with http:// or https://." });
+		if (data.website && !webAddress(data.website)) return bad.push({ line, title: data.title, reason: `Website ${LINK_RULE}` });
 		const number = (value: string, max: number) => value === "" || (Number.isFinite(Number(value)) && Math.abs(Number(value)) <= max);
 		if (!number(data.lat, 90) || !number(data.lng, 180)) return bad.push({ line, title: data.title, reason: "Latitude or longitude is not a valid number." });
 		const wanted = data.listing_type.toLowerCase();
 		const type = settings.types.find((item) => item.slug === wanted) ?? settings.types.find((item) => item.name.toLowerCase() === wanted);
 		if (data.listing_type && !type) return bad.push({ line, title: data.title, reason: `"${data.listing_type}" is not a listing type.` });
+		// The row's type's own details, from the columns named by its field labels. Empty cells are left out.
+		const rowType = type ?? typeBySlug(settings.types, "business");
+		const sent = Object.fromEntries(rowType.fields.filter((field) => !STANDARD.has(csvName(field.label))).map((field) => [field.key, unguard(source[csvName(field.label)] ?? "")]));
+		const details = typeValues(rowType, sent, "import");
+		if (details.error) return bad.push({ line, title: data.title, reason: details.error });
 		if (seen.has(key(data.title, data.city))) return duplicates.push({ line, title: data.title, city: data.city });
 		seen.add(key(data.title, data.city));
-		candidates.push({ line, data, type: type?.slug ?? "business" });
+		candidates.push({ line, data, type: rowType.slug, details: details.values });
 	});
 
 	// What is already in the directory, live or waiting: same name and same city is a duplicate.
@@ -228,6 +255,7 @@ export async function importCsv(input: unknown, ctx: Ctx) {
 					...(webAddress(item.data.website) ? { website: item.data.website } : {}),
 					lat: item.data.lat === "" ? null : Number(item.data.lat),
 					lng: item.data.lng === "" ? null : Number(item.data.lng),
+					...(Object.keys(item.details).length ? { type_fields: JSON.stringify(item.details) } : {}),
 					is_claimed: false,
 					listing_status: "live",
 				}),

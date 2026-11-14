@@ -1,7 +1,7 @@
 ---
 import { getEmDashCollection, getTermsForEntries } from "emdash";
 import { Image } from "emdash/ui";
-import { loadTypes, matchesPlace, placeOf, placeholderHtml, sortListings, typeName, typeOf } from "../lib/listora";
+import { loadTypes, matchesPlace, placeFor, placeholderHtml, sortListings, typeName, typeOf } from "../lib/listora";
 import { S } from "../lib/listora-strings";
 import "../styles/listora-ui.css";
 
@@ -51,7 +51,7 @@ const types = shown.length ? await loadTypes(Astro.locals) : [];
 							<p class="listora-inline__title">
 								<a href={`/listings/${listing.id}/`}>{listing.data.title}</a>
 							</p>
-							<p class="listora-meta">{placeOf(listing.data)}</p>
+							<p class="listora-meta">{placeFor(types, listing.data)}</p>
 						</div>
 					</article>
 				))}

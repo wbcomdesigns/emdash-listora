@@ -8,7 +8,26 @@ export type HourRow = { day: number; open: string; close: string };
  * A listing type as the plugin's `types` route gives it. The owner edits types in the admin (built-ins
  * and their own), so the kit never keeps a copy: every page asks the route (loadTypes).
  */
-export type ListingTypeInfo = { slug: string; name: string; schemaType?: string; color?: string; icon?: string; hidden?: boolean; location?: boolean };
+export type ListingTypeInfo = { slug: string; name: string; schemaType?: string; color?: string; icon?: string; hidden?: boolean; location?: boolean; fields?: TypeFieldInfo[] };
+
+/** One of a type's own fields, as the owner set it up in the admin (Listing types). */
+export type TypeFieldInfo = { key: string; label: string; kind: "text" | "number" | "choice" | "link" | "date" | "yesno"; options?: string[]; required?: boolean; cards?: boolean };
+
+const KINDS = new Set(["text", "number", "choice", "link", "date", "yesno"]);
+
+/** A type's fields from the route, anything unreadable left out. */
+function fieldsOf(value: unknown): TypeFieldInfo[] {
+	return (Array.isArray(value) ? (value as Array<Record<string, unknown>>) : [])
+		.filter((field) => field && /^[a-z0-9_]+$/.test(String(field.key)) && typeof field.label === "string" && KINDS.has(String(field.kind)))
+		.map((field) => ({
+			key: String(field.key),
+			label: String(field.label),
+			kind: field.kind as TypeFieldInfo["kind"],
+			...(Array.isArray(field.options) ? { options: field.options.map(String) } : {}),
+			required: field.required === true,
+			cards: field.cards === true,
+		}));
+}
 
 /** The site's listing types, from the plugin, for an Astro page's server code. None when the plugin cannot be reached. */
 export async function loadTypes(locals: unknown): Promise<ListingTypeInfo[]> {
@@ -24,6 +43,7 @@ export async function loadTypes(locals: unknown): Promise<ListingTypeInfo[]> {
 			icon: typeof item.icon === "string" ? item.icon : undefined,
 			hidden: item.hidden === true,
 			location: item.location !== false,
+			fields: fieldsOf(item.fields),
 		}));
 }
 
@@ -37,6 +57,13 @@ export function typeOf(types: ListingTypeInfo[], slug: unknown): ListingTypeInfo
 }
 
 export const typeName = (types: ListingTypeInfo[], slug: unknown) => typeOf(types, slug).name;
+
+/** False for a type the owner set up without a location: no map, city, hours, directions, Open or Closed, or address. */
+export const hasPlace = (types: ListingTypeInfo[], slug: unknown) => typeOf(types, slug).location !== false;
+
+/** A listing's city, state and country, or nothing when its type has no location. */
+export const placeFor = (types: ListingTypeInfo[], data: { listing_type?: unknown; city?: unknown; state?: unknown; country?: unknown }) =>
+	hasPlace(types, data.listing_type) ? placeOf(data) : "";
 
 /** The schema.org type for a listing page. A type the site does not know is a plain Thing. */
 export function schemaType(types: ListingTypeInfo[], slug: unknown): string {
@@ -285,52 +312,89 @@ export function formatEventWhen(value: unknown, timeZone = "UTC"): string {
 	}).format(date);
 }
 
-/** The extra fields each listing type has. The add-a-listing form asks for them and the listing page shows them. */
-export const TYPE_FIELDS: Record<string, Array<{ key: string; label: string; help: string; type?: string }>> = {
-	restaurant: [
-		{ key: "cuisine", label: S.fields.cuisine.label, help: S.fields.cuisine.help },
-		{ key: "price_range", label: S.fields.priceRange.label, help: S.fields.priceRange.help },
-	],
-	hotel: [{ key: "star_rating", label: S.fields.stars.label, help: S.fields.stars.help }],
-	"real-estate": [
-		{ key: "beds", label: S.fields.beds.label, help: S.fields.beds.help },
-		{ key: "baths", label: S.fields.baths.label, help: S.fields.baths.help },
-		{ key: "price", label: S.fields.price.label, help: S.fields.price.help },
-	],
-	event: [
-		{ key: "event_start", label: S.fields.starts.label, help: S.fields.starts.help, type: "datetime-local" },
-		{ key: "event_end", label: S.fields.ends.label, help: S.fields.ends.help, type: "datetime-local" },
-	],
-	job: [
-		{ key: "salary", label: S.fields.salary.label, help: S.fields.salary.help },
-		{ key: "job_type", label: S.fields.jobType.label, help: S.fields.jobType.help },
-	],
-	healthcare: [{ key: "specialty", label: S.fields.specialty.label, help: S.fields.specialty.help }],
-	education: [{ key: "program", label: S.fields.program.label, help: S.fields.program.help }],
-	classified: [{ key: "asking_price", label: S.fields.askingPrice.label, help: S.fields.askingPrice.help }],
-	place: [{ key: "place_kind", label: S.fields.placeKind.label, help: S.fields.placeKind.help }],
-	business: [{ key: "year_founded", label: S.fields.yearFounded.label, help: S.fields.yearFounded.help }],
-};
+/** Details 0.7.x and earlier kept in fields of their own on the listing (the engine's edits.ts, OWN_FIELD_DETAILS). */
+const OWN_FIELD_DETAILS = new Set(["cuisine", "price_range", "event_start", "event_end"]);
 
-/**
- * The filled-in extra fields of one listing, as label and value, ready to show. A few are
- * fields of their own on the listing; the rest are stored together in `type_fields`.
- */
-export function typeFacts(data: Record<string, unknown>, timeZone = "UTC"): Array<{ label: string; value: string }> {
-	let extra: Record<string, unknown> = {};
+/** A listing's stored details, whatever form they were saved in. */
+export function storedDetails(data: Record<string, unknown>): Record<string, unknown> {
 	try {
 		const parsed = typeof data.type_fields === "string" ? JSON.parse(data.type_fields || "{}") : data.type_fields;
-		if (parsed && typeof parsed === "object") extra = parsed as Record<string, unknown>;
+		return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? (parsed as Record<string, unknown>) : {};
 	} catch {
-		extra = {};
+		return {};
 	}
-	return (TYPE_FIELDS[String(data.listing_type || "")] ?? [])
-		.map((field) => {
-			const raw = data[field.key] ?? extra[field.key];
-			const text = raw === null || raw === undefined ? "" : String(raw).trim();
-			return { label: field.label, value: field.type === "datetime-local" ? formatEventWhen(text, timeZone) : text };
-		})
-		.filter((fact) => fact.value !== "");
+}
+
+/** One detail: from `type_fields`, or from its own field for a listing saved before 0.8.0. */
+export function detailValue(data: Record<string, unknown>, stored: Record<string, unknown>, key: string): unknown {
+	return key in stored ? stored[key] : OWN_FIELD_DETAILS.has(key) ? data[key] : undefined;
+}
+
+const MONTHS = (style: "long" | "short", locale?: string) =>
+	Array.from({ length: 12 }, (_, month) => new Intl.DateTimeFormat(locale, { month: style, timeZone: "UTC" }).format(new Date(Date.UTC(2026, month, 1))));
+const WEEKDAYS = (style: "long" | "short", locale?: string) =>
+	Array.from({ length: 7 }, (_, day) => new Intl.DateTimeFormat(locale, { weekday: style, timeZone: "UTC" }).format(new Date(Date.UTC(2026, 1, 1 + day))));
+
+/**
+ * A calendar date ("2026-04-01") in the site's date format from EmDash's settings (General, Date
+ * Format). That setting is a pattern such as "MMMM d, yyyy", which Intl cannot read, so the common
+ * parts are read here: yyyy yy MMMM MMM MM M dd d EEEE EEE, and text in single quotes. Any other
+ * letter is kept as written. No pattern means EmDash's own default. A value that is not a date is
+ * shown as stored.
+ */
+export function formatSiteDate(value: unknown, pattern?: string, locale?: string): string {
+	const raw = String(value ?? "").trim();
+	const day = /^(\d{4})-(\d{2})-(\d{2})/.exec(raw);
+	if (!day) return raw;
+	const [year, month, date] = [Number(day[1]), Number(day[2]), Number(day[3])];
+	const weekday = new Date(Date.UTC(year, month - 1, date)).getUTCDay();
+	const parts: Record<string, () => string> = {
+		yyyy: () => String(year),
+		yy: () => String(year).slice(-2),
+		MMMM: () => MONTHS("long", locale)[month - 1],
+		MMM: () => MONTHS("short", locale)[month - 1],
+		MM: () => String(month).padStart(2, "0"),
+		M: () => String(month),
+		dd: () => String(date).padStart(2, "0"),
+		d: () => String(date),
+		EEEE: () => WEEKDAYS("long", locale)[weekday],
+		EEE: () => WEEKDAYS("short", locale)[weekday],
+	};
+	return (pattern?.trim() || "MMMM d, yyyy").replace(/'([^']*)'|yyyy|yy|MMMM|MMM|MM|M|dd|d|EEEE|EEE/g, (token, quoted) => (quoted !== undefined ? quoted : parts[token]()));
+}
+
+export type Fact = { label: string; value: string; href?: string; kind: TypeFieldInfo["kind"] };
+
+/**
+ * The filled-in details of one listing, in its type's field order, ready to show: a choice as the
+ * owner wrote it, yes or no in words, a date in the site's date format, a link only when it is a full
+ * http or https address. `cards` keeps only the fields the owner marked to show on cards.
+ */
+export function typeFacts(data: Record<string, unknown>, type: ListingTypeInfo, options: { dateFormat?: string; timeZone?: string; cards?: boolean } = {}): Fact[] {
+	const stored = storedDetails(data);
+	return (type.fields ?? [])
+		.filter((field) => !options.cards || field.cards)
+		.flatMap((field): Fact[] => {
+			const raw = detailValue(data, stored, field.key);
+			if (raw === null || raw === undefined || raw === "") return [];
+			const text = String(raw).trim();
+			const base = { label: field.label, kind: field.kind };
+			if (field.kind === "yesno") return raw === true || raw === "true" ? [{ ...base, value: S.common.yes }] : raw === false || raw === "false" ? [{ ...base, value: S.common.no }] : [];
+			if (field.kind === "date") return [{ ...base, value: formatSiteDate(text, options.dateFormat) }];
+			if (field.kind === "choice") return [{ ...base, value: field.options?.find((option) => option.toLowerCase() === text.toLowerCase()) ?? text }];
+			if (field.kind === "link") {
+				const href = websiteHref(text);
+				return href ? [{ ...base, value: text.replace(/^https?:\/\//, "").replace(/\/$/, ""), href }] : [];
+			}
+			// An event's times from before 0.8.0 were typed as a date and time: shown in the site's zone.
+			if (field.key === "event_start" || field.key === "event_end") return [{ ...base, value: formatEventWhen(text, options.timeZone) }];
+			return text ? [{ ...base, value: text }] : [];
+		});
+}
+
+/** The details the owner marked "on cards", as short chips: a choice reads alone ("Plugin"), the rest with their label ("Berths: 6"). */
+export function cardFacts(data: Record<string, unknown>, type: ListingTypeInfo, dateFormat?: string): string[] {
+	return typeFacts(data, type, { dateFormat, cards: true }).map((fact) => (fact.kind === "choice" ? fact.value : `${fact.label}: ${fact.value}`));
 }
 
 export function mapsDirectionsUrl(lat: number, lng: number): string {

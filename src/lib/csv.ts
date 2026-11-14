@@ -76,9 +76,13 @@ function cell(value: unknown): string {
 	return `"${text.replaceAll('"', '""')}"`;
 }
 
-export function toCsv(rows: Array<Record<string, unknown>>): string {
-	const lines = [CSV_COLUMNS.join(",")];
-	for (const row of rows) lines.push(CSV_COLUMNS.map((column) => cell(row[column])).join(","));
+/** A column name as the import reads it: case and spaces do not matter (parseCsv). */
+export const csvName = (name: string) => name.trim().toLowerCase().replace(/\s+/g, "_");
+
+/** The standard columns, then `extra` (named as written, one per field label). A row carries those values in `details`, under csvName(label). */
+export function toCsv(rows: Array<Record<string, unknown>>, extra: readonly string[] = []): string {
+	const lines = [[...CSV_COLUMNS, ...extra.map(cell)].join(",")];
+	for (const row of rows) lines.push([...CSV_COLUMNS.map((column) => cell(row[column])), ...extra.map((label) => cell((row.details as Record<string, unknown> | undefined)?.[csvName(label)]))].join(","));
 	// A byte order mark so Excel reads accents and non-Latin text correctly.
 	return `﻿${lines.join("\r\n")}\r\n`;
 }

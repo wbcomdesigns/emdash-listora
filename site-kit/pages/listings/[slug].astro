@@ -10,7 +10,10 @@ import { Image } from "emdash/ui";
 import Layout from "../../layouts/ListoraLayout.astro";
 import {
 	asNumber,
+	detailValue,
+	hasPlace,
 	imageUrl,
+	storedDetails,
 	jsonForScript,
 	placeholderHtml,
 	typeOf,
@@ -48,14 +51,17 @@ const data = listing.data;
 const types = await loadTypes(Astro.locals);
 const categories =
 	(await getTermsForEntries("listings", [data.id], "listing_category")).get(data.id) ?? [];
+// A type the owner set up without a location shows no address, map, hours, directions or Open and
+// Closed. The listing keeps what it stored; nothing here shows it while the type has none.
+const located = hasPlace(types, data.listing_type);
 // A street line that already names the city is not followed by the city and state again.
 const namesCity = Boolean(data.city) && String(data.address || "").toLowerCase().includes(String(data.city).toLowerCase());
-const address = [data.address, ...(namesCity ? [] : [data.city, data.state]), data.postal_code, data.country]
-	.filter(Boolean)
-	.join(", ");
-const place = [data.city, data.state, data.country].filter(Boolean).join(", ");
+const address = located
+	? [data.address, ...(namesCity ? [] : [data.city, data.state]), data.postal_code, data.country].filter(Boolean).join(", ")
+	: "";
+const place = located ? [data.city, data.state, data.country].filter(Boolean).join(", ") : "";
 const website = websiteHref(data.website);
-const hours = parseHours(data.hours);
+const hours = located ? parseHours(data.hours) : [];
 // One zone for the whole directory: the site's own, from EmDash's settings.
 const zone = siteZone(site?.timezone);
 const open = hours.length ? isOpenNow(hours, zone) : null;
@@ -63,7 +69,7 @@ const weekHours = hoursForWeek(hours);
 const today = weekdayIndex(zone);
 const lat = asNumber(data.lat);
 const lng = asNumber(data.lng);
-const hasMap = Number.isFinite(lat) && Number.isFinite(lng) && lat !== 0 && lng !== 0;
+const hasMap = located && Number.isFinite(lat) && Number.isFinite(lng) && lat !== 0 && lng !== 0;
 // Photos beyond the cover. Rows an admin added in the editor and photos an owner sent both live here.
 const gallery = (Array.isArray(data.gallery) ? data.gallery : []).filter((row: { image?: unknown }) => row?.image) as Array<{ image: never }>;
 const expired = String(data.listing_status || "") === "expired";
@@ -76,9 +82,12 @@ const services = (() => {
 		return [];
 	}
 })();
-// What this type of listing adds: an event's dates, a home's bedrooms and price, a job's salary.
-const facts = typeFacts(data, zone);
+// What this type of listing adds, in the type's field order: a home's bedrooms, a job's salary.
+const facts = typeFacts(data, typeOf(types, data.listing_type), { dateFormat: site?.dateFormat, timeZone: zone });
+// A member wrote the links of a listing they manage: search engines are told so.
+const factRel = claimed ? "nofollow ugc" : undefined;
 const isEvent = data.listing_type === "event";
+const details = storedDetails(data);
 const hasContact = Boolean(data.phone || website || data.email);
 // The share image is the listing's own photo, or none. Never a stock picture.
 const photoPath = imageUrl(data.featured_image, Astro.locals.emdash?.getPublicMediaUrl);
@@ -106,11 +115,13 @@ const schema = {
 	url: website || undefined,
 	...(isEvent
 		? {
-				startDate: data.event_start || undefined,
-				endDate: data.event_end || undefined,
-				location: { "@type": "Place", name: data.address || place || data.title, address: postal },
+				startDate: detailValue(data, details, "event_start") || undefined,
+				endDate: detailValue(data, details, "event_end") || undefined,
+				location: located ? { "@type": "Place", name: data.address || place || data.title, address: postal } : undefined,
 			}
-		: { address: postal, geo: hasMap ? { "@type": "GeoCoordinates", latitude: lat, longitude: lng } : undefined }),
+		: located
+			? { address: postal, geo: hasMap ? { "@type": "GeoCoordinates", latitude: lat, longitude: lng } : undefined }
+			: {}),
 	image: photo,
 };
 ---
@@ -224,18 +235,6 @@ const schema = {
 							) : null
 						}
 						{data.excerpt ? <p class="listora-detail__lead">{data.excerpt}</p> : null}
-						{
-							facts.length ? (
-								<dl class="listora-facts listora-facts--row">
-									{facts.map((fact) => (
-										<div>
-											<dt>{fact.label}</dt>
-											<dd>{fact.value}</dd>
-										</div>
-									))}
-								</dl>
-							) : null
-						}
 
 						<div class="listora-detail__actions">
 							<button class="listora-btn listora-btn--secondary" type="button" id="fav-btn" aria-pressed="false" data-id={data.id}>
@@ -292,6 +291,21 @@ const schema = {
 									<p>{S.listing.noDescriptionBody}</p>
 								</div>
 							)
+						}
+						{
+							facts.length ? (
+								<section class="listora-panel" aria-labelledby="listora-details-heading">
+									<h2 id="listora-details-heading">{S.listing.details}</h2>
+									<dl class="listora-facts listora-facts--details">
+										{facts.map((fact) => (
+											<div>
+												<dt>{fact.label}</dt>
+												<dd>{fact.href ? <a href={fact.href} rel={factRel}>{fact.value}</a> : fact.value}</dd>
+											</div>
+										))}
+									</dl>
+								</section>
+							) : null
 						}
 						{
 							services.length ? (
@@ -480,7 +494,7 @@ const schema = {
 					}
 
 					{
-						hasMap || data.address ? (
+						hasMap || address ? (
 							<div class="listora-detail__map-card">
 								<h2>{S.listing.location}</h2>
 								{/* A listing with no map position still shows where it is. */}

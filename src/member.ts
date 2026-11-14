@@ -2,7 +2,7 @@ import type { PluginContext } from "emdash/plugin";
 
 import { budget, MAX_CALLS, spend } from "./lib/budget";
 import { onSite, setPluginFields } from "./lib/directory";
-import { clean, EDITABLE, editPatch, fieldValue, filled, webAddress } from "./lib/edits";
+import { clean, EDITABLE, editPatch, fieldValue, LINK_RULE, sentDetails, typeValues, webAddress } from "./lib/edits";
 import { parseHours } from "./lib/hours";
 import { fieldsOf, getListing, ownerOf, patchListing, publicListing, publishNow } from "./lib/listings-query";
 import { imageType, PHOTO_MAX_BYTES } from "./lib/photos";
@@ -10,7 +10,7 @@ import { rateLimited } from "./lib/rates";
 import { mirrorRating, moveRating, partOf, starsOf } from "./lib/ratings";
 import { openRef, refKey, sealRef } from "./lib/refs";
 import { loadSettings, photosOn, type Settings } from "./lib/settings";
-import { LISTINGS, SUBMITTER_IS_OWNER, shownTypes } from "./lib/types";
+import { LISTINGS, PLACE_FIELDS, SUBMITTER_IS_OWNER, shownTypes, typeBySlug } from "./lib/types";
 import { asBoolean, asNumber, asRecord, asString, asStringArray, nowIso, parseJson, readCursor } from "./lib/util";
 
 type Ctx = PluginContext;
@@ -50,7 +50,7 @@ export function parseSubmit(input: unknown): { ok: true; data: SubmitInput } | {
 	// The listing type is checked against the site's types by submit, once the settings are read.
 	const wantedType = asString(raw.listing_type);
 	const site = asString(raw.website);
-	if (site && !/^https?:\/\/\S+\.\S+/i.test(site)) return { ok: false, error: "Website must be a full address starting with http:// or https://." };
+	if (site && !/^https?:\/\/\S+\.\S+/i.test(site)) return { ok: false, error: `Website ${LINK_RULE}` };
 	// Every stored field is cleaned and capped exactly as an owner's edit is (fieldValue), so a
 	// request that skips the form cannot store a field of any size.
 	const text = (key: string) => fieldValue(key, raw[key]);
@@ -86,11 +86,6 @@ export function parseSubmit(input: unknown): { ok: true; data: SubmitInput } | {
 					.map((item) => ({ name: clean(item.name, 120), price: asNumber(item.price), duration: asNumber(item.duration) })),
 			),
 			amenities: fieldValue("amenities", asStringArray(raw.amenities).join(", ")),
-			price_range: text("price_range"),
-			cuisine: text("cuisine"),
-			event_start: text("event_start"),
-			event_end: text("event_end"),
-			type_fields: filled(raw.type_fields),
 		},
 	};
 }
@@ -131,6 +126,10 @@ export async function submit(routeCtx: { user?: unknown; input: unknown }, ctx: 
 		if (!offered.length) return fail("VALIDATION_ERROR", "This directory takes no new listings just now.");
 	}
 	const listingType = offered.some((item) => item.slug === type) ? type : offered[0].slug;
+	const chosen = typeBySlug(settings.types, listingType);
+	// The type's own fields, checked on the server whatever the form did; every other key is dropped.
+	const details = typeValues(chosen, sentDetails(asRecord(routeCtx.input)), "submit");
+	if (details.error) return fail("VALIDATION_ERROR", details.error);
 	spend(b, 2);
 	const limited = await rateLimited(ctx, "submit", user.id);
 	if (limited) return limited;
@@ -139,7 +138,9 @@ export async function submit(routeCtx: { user?: unknown; input: unknown }, ctx: 
 	if (!fields || !ctx.content?.create) {
 		return fail("LISTINGS_COLLECTION_MISSING", "Create the listings collection from the site seed before accepting submissions.");
 	}
-	const { agree_terms: _agree, type_fields, ...data } = parsed.data;
+	const { agree_terms: _agree, ...data } = parsed.data;
+	// A type without a location takes no address, map position or hours.
+	if (!chosen.location) for (const key of PLACE_FIELDS) delete data[key];
 	const write: Record<string, unknown> = {
 		...data,
 		listing_type: listingType,
@@ -147,7 +148,7 @@ export async function submit(routeCtx: { user?: unknown; input: unknown }, ctx: 
 		is_claimed: SUBMITTER_IS_OWNER,
 		is_featured: false,
 		owner_name: asString(data.owner_name) || user.name || "",
-		type_fields: JSON.stringify(type_fields),
+		type_fields: JSON.stringify(details.values),
 		listing_status: "live",
 	};
 	spend(b);
@@ -341,7 +342,9 @@ export async function edit(routeCtx: { user?: unknown; input: unknown; request: 
 		const mine = waiting.status === "pending" && waiting.member_id === user.id;
 		const source = mine ? { ...current, ...asRecord(waiting.fields) } : current;
 		const values: Record<string, unknown> = {};
-		for (const key of EDITABLE) values[key] = key === "type_fields" ? filled(source[key]) : asString(source[key]);
+		for (const key of EDITABLE) values[key] = asString(source[key]);
+		// Every stored detail; a listing saved before 0.8.0 has some in fields of their own.
+		values.type_fields = sentDetails(source);
 		return { ok: true, listingId, listing_type: asString(current.listing_type), pending: mine, values };
 	}
 
@@ -349,12 +352,19 @@ export async function edit(routeCtx: { user?: unknown; input: unknown; request: 
 	if (!parsed.ok) return fail("VALIDATION_ERROR", parsed.error);
 	const settings = await loadSettings(ctx);
 	if (spamBlocked(settings, parsed.data.title, String(parsed.data.description))) return fail("SPAM", "Those changes were rejected.");
-	const limited = await rateLimited(ctx, "edit", user.id);
-	if (limited) return limited;
+	const type = typeBySlug(settings.types, current.listing_type);
 	// Only the fields the form sent, cleaned, and only where they differ from the live listing.
 	const sent: Record<string, unknown> = {};
-	for (const key of EDITABLE) if (key in raw) sent[key] = (parsed.data as Record<string, unknown>)[key];
-	const { patch, changes } = editPatch(current, sent);
+	for (const key of EDITABLE) if (key in raw && key !== "type_fields") sent[key] = (parsed.data as Record<string, unknown>)[key];
+	// A type without a location keeps the address it has, and an edit cannot change it.
+	if (!type.location) for (const key of PLACE_FIELDS) delete sent[key];
+	// Only the type's fields that were sent; none sent changes none.
+	const details = typeValues(type, sentDetails(raw), "edit");
+	if (details.error) return fail("VALIDATION_ERROR", details.error);
+	sent.type_fields = details.values;
+	const limited = await rateLimited(ctx, "edit", user.id);
+	if (limited) return limited;
+	const { patch, changes } = editPatch(current, sent, type);
 	if (Object.keys(patch).length === 0) {
 		await ctx.storage.edits.delete(listingId);
 		return { ok: true, listingId, pending: false, unchanged: true };
@@ -364,6 +374,8 @@ export async function edit(routeCtx: { user?: unknown; input: unknown; request: 
 	await ctx.storage.edits.put(listingId, {
 		listingId,
 		listing_title: titleOf(listing),
+		// The type its details are read by on the approval screen.
+		listing_type: asString(current.listing_type),
 		member_id: user.id,
 		fields: patch,
 		was,

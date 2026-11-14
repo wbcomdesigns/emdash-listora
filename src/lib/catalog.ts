@@ -41,10 +41,6 @@ export type ListingCard = {
 	hours: ReturnType<typeof parseHours>;
 	services: ServiceRow[];
 	amenities: string[];
-	price_range: string;
-	cuisine: string;
-	event_start: string;
-	event_end: string;
 	expires_at: string;
 	listing_status: string;
 	type_fields: Record<string, unknown>;
@@ -92,10 +88,6 @@ export function listingFromContent(
 		// Open or closed is worked out by the site page, in the site's own time zone.
 		services: parseJson<ServiceRow[]>(data.services, []),
 		amenities: asStringArray(data.amenities),
-		price_range: asString(data.price_range),
-		cuisine: asString(data.cuisine),
-		event_start: asString(data.event_start),
-		event_end: asString(data.event_end),
 		expires_at: asString(data.expires_at),
 		listing_status: asString(data.listing_status) || "live",
 		type_fields: parseJson<Record<string, unknown>>(data.type_fields, {}),
@@ -105,10 +97,14 @@ export function listingFromContent(
 
 export type TypedCard = ListingCard & { type_name: string; type_color: string };
 
-/** A card as a route returns it: its type's current name and colour, from the types store. */
+/**
+ * A card as a route returns it: its type's current name and colour, from the types store. A type
+ * without a location shows no place: the listing keeps what it stored, and no route gives it out.
+ */
 export function withType(card: ListingCard, types: readonly ListingType[]): TypedCard {
 	const type = typeBySlug(types, card.listing_type);
-	return { ...card, type_name: type.name, type_color: type.color };
+	const place = type.location ? {} : { address: "", city: "", state: "", country: "", postal_code: "", lat: null, lng: null, hours: [], place: "" };
+	return { ...card, ...place, type_name: type.name, type_color: type.color };
 }
 
 export function haversineKm(
@@ -134,7 +130,6 @@ export function matchesQuery(listing: ListingCard, query: string): boolean {
 		listing.description,
 		listing.city,
 		listing.listing_type,
-		listing.cuisine,
 		listing.amenities.join(" "),
 	]
 		.join(" ")
