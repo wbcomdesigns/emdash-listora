@@ -4,7 +4,7 @@ import { handleAdmin } from "./admin";
 import { hideListing, indexListing } from "./lib/directory";
 import { readRating } from "./lib/ratings";
 import { loadSettings } from "./lib/settings";
-import { LISTING_TYPES, LISTINGS, listingTypeBySlug } from "./lib/types";
+import { LISTINGS, typeBySlug } from "./lib/types";
 import { asNumber, asRecord, asString } from "./lib/util";
 import { sampleStep } from "./lib/onboard";
 import { claim, dashboard, edit, favorites, message, photo, photoRemove, privacy, renew, reply, review, submit } from "./member";
@@ -104,15 +104,19 @@ const plugin: SandboxedPlugin = {
 				if (item.status === "published" && !item.draftRevisionId) await indexFromHook(ctx, item);
 			},
 		},
-		// Adds the rating to a listing page's structured data. Nothing for unrated listings. Two calls.
+		// Adds the rating to a listing page's structured data. Nothing for unrated listings. Three calls,
+		// side by side: the rating, the listing's index row (its type) and the settings (the types store).
 		"page:metadata": {
 			handler: async (event, ctx) => {
 				const content = event.page.content;
 				if (!content || content.collection !== LISTINGS) return null;
-				const [stored, row] = await Promise.all([ctx.storage.ratings.get(content.id), ctx.storage.directory.get(content.id)]);
+				const [stored, row, settings] = await Promise.all([ctx.storage.ratings.get(content.id), ctx.storage.directory.get(content.id), loadSettings(ctx)]);
 				const rating = readRating(stored);
 				if (!rating.count) return null;
-				const schema = asString(asRecord(stored).schema) || listingTypeBySlug(asString(asRecord(row).type)).schemaType;
+				// The type's schema.org type as the owner has it now. A 0.6.x rating row's saved copy only
+				// when the listing is not in the index yet.
+				const slug = asString(asRecord(row).type);
+				const schema = slug ? typeBySlug(settings.types, slug).schemaType : asString(asRecord(stored).schema) || "LocalBusiness";
 				return {
 					kind: "jsonld",
 					id: "listora-rating",
@@ -138,7 +142,9 @@ const plugin: SandboxedPlugin = {
 				listingsCollection: Boolean(await ctx.schema?.getCollection(LISTINGS).catch(() => null)),
 			}),
 		},
-		types: { public: true, cacheControl: CACHE, handler: async () => ({ ok: true, items: LISTING_TYPES }) },
+		// Every type with its fields, hidden ones included (their listings still show the name): the kit
+		// offers only the ones not hidden. One call (the settings, where the owner's types live).
+		types: { public: true, cacheControl: CACHE, handler: async (_routeCtx, ctx) => ({ ok: true, items: (await loadSettings(ctx)).types }) },
 		listings: { public: true, cacheControl: CACHE, handler: async (routeCtx, ctx) => listings(routeCtx.input, ctx) },
 		search: {
 			public: true,

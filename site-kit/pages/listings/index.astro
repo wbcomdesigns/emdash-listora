@@ -3,7 +3,7 @@ import { getEmDashCollection, getSiteSettings, getTermsForEntries } from "emdash
 import { Image } from "emdash/ui";
 import Layout from "../../layouts/ListoraLayout.astro";
 import {
-	LISTING_TYPES,
+	loadTypes,
 	placeholderHtml,
 	isOpenNow,
 	siteZone,
@@ -11,7 +11,8 @@ import {
 	parseHours,
 	placeOf,
 	sortListings,
-	typeName,
+	typeName as nameOf,
+	typeOf,
 } from "../../lib/listora";
 import { listingCount, pageOf, resultCount, saveNamed, S } from "../../lib/listora-strings";
 import { callPluginRoute } from "../../lib/wbcom-kit";
@@ -54,7 +55,17 @@ const categoryFacets = byCount(categoryCounts);
 const cityFacets = byCount(cityCounts);
 // Type chips only for types this directory uses (plus the one being viewed), like the city chips.
 const typesInUse = new Set(published.map((entry) => String(entry.data.listing_type || "")).filter(Boolean));
-const typeChips = LISTING_TYPES.filter((item) => typesInUse.has(item.slug) || item.slug === type);
+// Names, colours and order come from the plugin's types (the owner edits them in the admin). A slug
+// the site has no type for still gets its chip, shown as the slug.
+const types = await loadTypes(Astro.locals);
+const typeName = (slug: unknown) => nameOf(types, slug);
+const order = (slug: string) => {
+	const at = types.findIndex((item) => item.slug === slug);
+	return at < 0 ? types.length : at;
+};
+const typeChips = [...new Set([...typesInUse, ...(type ? [type] : [])])]
+	.sort((a, b) => order(a) - order(b) || a.localeCompare(b))
+	.map((slug) => typeOf(types, slug));
 
 // Ratings live in plugin storage, so sorting by rating asks the plugin once. If that fails
 // the list keeps its normal order: the page never breaks over a sort.

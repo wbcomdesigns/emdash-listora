@@ -15,17 +15,20 @@ export const S = {
 		featured: "Featured",
 		companyWebsite: "Company website",
 	},
-	types: {
-		business: { name: "Business", hint: "Shops and local services" },
-		restaurant: { name: "Restaurant", hint: "Food and drink" },
-		realEstate: { name: "Real estate", hint: "Homes and rentals" },
-		hotel: { name: "Hotel", hint: "Rooms and stays" },
-		event: { name: "Event", hint: "Dates and venues" },
-		job: { name: "Job", hint: "Open roles" },
-		healthcare: { name: "Healthcare", hint: "Clinics and care" },
-		education: { name: "Education", hint: "Schools and classes" },
-		place: { name: "Place", hint: "Parks and landmarks" },
-		classified: { name: "Classified", hint: "Goods for sale" },
+	// The short line under each built-in type on the add-a-listing form, by type. Type names come from
+	// the plugin (the owner can rename them in the admin), so they are not here.
+	typeHints: {
+		business: "Shops and local services",
+		restaurant: "Food and drink",
+		"real-estate": "Homes and rentals",
+		hotel: "Rooms and stays",
+		event: "Dates and venues",
+		job: "Open roles",
+		healthcare: "Clinics and care",
+		education: "Schools and classes",
+		place: "Parks and landmarks",
+		classified: "Goods for sale",
+		software: "Plugins, apps and tools",
 	},
 	days: ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"],
 	fields: {

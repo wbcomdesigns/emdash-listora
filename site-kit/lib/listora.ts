@@ -1,34 +1,51 @@
 import { phrase, S } from "./listora-strings";
 
-import { pluginFetch } from "./wbcom-kit";
+import { callPluginRoute, pluginFetch } from "./wbcom-kit";
 
 export type HourRow = { day: number; open: string; close: string };
 
-export const LISTING_TYPES = [
-	{ slug: "business", name: S.types.business.name, schema: "LocalBusiness", color: "#2563EB", hint: S.types.business.hint },
-	{ slug: "restaurant", name: S.types.restaurant.name, schema: "Restaurant", color: "#DC2626", hint: S.types.restaurant.hint },
-	{ slug: "real-estate", name: S.types.realEstate.name, schema: "Residence", color: "#16A34A", hint: S.types.realEstate.hint },
-	{ slug: "hotel", name: S.types.hotel.name, schema: "Hotel", color: "#DB2777", hint: S.types.hotel.hint },
-	{ slug: "event", name: S.types.event.name, schema: "Event", color: "#7C3AED", hint: S.types.event.hint },
-	{ slug: "job", name: S.types.job.name, schema: "JobPosting", color: "#0D9488", hint: S.types.job.hint },
-	{ slug: "healthcare", name: S.types.healthcare.name, schema: "MedicalBusiness", color: "#0284C7", hint: S.types.healthcare.hint },
-	{ slug: "education", name: S.types.education.name, schema: "EducationalOrganization", color: "#CA8A04", hint: S.types.education.hint },
-	{ slug: "place", name: S.types.place.name, schema: "Place", color: "#059669", hint: S.types.place.hint },
-	{ slug: "classified", name: S.types.classified.name, schema: "Offer", color: "#EA580C", hint: S.types.classified.hint },
-] as const;
+/**
+ * A listing type as the plugin's `types` route gives it. The owner edits types in the admin (built-ins
+ * and their own), so the kit never keeps a copy: every page asks the route (loadTypes).
+ */
+export type ListingTypeInfo = { slug: string; name: string; schemaType?: string; color?: string; hidden?: boolean; location?: boolean };
 
-export function typeName(slug: unknown): string {
-	const found = LISTING_TYPES.find((item) => item.slug === slug);
-	return found?.name ?? S.types.business.name;
+/** The site's listing types, from the plugin, for an Astro page's server code. None when the plugin cannot be reached. */
+export async function loadTypes(locals: unknown): Promise<ListingTypeInfo[]> {
+	const answer = await callPluginRoute(locals, "listora", "types").catch(() => null);
+	const items = Array.isArray(answer?.items) ? (answer.items as Array<Record<string, unknown>>) : [];
+	return items
+		.filter((item) => typeof item.slug === "string" && item.slug && typeof item.name === "string")
+		.map((item) => ({
+			slug: String(item.slug),
+			name: String(item.name),
+			schemaType: typeof item.schemaType === "string" ? item.schemaType : undefined,
+			color: typeof item.color === "string" ? item.color : undefined,
+			hidden: item.hidden === true,
+			location: item.location !== false,
+		}));
 }
 
-export function schemaType(slug: unknown): string {
-	return LISTING_TYPES.find((item) => item.slug === slug)?.schema ?? "LocalBusiness";
+/** The types offered for a new listing (not hidden by the owner). */
+export const shownTypes = (types: ListingTypeInfo[]) => types.filter((item) => !item.hidden);
+
+/** A listing's type. A slug the site has no type for shows as the slug itself, never as another type. */
+export function typeOf(types: ListingTypeInfo[], slug: unknown): ListingTypeInfo {
+	const wanted = String(slug || "business");
+	return types.find((item) => item.slug === wanted) ?? { slug: wanted, name: wanted };
 }
 
-export function typeColor(slug: unknown): string {
-	const found = LISTING_TYPES.find((item) => item.slug === slug);
-	return found?.color ?? "#2563EB";
+export const typeName = (types: ListingTypeInfo[], slug: unknown) => typeOf(types, slug).name;
+
+/** The schema.org type for a listing page. A type the site does not know is a plain Thing. */
+export function schemaType(types: ListingTypeInfo[], slug: unknown): string {
+	const found = types.find((item) => item.slug === String(slug || "business"));
+	return found ? found.schemaType || "LocalBusiness" : "Thing";
+}
+
+/** The short line under a built-in type on the add-a-listing form. The owner's own types have none. */
+export function typeHint(slug: string): string {
+	return (S.typeHints as Record<string, string>)[slug] ?? "";
 }
 
 export function parseHours(value: unknown): HourRow[] {
@@ -206,6 +223,7 @@ const TYPE_ICONS: Record<string, string> = {
 	healthcare: '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M12 8v8M8 12h8"/>',
 	education: '<path d="M22 10 12 5 2 10l10 5 10-5Z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/>',
 	place: '<path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/>',
+	software: '<path d="m16 18 6-6-6-6M8 6l-6 6 6 6"/>',
 	classified:
 		'<path d="M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z"/><circle cx="7.5" cy="7.5" r="1"/>',
 };

@@ -143,23 +143,6 @@
 				"type": "boolean",
 				"default": true
 			},
-			"default_listing_type": {
-				"label": "Default listing type",
-				"type": "select",
-				"default": "business",
-				"options": [
-					{ "value": "business", "label": "Business" },
-					{ "value": "restaurant", "label": "Restaurant" },
-					{ "value": "real-estate", "label": "Real estate" },
-					{ "value": "hotel", "label": "Hotel" },
-					{ "value": "event", "label": "Event" },
-					{ "value": "job", "label": "Job" },
-					{ "value": "healthcare", "label": "Healthcare" },
-					{ "value": "education", "label": "Education" },
-					{ "value": "place", "label": "Place" },
-					{ "value": "classified", "label": "Classified" }
-				]
-			},
 			"expiry_days": {
 				"label": "Listings expire after this many days (0 = never)",
 				"description": "0 means listings never expire.",

@@ -10,7 +10,7 @@ import { rateLimited } from "./lib/rates";
 import { mirrorRating, moveRating, partOf, starsOf } from "./lib/ratings";
 import { openRef, refKey, sealRef } from "./lib/refs";
 import { loadSettings, photosOn, type Settings } from "./lib/settings";
-import { LISTING_TYPES, LISTINGS, SUBMITTER_IS_OWNER, listingTypeBySlug } from "./lib/types";
+import { LISTINGS, SUBMITTER_IS_OWNER, shownTypes } from "./lib/types";
 import { asBoolean, asNumber, asRecord, asString, asStringArray, nowIso, parseJson, readCursor } from "./lib/util";
 
 type Ctx = PluginContext;
@@ -47,9 +47,8 @@ export function parseSubmit(input: unknown): { ok: true; data: SubmitInput } | {
 	if (!title) return { ok: false, error: "Title is required." };
 	if (title.length > 200) return { ok: false, error: "Title must be 200 characters or fewer." };
 	if (asString(raw.company_website) || asString(raw.honeypot)) return { ok: false, error: "Submission rejected." };
-	// The form checks these too. The route is the real gate, because a request need not come from the form.
+	// The listing type is checked against the site's types by submit, once the settings are read.
 	const wantedType = asString(raw.listing_type);
-	if (wantedType && !LISTING_TYPES.some((item) => item.slug === wantedType)) return { ok: false, error: "Choose a listing type from the list." };
 	const site = asString(raw.website);
 	if (site && !/^https?:\/\/\S+\.\S+/i.test(site)) return { ok: false, error: "Website must be a full address starting with http:// or https://." };
 	// Every stored field is cleaned and capped exactly as an owner's edit is (fieldValue), so a
@@ -123,6 +122,15 @@ export async function submit(routeCtx: { user?: unknown; input: unknown }, ctx: 
 	const b = budget(1);
 	const settings = await loadSettings(ctx);
 	if (spamBlocked(settings, parsed.data.title, String(parsed.data.description))) return fail("SPAM", "Submission rejected.");
+	// The form offers these too. The route is the real gate, because a request need not come from the form.
+	const offered = shownTypes(settings.types);
+	const type = parsed.data.listing_type || settings.defaultListingType;
+	if (!offered.some((item) => item.slug === type)) {
+		if (parsed.data.listing_type) return fail("VALIDATION_ERROR", "Choose a listing type from the list.");
+		// The default type was hidden or removed since it was chosen: the first type still offered.
+		if (!offered.length) return fail("VALIDATION_ERROR", "This directory takes no new listings just now.");
+	}
+	const listingType = offered.some((item) => item.slug === type) ? type : offered[0].slug;
 	spend(b, 2);
 	const limited = await rateLimited(ctx, "submit", user.id);
 	if (limited) return limited;
@@ -131,11 +139,10 @@ export async function submit(routeCtx: { user?: unknown; input: unknown }, ctx: 
 	if (!fields || !ctx.content?.create) {
 		return fail("LISTINGS_COLLECTION_MISSING", "Create the listings collection from the site seed before accepting submissions.");
 	}
-	const type = listingTypeBySlug(parsed.data.listing_type || settings.defaultListingType).slug;
 	const { agree_terms: _agree, type_fields, ...data } = parsed.data;
 	const write: Record<string, unknown> = {
 		...data,
-		listing_type: type,
+		listing_type: listingType,
 		website: parsed.data.website || undefined,
 		is_claimed: SUBMITTER_IS_OWNER,
 		is_featured: false,
@@ -165,7 +172,7 @@ export async function submit(routeCtx: { user?: unknown; input: unknown }, ctx: 
 		owner_email: EMAIL_RE.test(asString(user.email)) ? asString(user.email) : "",
 		title: parsed.data.title,
 		tl: parsed.data.title.toLowerCase(),
-		listing_type: type,
+		listing_type: listingType,
 		city: asString(data.city),
 		status: live ? "approving" : "pending",
 		...(live ? { claimedAt: new Date(now).toISOString() } : {}),

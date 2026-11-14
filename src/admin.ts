@@ -6,7 +6,7 @@ import { getListing, ownerOf, patchListing, publishNow } from "./lib/listings-qu
 import { mirrorRating, moveRating, partOf } from "./lib/ratings";
 import { KEY, loadSettings, PAGE, photosOn, type Settings, type View } from "./lib/settings";
 import { startSample, sampleState, type SampleState } from "./lib/onboard";
-import { LISTING_TYPES, LISTINGS } from "./lib/types";
+import { LISTINGS, shownTypes, typeBySlug } from "./lib/types";
 import { nudgeUpgrade, upgradeDone, upgradeNote, type State } from "./lib/upgrade";
 import { asBoolean, asRecord, asString, nowIso, readCursor } from "./lib/util";
 import { CLAIM_TIMEOUT_MS } from "./lib/util";
@@ -30,7 +30,6 @@ type Where = NonNullable<Parameters<PluginContext["storage"][string]["count"]>[0
 /* ---- Small helpers ---- */
 
 const lowerText = (...parts: unknown[]) => parts.map((part) => asString(part)).join(" ").toLowerCase();
-const typeName = (slug: unknown) => LISTING_TYPES.find((type) => type.slug === asString(slug))?.name ?? "Business";
 const asNumberText = (value: unknown) => String(Number(value) || 0);
 const rowsOf = (items: Array<{ id: string; data: unknown }>): Row[] => items.map((item) => ({ ...asRecord(item.data), id: item.id }));
 
@@ -112,7 +111,7 @@ type ListDef = {
 };
 
 const LISTS: Record<ListDef["key"], ListDef> = {
-	queue: { key: "queue", store: "submissions", where: { status: { in: ["pending", "approving"] } }, order: { createdAt: "desc" }, text: (r) => lowerText(r.title, r.city, typeName(r.listing_type)) },
+	queue: { key: "queue", store: "submissions", where: { status: { in: ["pending", "approving"] } }, order: { createdAt: "desc" }, text: (r) => lowerText(r.title, r.city, r.listing_type) },
 	changes: { key: "changes", store: "edits", where: { status: { in: ["pending", "approving"] } }, order: { createdAt: "asc" }, text: (r) => lowerText(r.listing_title) },
 	photos: { key: "photos", store: "photos", where: { status: { in: ["pending", "approving", "rejecting"] } }, order: { createdAt: "asc" }, text: (r) => lowerText(r.listing_title, r.label) },
 	reviews: { key: "reviews", store: "reviews", where: { status: "pending" }, order: { createdAt: "desc" }, text: (r) => lowerText(r.listing_title, r.title, r.body, r.author) },
@@ -184,7 +183,9 @@ const stats = (label: string, value: number): BlockMap => ({ type: "stats", item
 /* ---- Listings queue (new listings) ---- */
 
 async function renderQueue(ctx: Ctx, settings: Settings, b: Budget, extra: Extra = {}): Promise<BlockResponse> {
-	const listed = await listRows(ctx, LISTS.queue, viewFor(settings, "queue"), b);
+	const typeName = (slug: unknown) => typeBySlug(settings.types, slug).name;
+	// Find matches the type's name as the owner has it, not only its slug.
+	const listed = await listRows(ctx, { ...LISTS.queue, text: (r) => lowerText(r.title, r.city, typeName(r.listing_type)) }, viewFor(settings, "queue"), b);
 	const rows = listed.rows.map((row) => {
 		const listingId = asString(row.listingId) || row.id;
 		const title = wrappable(asString(row.title) || "Untitled listing");
@@ -850,7 +851,10 @@ export async function renderSettings(ctx: Ctx, settings: Settings, _b: Budget, e
 									action_id: "default_listing_type",
 									label: "Default listing type",
 									initial_value: settings.defaultListingType,
-									options: LISTING_TYPES.map((type) => ({ label: type.name, value: type.slug })),
+									// Types offered for new listings, plus the current default if the owner has hidden it since.
+									options: settings.types
+										.filter((type) => !type.hidden || type.slug === settings.defaultListingType)
+										.map((type) => ({ label: type.name, value: type.slug })),
 								},
 								{ type: "text_input", action_id: "spam_keywords", label: "Blocked words, separated by commas", initial_value: settings.spamKeywords },
 							],
@@ -950,7 +954,8 @@ async function saveSettings(ctx: Ctx, settings: Settings, b: Budget, actionId: s
 	switch (actionId) {
 		case "save_submissions": {
 			spend(b, 3);
-			const type = LISTING_TYPES.some((item) => item.slug === asString(values.default_listing_type)) ? asString(values.default_listing_type) : "business";
+			const wanted = asString(values.default_listing_type);
+			const type = shownTypes(settings.types).some((item) => item.slug === wanted) || wanted === settings.defaultListingType ? wanted : "business";
 			await ctx.settings.set("default_listing_type", type);
 			await ctx.settings.set("require_moderation", asBoolean(values.require_moderation));
 			await ctx.settings.set("spam_keywords", asString(values.spam_keywords));

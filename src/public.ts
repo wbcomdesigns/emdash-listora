@@ -1,6 +1,7 @@
 import type { PluginContext } from "emdash/plugin";
 
 import { cardOf, matches, orderOf, readFilters, readPosition, readRows, scanned, visible, type DirRow } from "./lib/directory";
+import { withType } from "./lib/catalog";
 import { clean } from "./lib/edits";
 import { ownerOf, publicListing } from "./lib/listings-query";
 import { rateLimited, visitorKey } from "./lib/rates";
@@ -59,7 +60,7 @@ export async function listings(input: unknown, ctx: Ctx) {
 			scan ? null : ctx.storage.directory.count({ ...where, exp: 0 }),
 			scan ? null : ctx.storage.directory.count({ ...where, exp: { gt: now } }),
 		]);
-		return { ok: true, items: page.rows.map(cardOf), total: scan ? null : (never ?? 0) + (later ?? 0), per_page: perPage, cursor: page.next };
+		return { ok: true, items: page.rows.map((row) => withType(cardOf(row), settings.types)), total: scan ? null : (never ?? 0) + (later ?? 0), per_page: perPage, cursor: page.next };
 	} catch {
 		return READ_FAILED;
 	}

@@ -1,5 +1,6 @@
 import type { PluginContext } from "emdash/plugin";
 
+import { TYPES_KEY, typesFrom, type ListingType } from "./types";
 import { asNumber, asRecord, asString } from "./util";
 
 /**
@@ -12,6 +13,8 @@ export type Settings = {
 	requireModeration: boolean;
 	emailMessages: boolean;
 	defaultListingType: string;
+	/** Every listing type: the built-ins with the owner's changes over them, then the owner's own (types.ts). */
+	types: ListingType[];
 	expiryDays: number;
 	emailExpiry: boolean;
 	photoLimit: number;
@@ -76,6 +79,7 @@ export async function loadSettings(ctx: PluginContext): Promise<Settings> {
 		requireModeration: all.get("require_moderation") !== false,
 		emailMessages: all.get("email_messages") !== false,
 		defaultListingType: asString(all.get("default_listing_type")) || "business",
+		types: typesFrom(all.get(TYPES_KEY)),
 		expiryDays: days > 0 ? Math.min(days, 3650) : 0,
 		emailExpiry: all.get("email_expiry") !== false,
 		photoLimit: Math.min(Math.max(limit, 0), 20),

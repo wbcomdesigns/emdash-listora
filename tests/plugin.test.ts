@@ -5,8 +5,9 @@ import { createPluginTestHost, type PluginTestHost } from "@emdash-cms/plugin-te
 
 import manifestText from "../emdash-plugin.jsonc?raw";
 import kitLib from "../site-kit/lib/listora.ts?raw";
-import { LISTING_TYPES as KIT_TYPES } from "../site-kit/lib/listora";
-import { LISTING_TYPES } from "../src/lib/types";
+import blockPlugin from "../site-kit/blocks/plugin.ts?raw";
+import { BUILTIN_TYPES, typesFrom } from "../src/lib/types";
+import { SAMPLE_LISTINGS } from "../src/lib/sample-listings";
 import { imageType } from "../src/plugin";
 import { parseCsv, toCsv, unguard } from "../src/lib/csv";
 // @ts-expect-error plain module shared with the lab seed
@@ -347,11 +348,11 @@ describe("two admin tabs deciding on one listing", () => {
 });
 
 describe("types and spam", () => {
-	it("lists the ten Free types", async () => {
+	it("lists the ten Free types and Software", async () => {
 		host = await createPluginTestHost();
-		const result = await host.invokeRoute("types");
-		expect(result).toMatchObject({ ok: true });
-		expect((result as { items: unknown[] }).items).toHaveLength(10);
+		const result = (await host.invokeRoute("types")) as { ok: boolean; items: Array<{ slug: string }> };
+		expect(result.ok).toBe(true);
+		expect(result.items.map((item) => item.slug)).toEqual(["business", "restaurant", "real-estate", "hotel", "event", "job", "healthcare", "education", "place", "classified", "software"]);
 	});
 
 	it("rejects a honeypot submit", async () => {
@@ -843,25 +844,137 @@ describe("listing guards", () => {
 	});
 });
 
-// The plugin and the kit are separate packages, so each keeps a list of listing types.
-// These tests are what stops the copies drifting apart.
-describe("listing types stay in step", () => {
-	it("matches between the plugin and the kit: slug, name, colour and schema type", () => {
-		expect(KIT_TYPES.map((t) => [t.slug, t.name, t.color, t.schema])).toEqual(
-			LISTING_TYPES.map((t) => [t.slug, t.name, t.color, t.schemaType]),
-		);
+/* ---- 0.8.0: the types store (SCOPE.md items 1 and 2) ---- */
+
+// The owner's types as the type editor stores them (settings key `types`): a renamed and re-typed
+// built-in, a hidden built-in, and a type of their own.
+const OWNER_TYPES = [
+	{ slug: "restaurant", name: "Eatery", schemaType: "FoodEstablishment" },
+	{ slug: "hotel", hidden: true },
+	{ slug: "boat-hire", name: "Boat hire", schemaType: "LocalBusiness", color: "#0E7490", location: true, fields: [{ key: "berths", label: "Berths", kind: "number", slot: 1 }] },
+];
+
+describe("types store", () => {
+	it("seeds the built-ins from code and lays the owner's changes and own types over them", async () => {
+		const rt = await createPluginRuntimeTestHost();
+		host = { dispose: () => rt.dispose() } as unknown as PluginTestHost;
+		await rt.fixtures.plugin.setting("types", OWNER_TYPES);
+		const { items } = (await rt.transport.invokeRoute("types")) as { items: Array<Record<string, unknown>> };
+		expect(items.map((item) => item.slug)).toEqual([...BUILTIN_TYPES.map((type) => type.slug), "boat-hire"]);
+		expect(items.find((item) => item.slug === "restaurant")).toMatchObject({ name: "Eatery", schemaType: "FoodEstablishment", color: "#DC2626", builtin: true, hidden: false });
+		expect(items.find((item) => item.slug === "hotel")).toMatchObject({ name: "Hotel", hidden: true, builtin: true });
+		expect(items.find((item) => item.slug === "boat-hire")).toMatchObject({ name: "Boat hire", builtin: false, fields: [{ key: "berths", kind: "number", slot: 1 }] });
+		expect(items.find((item) => item.slug === "software")).toMatchObject({ name: "Software", schemaType: "SoftwareApplication", location: false });
 	});
 
-	it("matches the default-type choices in the manifest", () => {
-		const options = [...manifestText.matchAll(/\{ "value": "([^"]+)", "label": "([^"]+)" \}/g)].map((m) => [m[1], m[2]]);
-		expect(options).toEqual(LISTING_TYPES.map((t) => [t.slug, t.name]));
+	it("never lets a stored entry delete a built-in, and skips unreadable entries", () => {
+		const types = typesFrom([{ slug: "business", name: "" }, { slug: "Bad Slug", name: "x" }, { name: "No slug" }, "junk", { slug: "boat", name: "Boat" }, { slug: "boat", name: "Twice" }]);
+		expect(types.map((type) => type.slug)).toEqual([...BUILTIN_TYPES.map((type) => type.slug), "boat"]);
+		expect(types[0].name).toBe("Business");
+		expect(typesFrom("not an array")).toHaveLength(BUILTIN_TYPES.length);
 	});
 
-	it("matches the extra fields the form asks for and the listing page shows", () => {
-		for (const type of LISTING_TYPES) {
-			for (const field of type.fields) {
-				expect(kitLib, `${type.slug}.${field.key}`).toContain(`key: "${field.key}"`);
-			}
+	it("keeps a listing's raw slug and shows a slug the site has no type for as the slug, never as Business", async () => {
+		const rt = await createPluginRuntimeTestHost();
+		await rt.fixtures.collection(listingsCollection as never);
+		host = { dispose: () => rt.dispose() } as unknown as PluginTestHost;
+		await rt.fixtures.content("listings", { data: { title: "Gone Type Co", listing_type: "kayaks" }, slug: "gone-type", status: "published" } as never);
+		await upgraded(rt);
+		const found = (await rt.transport.invokeRoute("search", { q: "gone type" })) as { items: Array<Record<string, unknown>> };
+		expect(found.items[0]).toMatchObject({ listing_type: "kayaks", type_name: "kayaks" });
+		// The type filter finds it by its raw slug.
+		expect(((await rt.transport.invokeRoute("listings", { type: "kayaks" })) as { items: unknown[] }).items).toHaveLength(1);
+	});
+
+	it("names a listing by its type's name as the owner has it now, not as it was indexed", async () => {
+		const { rt } = await directory();
+		const before = (await rt.transport.invokeRoute("search", { q: "probe" })) as { items: Array<Record<string, unknown>> };
+		expect(before.items[0]).toMatchObject({ listing_type: "restaurant", type_name: "Restaurant" });
+		await rt.fixtures.plugin.setting("types", OWNER_TYPES);
+		const after = (await rt.transport.invokeRoute("search", { q: "probe" })) as { items: Array<Record<string, unknown>> };
+		expect(after.items[0]).toMatchObject({ listing_type: "restaurant", type_name: "Eatery" });
+		// The stored index row holds the slug only, so nothing has to be rewritten when a type changes.
+		const row = (await rt.inspect.storage.list<Record<string, unknown>>("directory"))[0].data;
+		expect(row.card).not.toHaveProperty("type_name");
+	});
+
+	it("gives a listing page the owner's schema.org type for its listing type", async () => {
+		const { a, rt } = await directory();
+		await rt.fixtures.plugin.setting("types", OWNER_TYPES);
+		await rt.transport.invokeRoute("review", { listingId: a, stars: 5, body: "Great." }, { method: "POST", user: ana });
+		const rev = (await rt.inspect.storage.get<{ rev: string }>("reviews", `rev-${a}-ana`))!.rev;
+		await rt.transport.invokeRoute("admin", { type: "block_action", action_id: "review_mod", value: `approve|${rev}|rev-${a}-ana`, page: "/reviews" });
+		const page = { page: { url: "https://x.test/listings/probe-cafe", path: "/listings/probe-cafe", locale: null, kind: "content", pageType: "listing", title: "Probe Cafe", description: null, canonical: null, image: null, content: { collection: "listings", id: a, slug: "probe-cafe" } } };
+		expect(await rt.transport.invokeHook("page:metadata", page)).toMatchObject({ graph: { "@type": "FoodEstablishment" } });
+	});
+
+	it("takes a new listing of the owner's own type and refuses a hidden one", async () => {
+		const rt = await createPluginRuntimeTestHost();
+		await rt.fixtures.collection(listingsCollection as never);
+		host = { dispose: () => rt.dispose() } as unknown as PluginTestHost;
+		await rt.fixtures.plugin.setting("types", OWNER_TYPES);
+		const send = (title: string, listing_type: string) => rt.transport.invokeRoute("submit", { title, listing_type, agree_terms: true }, { method: "POST", user: ana });
+		expect(await send("Harbour Boats", "boat-hire")).toMatchObject({ ok: true });
+		expect(await send("Hidden Inn", "hotel")).toMatchObject({ ok: false, error: { code: "VALIDATION_ERROR" } });
+		expect(await send("Made Up", "made-up")).toMatchObject({ ok: false, error: { code: "VALIDATION_ERROR" } });
+		const rows = await rt.inspect.storage.list<Record<string, unknown>>("submissions");
+		expect(rows.map((row) => row.data.listing_type)).toEqual(["boat-hire"]);
+	});
+
+	it("falls back to the first offered type when the saved default has been hidden", async () => {
+		const rt = await createPluginRuntimeTestHost();
+		await rt.fixtures.collection(listingsCollection as never);
+		host = { dispose: () => rt.dispose() } as unknown as PluginTestHost;
+		await rt.fixtures.plugin.setting("default_listing_type", "hotel");
+		await rt.fixtures.plugin.setting("types", OWNER_TYPES);
+		expect(await rt.transport.invokeRoute("submit", { title: "No Type Given", agree_terms: true }, { method: "POST", user: ana })).toMatchObject({ ok: true });
+		expect((await rt.inspect.storage.list<Record<string, unknown>>("submissions"))[0].data.listing_type).toBe("business");
+	});
+
+	it("imports the owner's own type by its slug or name, and refuses a type the site does not have", async () => {
+		const rt = await createPluginRuntimeTestHost();
+		await rt.fixtures.collection(listingsCollection as never);
+		host = { dispose: () => rt.dispose() } as unknown as PluginTestHost;
+		await rt.fixtures.plugin.setting("types", OWNER_TYPES);
+		const csv = "title,listing_type,city\nHarbour Boats,boat-hire,Lyon\nRiver Boats,Boat hire,Lyon\nOld Eatery,eatery,Lyon\nSome Place,submarine,Lyon";
+		const checked = (await rt.transport.invokeRoute("import", { csv, mode: "check" }, { method: "POST" })) as { valid: number; bad: Array<{ title: string }> };
+		expect(checked.valid).toBe(3);
+		expect(checked.bad.map((row) => row.title)).toEqual(["Some Place"]);
+	});
+
+	it("offers the owner's types for the default type, not hidden ones, and saves their own", async () => {
+		const rt = await createPluginRuntimeTestHost();
+		await rt.fixtures.collection(listingsCollection as never);
+		host = { dispose: () => rt.dispose() } as unknown as PluginTestHost;
+		await rt.fixtures.plugin.setting("types", OWNER_TYPES);
+		const page = JSON.stringify(await rt.admin.loadPage("/settings"));
+		expect(page).toContain('{"label":"Boat hire","value":"boat-hire"}');
+		expect(page).toContain('{"label":"Eatery","value":"restaurant"}');
+		expect(page).not.toContain('"value":"hotel"');
+		const saved = (await rt.transport.invokeRoute("admin", { type: "form_submit", action_id: "save_submissions", page: "/settings", values: { default_listing_type: "boat-hire", require_moderation: true, spam_keywords: "" } })) as { toast?: { type: string } };
+		expect(saved.toast?.type).toBe("success");
+		expect(await rt.inspect.setting("default_listing_type")).toBe("boat-hire");
+		await rt.transport.invokeRoute("admin", { type: "form_submit", action_id: "save_submissions", page: "/settings", values: { default_listing_type: "hotel", require_moderation: true, spam_keywords: "" } });
+		expect(await rt.inspect.setting("default_listing_type")).toBe("business");
+	});
+
+	it("keeps no fixed type list in the manifest, and the in-text block offers every built-in", () => {
+		// The generated settings form could only list fixed choices; Listora's own Settings page lists the store.
+		expect(manifestText).not.toContain("default_listing_type");
+		const offered = [...blockPlugin.matchAll(/\["([a-z-]+)", "([^"]+)"\]/g)].map((m) => [m[1], m[2]]);
+		expect(offered).toEqual(BUILTIN_TYPES.map((type) => [type.slug, type.name]));
+	});
+
+	it("loads the sample directory with built-in types only", () => {
+		const builtins = new Set(BUILTIN_TYPES.map((type) => type.slug));
+		for (const sample of SAMPLE_LISTINGS) expect(builtins.has(sample.listing_type), sample.key).toBe(true);
+	});
+
+	it("keeps the form's extra fields in step with the built-in types", () => {
+		// Software's fields are rendered from the types route in step 5 (SCOPE.md item 4); the rest are
+		// still drawn by the kit's own field list until then.
+		for (const type of BUILTIN_TYPES.filter((item) => item.slug !== "software")) {
+			for (const field of type.fields) expect(kitLib, `${type.slug}.${field.key}`).toContain(`key: "${field.key}"`);
 		}
 	});
 });

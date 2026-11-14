@@ -25,7 +25,7 @@ const MEASURED: Record<string, number> = {
 	"admin page_load /queue (upgrade running)": 6,
 	"cron upgrade (each step)": 9,
 	"route health": 1,
-	"route types": 0,
+	"route types": 1,
 	"route listings (first page)": 4,
 	"route listings (next page)": 4,
 	"route listings (filtered, nothing matches)": 6,
@@ -69,7 +69,8 @@ const MEASURED: Record<string, number> = {
 	"route reply (listing with 500 reviews)": 6,
 	"route privacy (view)": 3,
 	"route export (500 listings, one part)": 7,
-	"route import check (100 rows)": 9,
+	"route import check (100 rows)": 7,
+	"route import check (100 rows, types by name)": 7,
 	"route import (one batch of 2)": 8,
 	"route import (one batch of 2, both cut off before)": 7,
 	"route import (one batch of 2, nothing kept)": 9,
@@ -139,7 +140,7 @@ const MEASURED: Record<string, number> = {
 	"hook content:afterUnpublish": 1,
 	"hook content:afterRestore": 2,
 	"hook content:afterDelete": 2,
-	"hook page:metadata": 2,
+	"hook page:metadata": 3,
 	"cron notify (each run, 100 waiting, 50 owners)": 8,
 	"cron notify (everyone told within the hour)": 3,
 	"cron notify (email off, 100 waiting)": 3,
@@ -474,6 +475,9 @@ describe("bridge calls per entry point, worst case", () => {
 	it("import", async () => {
 		const csv = ["title,city,listing_type", ...Array.from({ length: 100 }, (_, i) => `Imported ${i},City ${i},restaurant`)].join("\n");
 		expect(await measure("route import check (100 rows)", () => route("import", { csv, mode: "check" }, { method: "POST" }))).toMatchObject({ ok: true, valid: 100 });
+		// Types written by name are matched against the site's types (the settings read every check makes).
+		const named = ["title,city,listing_type", ...Array.from({ length: 100 }, (_, i) => `Named ${i},City ${i},Real estate`)].join("\n");
+		expect(await measure("route import check (100 rows, types by name)", () => route("import", { csv: named, mode: "check" }, { method: "POST" }))).toMatchObject({ ok: true, valid: 100 });
 		const batch = ["title,city,listing_type", ...Array.from({ length: 2 }, (_, i) => `Batch ${i},City ${i},restaurant`)].join("\n");
 		expect(await measure("route import (one batch of 2)", () => route("import", { csv: batch, mode: "import" }, { method: "POST" }))).toMatchObject({ ok: true, imported: 2 });
 		// Drafts a cut-off request created without their queue rows: given them, not created again.

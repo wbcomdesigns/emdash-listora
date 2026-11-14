@@ -7,7 +7,7 @@ import { CSV_COLUMNS, parseCsv, toCsv, unguard } from "./lib/csv";
 import { clean, webAddress } from "./lib/edits";
 import { fieldsOf } from "./lib/listings-query";
 import { loadSettings, onlyKnown } from "./lib/settings";
-import { LISTING_TYPES, LISTINGS } from "./lib/types";
+import { LISTINGS } from "./lib/types";
 import { asRecord, asString, nowIso, readCursor } from "./lib/util";
 
 type Ctx = PluginContext;
@@ -28,8 +28,10 @@ const IMPORT_SECONDS = 15_000;
 /** Rows one check request looks at, and the size of a file the page sends to be checked. */
 const IMPORT_MAX_ROWS = 100;
 const IMPORT_MAX_CHARS = 900_000;
-// D1 binds at most 100 values per statement.
-const IN_MAX = 45;
+// D1 binds at most 100 values per statement: 50 titles, the two statuses and EmDash's own few
+// (plugin, collection, limit) stay well inside it. Two reads of three cover a 100-row check, which
+// leaves room for the settings read a file that names its types needs (0.8.0).
+const IN_MAX = 50;
 
 /**
  * A real spreadsheet file of the published listings, 700 per request. The kit's import page asks with
@@ -85,7 +87,8 @@ const key = (title: string, city: string) => `${title.trim().toLowerCase()}|${ci
  * every row becomes a draft waiting in the Listings queue.
  *
  * `mode: "check"` reads up to 100 rows and says which are good, which are bad and which are already in
- * the directory or waiting (same name and city): up to nine calls (three reads per 45 titles).
+ * the directory or waiting (same name and city): up to seven calls (the settings, for the site's
+ * types, and three reads per 50 titles).
  * `mode: "import"` takes at most IMPORT_BATCH rows (the kit sends them in batches): the three duplicate
  * reads, the newest drafts, settings, the schema when settings has no field list yet, one write per
  * row and the queue rows, nine calls.
@@ -116,6 +119,8 @@ export async function importCsv(input: unknown, ctx: Ctx) {
 	const duplicates: Array<{ line: number; title: string; city: string }> = [];
 	const seen = new Set<string>();
 	const candidates: typeof good = [];
+	// The site's types (built-ins with the owner's changes, and their own), matched by slug or name.
+	const settings = await loadSettings(ctx);
 	parsed.forEach((source, index) => {
 		const line = first + index;
 		const data: Record<string, string> = {};
@@ -124,7 +129,8 @@ export async function importCsv(input: unknown, ctx: Ctx) {
 		if (data.website && !webAddress(data.website)) return bad.push({ line, title: data.title, reason: "Website must be a full address starting with http:// or https://." });
 		const number = (value: string, max: number) => value === "" || (Number.isFinite(Number(value)) && Math.abs(Number(value)) <= max);
 		if (!number(data.lat, 90) || !number(data.lng, 180)) return bad.push({ line, title: data.title, reason: "Latitude or longitude is not a valid number." });
-		const type = LISTING_TYPES.find((item) => item.slug === data.listing_type.toLowerCase() || item.name.toLowerCase() === data.listing_type.toLowerCase());
+		const wanted = data.listing_type.toLowerCase();
+		const type = settings.types.find((item) => item.slug === wanted) ?? settings.types.find((item) => item.name.toLowerCase() === wanted);
 		if (data.listing_type && !type) return bad.push({ line, title: data.title, reason: `"${data.listing_type}" is not a listing type.` });
 		if (seen.has(key(data.title, data.city))) return duplicates.push({ line, title: data.title, city: data.city });
 		seen.add(key(data.title, data.city));
@@ -166,10 +172,7 @@ export async function importCsv(input: unknown, ctx: Ctx) {
 	if (!importing) return { ok: true, checked: true, ...summary };
 	if (!ctx.content?.create) return fail("CONTENT_UNAVAILABLE", "The listings collection is not set up on this site.");
 	const started = Date.now();
-	const [settings, recent] = await Promise.all([
-		loadSettings(ctx),
-		good.length ? ctx.content.list(LISTINGS, { where: { status: "draft" }, limit: 100 }).catch(() => null) : null,
-	]);
+	const recent = good.length ? await ctx.content.list(LISTINGS, { where: { status: "draft" }, limit: 100 }).catch(() => null) : null;
 	const fields = await fieldsOf(ctx, settings.fields);
 	const orphans = new Map<string, string>();
 	// A draft an import request made before it was cut off: created by the plugin (EmDash records no

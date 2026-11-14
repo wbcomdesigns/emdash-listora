@@ -1,7 +1,7 @@
 ---
 import { getTaxonomyTerms } from "emdash";
 import Layout from "../../layouts/ListoraLayout.astro";
-import { LISTING_TYPES } from "../../lib/listora";
+import { loadTypes, shownTypes, typeHint } from "../../lib/listora";
 import { S } from "../../lib/listora-strings";
 import "../../styles/listora-ui.css";
 
@@ -10,6 +10,8 @@ Astro.response.headers.set("Cache-Control", "private, no-store");
 const user = Astro.locals.user;
 // The site's own categories. A site with none still gets a working form.
 const categories = await getTaxonomyTerms("listing_category").catch(() => []);
+// The types offered for a new listing, as the owner has set them up in the admin.
+const types = user ? shownTypes(await loadTypes(Astro.locals)) : [];
 const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.pathname)}`;
 ---
 
@@ -55,7 +57,7 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 				<p class="listora-helper" id="type-help">{S.submit.typeHelp}</p>
 				<div class="listora-type-grid" role="radiogroup" aria-labelledby="type-help">
 					{
-						LISTING_TYPES.map((item, index) => (
+						types.map((item, index) => (
 							<label class="listora-type-card">
 								<input
 									type="radio"
@@ -64,7 +66,7 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 									checked={index === 0}
 								/>
 								<span class="listora-type-card__name">{item.name}</span>
-								<span class="listora-type-card__hint">{item.hint}</span>
+								{typeHint(item.slug) ? <span class="listora-type-card__hint">{typeHint(item.slug)}</span> : null}
 							</label>
 						))
 					}
@@ -192,7 +194,7 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 </Layout>
 
 <script>
-	import { api, esc, TYPE_FIELDS, typeName } from "../../lib/listora";
+	import { api, esc, TYPE_FIELDS } from "../../lib/listora";
 	import { S } from "../../lib/listora-strings";
 
 	const form = document.getElementById("listora-submit") as HTMLFormElement | null;
@@ -247,9 +249,10 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 	function renderPreview() {
 		const data = Object.fromEntries(new FormData(form).entries());
 		const preview = document.getElementById("preview");
-		const type = String(data.listing_type || "business");
+		// The name shown on the chosen type's card, as the page drew it from the plugin's types.
+		const typeLabel = form.querySelector('input[name="listing_type"]:checked')?.closest("label")?.querySelector(".listora-type-card__name")?.textContent || "";
 		if (preview) {
-			preview.innerHTML = `<article class="listora-card"><div class="listora-card-body"><p class="listora-meta"><span class="listora-badge listora-badge--type">${esc(typeName(type))}</span></p><h2>${esc(data.title || S.submit.untitled)}</h2><p class="listora-meta">${esc(data.city || S.submit.cityMissing)}</p><p>${esc(data.excerpt || S.submit.noSummary)}</p></div></article>`;
+			preview.innerHTML = `<article class="listora-card"><div class="listora-card-body"><p class="listora-meta"><span class="listora-badge listora-badge--type">${esc(typeLabel)}</span></p><h2>${esc(data.title || S.submit.untitled)}</h2><p class="listora-meta">${esc(data.city || S.submit.cityMissing)}</p><p>${esc(data.excerpt || S.submit.noSummary)}</p></div></article>`;
 		}
 	}
 

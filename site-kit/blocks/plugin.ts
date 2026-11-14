@@ -1,6 +1,24 @@
 import { definePlugin } from "emdash";
 
-import { LISTING_TYPES } from "../lib/listora";
+/**
+ * The built-in listing types. This picker is built when the site starts, before any plugin route can
+ * answer, and a portable text block's `optionsRoute` can only call the block plugin's own routes, which
+ * cannot read Listora's settings. So it offers the built-ins; the block shows each listing's type by
+ * the name the owner set (ListingsBlock.astro asks the plugin's types route).
+ */
+const BUILT_IN_TYPES = [
+	["business", "Business"],
+	["restaurant", "Restaurant"],
+	["real-estate", "Real estate"],
+	["hotel", "Hotel"],
+	["event", "Event"],
+	["job", "Job"],
+	["healthcare", "Healthcare"],
+	["education", "Education"],
+	["place", "Place"],
+	["classified", "Classified"],
+	["software", "Software"],
+] as const;
 
 export function createPlugin() {
 	return definePlugin({
@@ -19,7 +37,7 @@ export function createPlugin() {
 							action_id: "listingType",
 							label: "Listing type",
 							initial_value: "any",
-							options: [{ label: "Any type", value: "any" }, ...LISTING_TYPES.map((item) => ({ label: item.name, value: item.slug }))],
+							options: [{ label: "Any type", value: "any" }, ...BUILT_IN_TYPES.map(([value, label]) => ({ label, value }))],
 						},
 						{ type: "text_input", action_id: "category", label: "Category name (optional)", placeholder: "Coffee shops" },
 						{ type: "text_input", action_id: "city", label: "City (optional)", placeholder: "Lisbon" },

@@ -43,7 +43,9 @@ describe("visitor wording", () => {
 		expect(paths.size).toBeGreaterThan(40);
 		for (const path of paths) {
 			const value = read(path);
-			const text = typeof value === "string" ? value : Array.isArray(value) ? value.join(" ") : "";
+			// A word list (days) or a table of phrases by key (type hints) counts when every entry is filled.
+			const list = Array.isArray(value) ? value : value && typeof value === "object" ? Object.values(value) : null;
+			const text = typeof value === "string" ? value : list && list.every((item) => typeof item === "string" && item) ? list.join(" ") : "";
 			expect(text, path).not.toBe("");
 		}
 	});

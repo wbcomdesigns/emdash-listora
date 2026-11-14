@@ -1,5 +1,5 @@
 import { parseHours } from "./hours";
-import { listingTypeBySlug } from "./types";
+import { typeBySlug, type ListingType } from "./types";
 import { asBoolean, asNumber, asRecord, asString, asStringArray, parseJson } from "./util";
 
 type ContentLike = {
@@ -23,8 +23,6 @@ export type ListingCard = {
 	excerpt: string;
 	description: string;
 	listing_type: string;
-	type_name: string;
-	type_color: string;
 	phone: string;
 	website: string;
 	email: string;
@@ -58,7 +56,6 @@ export function listingFromContent(
 	rating?: { average: number; count: number },
 ): ListingCard {
 	const data = asRecord(item.data);
-	const type = listingTypeBySlug(asString(data.listing_type) || "business");
 	const hours = parseHours(data.hours);
 	const websiteValue = data.website;
 	const website =
@@ -72,9 +69,9 @@ export function listingFromContent(
 		title: asString(data.title) || item.slug || item.id,
 		excerpt: asString(data.excerpt),
 		description: asString(data.description),
-		listing_type: type.slug,
-		type_name: type.name,
-		type_color: type.color,
+		// The raw slug. Its name and colour are looked up when a route answers (withType), so an
+		// owner's change to a type shows at once and is never copied into stored rows.
+		listing_type: asString(data.listing_type) || "business",
 		phone: asString(data.phone),
 		website,
 		email: asString(data.email),
@@ -104,6 +101,14 @@ export function listingFromContent(
 		type_fields: parseJson<Record<string, unknown>>(data.type_fields, {}),
 		place: [asString(data.city), asString(data.country)].filter(Boolean).join(", "),
 	};
+}
+
+export type TypedCard = ListingCard & { type_name: string; type_color: string };
+
+/** A card as a route returns it: its type's current name and colour, from the types store. */
+export function withType(card: ListingCard, types: readonly ListingType[]): TypedCard {
+	const type = typeBySlug(types, card.listing_type);
+	return { ...card, type_name: type.name, type_color: type.color };
 }
 
 export function haversineKm(
