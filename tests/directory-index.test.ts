@@ -7,9 +7,9 @@ import type { PluginRuntimeTestHost } from "@emdash-cms/plugin-test";
 // @ts-expect-error plain module shared with the lab seed
 import { listingsCollection } from "../site-kit/seed/collection.mjs";
 import directoryPage from "../site-kit/pages/listings/index.astro?raw";
-import { listingPart } from "../src/lib/directory";
+import { catRows, listingPart } from "../src/lib/directory";
 import { BUILTIN_TYPES } from "../src/lib/types";
-import { createPluginRuntimeTestHost, cron, publishListing, settle, upgraded } from "./site";
+import { createPluginRuntimeTestHost, cron, entryCats, minutesUntil, settle, upgraded } from "./site";
 
 /**
  * 0.8.0 step 6 (issue #97): the kit directory pages through the plugin's index, the index answers
@@ -51,7 +51,9 @@ describe("the directory index answers type, category and city", () => {
 		await categorySite();
 		const cafe = await submitted("Corner Cafe", "cafes", "Bristol");
 		const bakery = await submitted("Bread Hall", "bakeries", "Leeds");
-		expect(await rt!.inspect.storage.get("directory", cafe)).toMatchObject({ cat: "cafes", cy: "bristol" });
+		expect(await rt!.inspect.storage.get("directory", cafe)).toMatchObject({ cy: "bristol" });
+		expect(await rt!.inspect.storage.get("dircats", cafe)).toMatchObject({ cats: ["cafes"] });
+		expect(await rt!.inspect.storage.get("dircats", `cafes:${cafe}`)).toMatchObject({ cat: "cafes", lid: cafe, vis: true, type: "restaurant" });
 
 		const cafes = await route({ category: "cafes" });
 		expect(cafes).toMatchObject({ ok: true, total: 1 });
@@ -78,18 +80,24 @@ describe("the directory index answers type, category and city", () => {
 		expect((await route({ ids: `${bakery},${cafe}` })).items.map((item) => item.id)).toEqual([bakery]);
 	});
 
-	it("gives a row from before 0.8.0 its category copy in the sweep", async () => {
+	it("brings a row from before 0.8.0 up to date in the sweep: city copy, category rows, no long description", async () => {
 		await categorySite(false);
-		const cafe = await submitted("Corner Cafe", "cafes", "Bristol");
+		const made = await rt!.fixtures.content("listings", { data: { title: "Corner Cafe", listing_type: "restaurant", city: "Bristol" }, slug: "corner-cafe", status: "published" } as never);
+		entryCats.set(made.id, ["cafes", "bakeries"]);
 		await upgraded(rt!);
-		// As 0.7.x wrote it: no category or city copy, and the long description in the card.
-		const row = (await rt!.inspect.storage.get<Record<string, unknown>>("directory", cafe))!;
-		const { cat: _cat, cy: _cy, ...old } = row;
-		await rt!.fixtures.plugin.storage("directory", cafe, { ...old, card: { ...(row.card as object), description: "Long text" } });
+		// As 0.7.x wrote it: no city copy, no category rows, and the long description in the card.
+		const row = (await rt!.inspect.storage.get<Record<string, unknown>>("directory", made.id))!;
+		const { cy: _cy, ...old } = row;
+		await rt!.fixtures.plugin.storage("directory", made.id, { ...old, card: { ...(row.card as object), description: "Long text" } });
+		expect(await rt!.inspect.storage.get("dircats", made.id)).toBeNull();
 		await cron(rt!, "sweep");
-		const swept = (await rt!.inspect.storage.get<Record<string, unknown>>("directory", cafe))!;
-		expect(swept).toMatchObject({ cat: "cafes", cy: "bristol" });
+		await minutesUntil(rt!, async () => (await rt!.inspect.storage.get("dircats", made.id)) !== null, 10);
+		const swept = (await rt!.inspect.storage.get<Record<string, unknown>>("directory", made.id))!;
+		expect(swept).toMatchObject({ cy: "bristol" });
 		expect(swept.card).not.toHaveProperty("description");
+		expect((await route({ category: "bakeries" })).items.map((item) => item.id)).toEqual([made.id]);
+		expect((await route({ category: "cafes" })).items.map((item) => item.id)).toEqual([made.id]);
+		entryCats.delete(made.id);
 	});
 });
 
@@ -109,7 +117,8 @@ describe("a directory of 6000 listings", () => {
 	// Rows written straight into the index, as the content hooks leave them: the routes read only the index.
 	const N = 6000;
 	const typeOf = (i: number) => (i % 10 === 0 ? "software" : i % 2 ? "restaurant" : "hotel");
-	const catOf = (i: number) => (i % 3 === 0 ? "cafes" : i % 3 === 1 ? "bakeries" : "");
+	// Some listings are filed under both categories.
+	const catsOf = (i: number) => [...(i % 3 === 0 ? ["cafes"] : []), ...(i % 3 === 1 || i % 7 === 0 ? ["bakeries"] : [])];
 	const cityOf = (i: number) => `Town ${i % 40}`;
 
 	async function bigSite(): Promise<void> {
@@ -119,7 +128,9 @@ describe("a directory of 6000 listings", () => {
 		for (let i = 0; i < N; i += 1) {
 			const id = `L${String(i).padStart(5, "0")}`;
 			const item = { id, slug: id.toLowerCase(), status: "published", data: { title: `Spot ${i}`, listing_type: typeOf(i), city: cityOf(i), is_featured: i % 500 === 0, type_fields: i % 20 === 0 ? { stars: i } : {} } };
-			await rt.fixtures.plugin.storage("directory", id, { ...listingPart(item, BUILTIN_TYPES, catOf(i)), exp: 0, warned: 0, avg: i % 5, rc: 1, rseq: 0 });
+			const row = { ...listingPart(item, BUILTIN_TYPES), exp: 0, warned: 0, avg: i % 5, rc: 1, rseq: 0 };
+			await rt.fixtures.plugin.storage("directory", id, row);
+			for (const cat of catRows(id, catsOf(i), row)) await rt.fixtures.plugin.storage("dircats", cat.id, cat.data);
 		}
 	}
 
@@ -141,7 +152,7 @@ describe("a directory of 6000 listings", () => {
 		return { ids, totals, pages };
 	}
 
-	it("pages to the end and filters by type, category and city with exact totals", async () => {
+	it("pages to the end and filters by type, category (a listing under each of its categories) and city with exact totals", async () => {
 		await bigSite();
 		const count = (keep: (i: number) => boolean) => Array.from({ length: N }, (_, i) => i).filter(keep).length;
 
@@ -150,8 +161,8 @@ describe("a directory of 6000 listings", () => {
 		expect(all.totals[0]).toBe(N);
 
 		const cafes = await walk({ category: "cafes", sort: "rating" });
-		expect(new Set(cafes.ids).size).toBe(count((i) => catOf(i) === "cafes"));
-		expect(cafes.totals[0]).toBe(count((i) => catOf(i) === "cafes"));
+		expect(new Set(cafes.ids).size).toBe(count((i) => catsOf(i).includes("cafes")));
+		expect(cafes.totals[0]).toBe(count((i) => catsOf(i).includes("cafes")));
 		const averages = cafes.pages.flat().map((item) => item.rating_avg);
 		expect(averages).toEqual([...averages].sort((a, b) => b - a));
 
@@ -159,8 +170,16 @@ describe("a directory of 6000 listings", () => {
 		expect(new Set(town.ids).size).toBe(count((i) => cityOf(i) === "Town 7" && typeOf(i) === "restaurant"));
 		expect(town.totals[0]).toBe(town.ids.length);
 
+		const bakeries = await walk({ category: "bakeries", sort: "title" });
+		expect(new Set(bakeries.ids).size).toBe(count((i) => catsOf(i).includes("bakeries")));
+		expect(bakeries.totals[0]).toBe(bakeries.ids.length);
+		// Listings under both are found under each.
+		expect(new Set(cafes.ids).has("L00021") && new Set(bakeries.ids).has("L00021")).toBe(true);
+		const inTown = await walk({ category: "bakeries", city_exact: "town 7" });
+		expect(new Set(inTown.ids).size).toBe(count((i) => catsOf(i).includes("bakeries") && cityOf(i) === "Town 7"));
+
 		const stars = await walk({ type: "software", category: "bakeries", sort: "n1" });
-		expect(new Set(stars.ids).size).toBe(count((i) => typeOf(i) === "software" && catOf(i) === "bakeries"));
+		expect(new Set(stars.ids).size).toBe(count((i) => typeOf(i) === "software" && catsOf(i).includes("bakeries")));
 	}, 600_000);
 });
 

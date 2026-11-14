@@ -523,7 +523,7 @@ export function minutes(n: number): string {
 
 const CODES: Record<string, string> = {
 	SIGN_IN_REQUIRED: S.common.signInContinue,
-	RATE_LIMITED: "Too many requests. Try again in an hour.",
+	RATE_LIMITED: "Too many requests. Try again when the next hour starts.",
 	NOT_FOUND: "That listing is not available.",
 	BLOCKED: "This member cannot review.",
 	OWN_LISTING: "You cannot review your own listing.",

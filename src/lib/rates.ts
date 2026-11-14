@@ -1,6 +1,7 @@
 import type { PluginContext } from "emdash/plugin";
 
 import { guestKey } from "../visitor-key";
+import { notApplied } from "./util";
 
 /**
  * Writes per person per hour, in `rates` rows (id = action, who and the hour): two calls at most.
@@ -14,7 +15,7 @@ export const HOUR = 60 * 60 * 1000;
 
 export const windowOf = (now = Date.now()) => Math.floor(now / HOUR) * HOUR;
 
-export const RATE_LIMITED = { ok: false, error: { code: "RATE_LIMITED", message: "Too many requests. Try again in an hour." } };
+export const RATE_LIMITED = { ok: false, error: { code: "RATE_LIMITED", message: "Too many requests. Try again when the next hour starts." } };
 
 /**
  * The refusal when `who` has used up this hour, else null. Two calls at most: the row for this hour
@@ -25,10 +26,10 @@ export async function rateLimited(ctx: Pick<PluginContext, "storage">, action: s
 	if (!who) return null;
 	const w = windowOf(now);
 	const id = `${action}:${who}:${w}`;
-	const made = await ctx.storage.rates.compareAndSet(id, null, { who, w, c: 1 }).catch(() => ({ applied: false as const }));
+	const made = await ctx.storage.rates.compareAndSet(id, null, { who, w, c: 1 }).catch(notApplied);
 	if (made.applied) return null;
 	// The row is there: count this one, while the limit allows.
-	const counted = await ctx.storage.rates.updateIf(id, { where: { c: { lt: RATE_MAX } }, delta: { c: { inc: 1 } } }).catch(() => ({ applied: false as const }));
+	const counted = await ctx.storage.rates.updateIf(id, { where: { c: { lt: RATE_MAX } }, delta: { c: { inc: 1 } } }).catch(notApplied);
 	return counted.applied ? null : RATE_LIMITED;
 }
 /**

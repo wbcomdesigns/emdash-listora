@@ -1,7 +1,7 @@
 import type { PluginContext } from "emdash/plugin";
 
 import { spend, type Budget } from "./budget";
-import { asNumber, asRecord, asString } from "./util";
+import { asNumber, asRecord, asString, none, notApplied } from "./util";
 
 /**
  * Listing ratings, one row per listing in `ratings` (id = listing id), kept by in-database
@@ -58,12 +58,12 @@ export async function moveRating(ctx: Ctx, listingId: string, change: { rc: numb
 	const d: Record<string, { inc: number } | { dec: number }> = { seq: { inc: 1 } };
 	if (change.rc) d.rc = delta(change.rc);
 	if (change.rsum) d.rsum = delta(change.rsum);
-	const add = () => ctx.storage.ratings.updateIf(listingId, { where: { v: V }, delta: d }).catch(() => ({ applied: false as const }));
+	const add = () => ctx.storage.ratings.updateIf(listingId, { where: { v: V }, delta: d }).catch(notApplied);
 	const done = await add();
 	if (done.applied) return asRecord(done.data);
 	if (change.rc > 0) {
 		const row = { v: V, rc: change.rc, rsum: Math.max(0, change.rsum), seq: 1, ready: true, schema };
-		const made = await ctx.storage.ratings.compareAndSet(listingId, null, row).catch(() => ({ applied: false as const }));
+		const made = await ctx.storage.ratings.compareAndSet(listingId, null, row).catch(notApplied);
 		if (made.applied) return row;
 		if (!upgrading) {
 			// Another call created it a moment ago.
@@ -78,7 +78,7 @@ export async function moveRating(ctx: Ctx, listingId: string, change: { rc: numb
 /** Keep a change for a listing whose rating row is not a 0.7.0 row yet. One call. Never throws. */
 export async function queueChange(ctx: Ctx, listingId: string, change: { rc: number; rsum: number }): Promise<void> {
 	const id = `${Date.now().toString(36).padStart(9, "0")}|${crypto.randomUUID()}`;
-	await ctx.storage.rating_queue.put(id, { listingId, rc: change.rc, rsum: change.rsum }).catch(() => undefined);
+	await ctx.storage.rating_queue.put(id, { listingId, rc: change.rc, rsum: change.rsum }).catch(none);
 }
 
 /** The directory row's copy of a rating, for sorting by rating. Only a newer change replaces it. One call. */
@@ -88,7 +88,7 @@ export async function mirrorRating(ctx: Ctx, listingId: string, row: Record<stri
 	const shown = readRating(row);
 	await ctx.storage.directory
 		.updateIf(listingId, { where: { rseq: { lt: seq } }, set: { avg: shown.average, rc: shown.count, rseq: seq } })
-		.catch(() => undefined);
+		.catch(none);
 }
 
 /** Claim size for queued rating changes. Fixed, so two callers claim the same rows or rows that do not overlap. */
@@ -122,9 +122,9 @@ export async function drainRatingQueue(ctx: Ctx, b: Budget, upgrading: boolean):
 		const d: Record<string, { inc: number } | { dec: number }> = { seq: { inc: 1 } };
 		if (change.rc) d.rc = delta(change.rc);
 		if (change.rsum) d.rsum = delta(change.rsum);
-		const done = await ctx.storage.ratings.updateIf(listingId, { where: { v: V }, delta: d }).catch(() => ({ applied: false as const }));
+		const done = await ctx.storage.ratings.updateIf(listingId, { where: { v: V }, delta: d }).catch(notApplied);
 		// Still a 0.6.x row: keep it for after that row is turned over.
-		if (!done.applied && upgrading && spend(b)) await ctx.storage.rating_queue.put(item.id, row).catch(() => undefined);
+		if (!done.applied && upgrading && spend(b)) await ctx.storage.rating_queue.put(item.id, row).catch(none);
 	}
 	return found.items.length;
 }

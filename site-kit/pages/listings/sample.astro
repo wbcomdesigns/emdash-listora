@@ -42,6 +42,9 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 	import { sampleProgress, S } from "../../lib/listora-strings";
 	// The sample rows. The plugin checks each one again before it writes it.
 	import SAMPLE from "../../lib/listora-sample.json";
+	// The sample event is dated two weeks after the day it is loaded, so the calendar shows it ahead (#87).
+	const eventDay = new Date(Date.now() + 14 * 86_400_000).toISOString().slice(0, 10);
+	const ROWS = { ...SAMPLE, listings: SAMPLE.listings.map((row) => (row.listing_type === "event" ? { ...row, type_fields: { ...row.type_fields, event_start: eventDay } } : row)) };
 
 	const button = document.getElementById("sample-btn") as HTMLButtonElement | null;
 	const out = document.getElementById("sample-result");
@@ -72,7 +75,7 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 		let step = "start";
 		let tries = 0;
 		for (let n = 0; n < 100; n += 1) {
-			const result = await api("sample", { step, ...SAMPLE });
+			const result = await api("sample", { step, ...ROWS });
 			if (!result.ok) {
 				// A refusal is shown in the plugin's words. Only no answer or a 5xx is the site being slow:
 				// wait and send the same step again, twice at most.

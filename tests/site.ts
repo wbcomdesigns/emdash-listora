@@ -1,3 +1,4 @@
+import { PluginBridge } from "@emdash-cms/cloudflare/sandbox";
 import { createPluginRuntimeTestHost as createHost, type PluginRuntimeTestHost } from "@emdash-cms/plugin-test";
 
 import SAMPLE from "../site-kit/lib/listora-sample.json";
@@ -37,6 +38,39 @@ export async function upgraded(rt: PluginRuntimeTestHost, steps = 200): Promise<
 		await settle();
 	}
 	throw new Error("upgrade did not finish");
+}
+
+/** The data each task was last scheduled with (the test host's scheduledTasks() leaves it out). */
+export const taskData = new Map<string, unknown>();
+const cronSchedule = PluginBridge.prototype.cronSchedule;
+PluginBridge.prototype.cronSchedule = function (this: PluginBridge, name: string, opts: { schedule: string; data?: Record<string, unknown> }) {
+	taskData.set(name, opts?.data);
+	return cronSchedule.call(this, name, opts);
+};
+
+/** Categories a test files a listing under, answered as EmDash would (the test host has no fixture to file one). */
+export const entryCats = new Map<string, string[]>();
+const entryTerms = PluginBridge.prototype.taxonomyEntryTerms;
+PluginBridge.prototype.taxonomyEntryTerms = async function (this: PluginBridge, ...args: Parameters<typeof entryTerms>) {
+	const found = await entryTerms.apply(this, args);
+	const cats = entryCats.get(args[1]);
+	return (cats ? cats.map((slug) => ({ id: `term-${slug}`, name: "listing_category", slug, label: slug, parentId: null })) : found) as never;
+};
+
+/**
+ * Let scheduled tasks run as EmDash runs them, a minute at a time (every task due, with its data),
+ * until `done` says so. Returns the minutes it took.
+ */
+export async function minutesUntil(rt: PluginRuntimeTestHost, done: () => Promise<boolean>, max = 1000): Promise<number> {
+	let clock = Date.now();
+	for (let minute = 0; minute <= max; minute += 1) {
+		if (await done()) return minute;
+		clock += 61_000;
+		rt.scheduled.setTime(new Date(clock));
+		await rt.scheduled.run();
+		await settle();
+	}
+	throw new Error(`not done after ${max} minutes`);
 }
 
 /** Run one scheduled task, then wait for the hooks it caused. */

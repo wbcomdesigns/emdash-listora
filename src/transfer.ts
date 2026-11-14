@@ -8,7 +8,7 @@ import { clean, detailOf, detailText, LINK_RULE, storedDetails, typeValues, webA
 import { fieldsOf } from "./lib/listings-query";
 import { loadSettings, onlyKnown } from "./lib/settings";
 import { LISTINGS, PLACE_FIELDS, typeBySlug, type ListingType } from "./lib/types";
-import { asRecord, asString, nowIso, readCursor } from "./lib/util";
+import { asRecord, asString, nowIso, readCursor, nil, notApplied } from "./lib/util";
 
 type Ctx = PluginContext;
 const fail = (code: string, message: string) => ({ ok: false, error: { code, message } });
@@ -201,7 +201,7 @@ export async function importCsv(input: unknown, ctx: Ctx) {
 	if (!importing) return { ok: true, checked: true, ...summary };
 	if (!ctx.content?.create) return fail("CONTENT_UNAVAILABLE", "The listings collection is not set up on this site.");
 	const started = Date.now();
-	const recent = good.length ? await ctx.content.list(LISTINGS, { where: { status: "draft" }, limit: 100 }).catch(() => null) : null;
+	const recent = good.length ? await ctx.content.list(LISTINGS, { where: { status: "draft" }, limit: 100 }).catch(nil) : null;
 	const fields = await fieldsOf(ctx, settings.fields);
 	const orphans = new Map<string, string>();
 	// A draft an import request made before it was cut off: created by the plugin (EmDash records no
@@ -233,7 +233,7 @@ export async function importCsv(input: unknown, ctx: Ctx) {
 		const orphan = orphans.get(key(item.data.title, item.data.city));
 		if (orphan) {
 			// Created by a request that was cut off: it gets its queue row now, unless it has one.
-			const adopted = await ctx.storage.submissions.compareAndSet(orphan, null, queueRow(orphan, item)).catch(() => ({ applied: false }));
+			const adopted = await ctx.storage.submissions.compareAndSet(orphan, null, queueRow(orphan, item)).catch(notApplied);
 			if (adopted.applied) imported += 1;
 			else duplicates.push({ line: item.line, title: item.data.title, city: item.data.city });
 			continue;

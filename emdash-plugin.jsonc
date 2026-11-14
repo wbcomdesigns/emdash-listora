@@ -36,31 +36,34 @@
 	"allowedHosts": [],
 	"storage": {
 		"submissions": {
-			"indexes": ["status", "createdAt", "title", "member_id", "tl", "gone", "owner_email"]
+			"indexes": ["status", "createdAt", "title", "member_id", "tl", "gone", "owner_email", ["member_id", "createdAt"]]
 		},
 		"directory": {
-			"indexes": ["vis", "pub", "type", "tl", "feat", "avg", "rc", "exp", ["vis", "type", "n1"], ["vis", "type", "n2"], ["vis", "type", "n3"], ["vis", "type", "ch", "feat"], ["vis", "cat", "feat"], ["vis", "cy", "feat"]]
+			"indexes": ["vis", "pub", "type", "tl", "feat", "avg", "rc", "exp", ["vis", "type", "n1"], ["vis", "type", "n2"], ["vis", "type", "n3"], ["vis", "type", "ch", "feat"], ["vis", "cy", "feat"], ["vis", "type", "feat"], ["vis", "type", "avg"], ["vis", "type", "tl"], ["vis", "feat"], ["vis", "avg"], ["vis", "tl"]]
+		},
+		"dircats": {
+			"indexes": [["cat", "vis", "feat"], ["cat", "vis", "avg"], ["cat", "vis", "tl"], ["cat", "vis", "type", "n1"], ["cat", "vis", "type", "n2"], ["cat", "vis", "type", "n3"], ["cat", "vis", "cy", "feat"], ["cat", "vis", "type", "ch", "feat"]]
 		},
 		"events": {
 			"indexes": []
 		},
 		"reviews": {
-			"indexes": ["status", "listingId", "member_id", "createdAt", "reply_status", "reply_by", "stars", ["listingId", "status", "createdAt"]]
+			"indexes": ["status", "listingId", "member_id", "createdAt", "reply_status", "reply_by", "stars", ["listingId", "status", "createdAt"], ["reply_status", "createdAt"], ["member_id", "createdAt"]]
 		},
 		"claims": {
-			"indexes": ["status", "listingId", "member_id", "createdAt"]
+			"indexes": ["status", "listingId", "member_id", "createdAt", ["member_id", "createdAt"]]
 		},
 		"favorites": {
 			"indexes": ["member_id", "listingId", "createdAt", ["member_id", "createdAt"]]
 		},
 		"photos": {
-			"indexes": ["status", "listingId", "member_id", "createdAt"]
+			"indexes": ["status", "listingId", "member_id", "createdAt", ["member_id", "createdAt"]]
 		},
 		"edits": {
-			"indexes": ["status", "listingId", "member_id", "createdAt"]
+			"indexes": ["status", "listingId", "member_id", "createdAt", ["member_id", "createdAt"]]
 		},
 		"contacts": {
-			"indexes": ["listingId", "createdAt", "status", "notice", "owner_done", ["listingId", "createdAt"]]
+			"indexes": ["listingId", "createdAt", "status", "notice", "owner_done", ["listingId", "createdAt"], ["notice", "createdAt"]]
 		},
 		"notice_queue": {
 			"indexes": ["listingId"]

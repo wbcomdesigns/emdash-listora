@@ -1,17 +1,17 @@
 import type { PluginContext, SandboxedPlugin } from "emdash/plugin";
 
 import { handleAdmin } from "./admin";
-import { categoryOf, hideListing, indexListing } from "./lib/directory";
+import { catsOf, hideListing, indexListing } from "./lib/directory";
 import { readRating } from "./lib/ratings";
 import { loadSettings } from "./lib/settings";
 import { webAddress } from "./lib/edits";
 import { LISTINGS, typeBySlug } from "./lib/types";
-import { asNumber, asRecord, asString } from "./lib/util";
+import { asNumber, asRecord, asString, nil, none } from "./lib/util";
 import { sampleRoute } from "./lib/onboard";
 import { ownerOf } from "./lib/listings-query";
 import { claim, dashboard, edit, favorites, message, photo, photoRemove, privacy, renew, reply, review, submit } from "./member";
 import { contact, duplicate, listings, mapPoints, ratings, reviews, suggest } from "./public";
-import { expireAndWarn, notifyOwners, runUpgrade, scheduleAll, sweep, tidy } from "./tasks";
+import { expireAndWarn, notifyOwners, runUpgrade, scheduleAll, sweep, sweepCats, tidy } from "./tasks";
 import { exportCsv, importCsv } from "./transfer";
 import { PHOTO_MAX_BYTES } from "./lib/photos";
 export { imageType } from "./lib/photos";
@@ -30,15 +30,16 @@ const itemOf = (content: unknown) => content as Item;
 /**
  * A listing changed state: bring its directory row up to date. Three calls when the row exists (the
  * settings, for the type's sort slots, its categories and a merge), six when the listing is new to
- * the index (its rating and its starting expiry date are read). A plugin's own publish runs this too, after the
- * call that published.
+ * the index (its rating and its starting expiry date are read), then its category rows (one call when
+ * they are the same, two or three when not). A plugin's own publish runs this too, after the call
+ * that published.
  */
 async function indexFromHook(ctx: PluginContext, content: unknown): Promise<void> {
 	const item = itemOf(content);
 	if (!item?.id) return;
 	if (item.status !== "published") return hideListing(ctx, item.id);
-	const [{ types }, cat] = await Promise.all([loadSettings(ctx), categoryOf(ctx, item.id)]);
-	await indexListing(ctx, item, types, async () => asNumber(asRecord(await ctx.storage.submissions.get(item.id).catch(() => null)).expires_at) ?? 0, cat);
+	const [{ types }, cats] = await Promise.all([loadSettings(ctx), catsOf(ctx, item.id)]);
+	await indexListing(ctx, item, types, async () => asNumber(asRecord(await ctx.storage.submissions.get(item.id).catch(nil)).expires_at) ?? 0, cats);
 }
 
 /**
@@ -67,10 +68,11 @@ const plugin: SandboxedPlugin = {
 				if (task === "notify" || task === "notify-more") await notifyOwners(ctx, event.name);
 				else if (task === "expire" || task === "expire-more") await expireAndWarn(ctx, event.name);
 				else if (task === "tidy") await tidy(ctx);
-				else if (task === "sweep" || task === "sweep-more") await sweep(ctx, event.name);
+				else if (task === "sweep" || task === "sweep-more") await sweep(ctx, event.name, event.data);
+				else if (task.startsWith("sweep-cats")) await sweepCats(ctx, event.data);
 				else if (task === "upgrade") await runUpgrade(ctx, event.name);
 				// The per-minute sample task of 0.7.x: the kit's sample page loads it now.
-				else if (event.name === "sample") await ctx.cron?.cancel("sample").catch(() => undefined);
+				else if (event.name === "sample") await ctx.cron?.cancel("sample").catch(none);
 			},
 		},
 		// The directory index follows every listing's state. EmDash tells the plugin when one changes.
@@ -89,7 +91,7 @@ const plugin: SandboxedPlugin = {
 			handler: async (event, ctx) => {
 				if (event.collection !== LISTINGS) return;
 				const id = asString(asRecord(event.content).id);
-				await ctx.storage.submissions.updateIf(id, { where: { gone: true }, set: { gone: false } }).catch(() => undefined);
+				await ctx.storage.submissions.updateIf(id, { where: { gone: true }, set: { gone: false } }).catch(none);
 				await indexFromHook(ctx, event.content);
 			},
 		},
@@ -98,7 +100,7 @@ const plugin: SandboxedPlugin = {
 			handler: async (event, ctx) => {
 				if (event.collection !== LISTINGS) return;
 				await hideListing(ctx, event.id);
-				await ctx.storage.submissions.updateIf(event.id, { where: {}, set: { gone: true } }).catch(() => undefined);
+				await ctx.storage.submissions.updateIf(event.id, { where: {}, set: { gone: true } }).catch(none);
 			},
 		},
 		// A save that changed the live listing (a listings type without drafts): the index follows it.
@@ -149,7 +151,7 @@ const plugin: SandboxedPlugin = {
 				ok: true,
 				plugin: ctx.plugin.id,
 				version: ctx.plugin.version,
-				listingsCollection: Boolean(await ctx.schema?.getCollection(LISTINGS).catch(() => null)),
+				listingsCollection: Boolean(await ctx.schema?.getCollection(LISTINGS).catch(nil)),
 			}),
 		},
 		// Every type with its fields, hidden ones included (their listings still show the name): the kit

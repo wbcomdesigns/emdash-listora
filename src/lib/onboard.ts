@@ -6,7 +6,7 @@ import { publishNow } from "./listings-query";
 import { V } from "./ratings";
 import { loadSettings, onlyKnown } from "./settings";
 import { DEMO_MEMBER, LISTINGS } from "./types";
-import { asNumber, asRecord, asString, nowIso } from "./util";
+import { asNumber, asRecord, asString, nowIso, nil } from "./util";
 
 /**
  * The sample directory. Its rows live in the site kit (`lib/listora-sample.json`); the kit's admin-only
@@ -66,13 +66,13 @@ export async function sampleRoute(input: unknown, ctx: PluginContext) {
 	if (step === "start") {
 		// Part way already: go on from there.
 		if (running(saved)) return answer(saved);
-		if (!(await ctx.schema?.getCollection(LISTINGS).catch(() => null))) return fail("NO_COLLECTION", "Create a listings collection first, then load sample data.");
+		if (!(await ctx.schema?.getCollection(LISTINGS).catch(nil))) return fail("NO_COLLECTION", "Create a listings collection first, then load sample data.");
 		// Samples already on the site, however many listings it has: looked up by their titles (lower
 		// case) in the directory index (published ones) and the queue (waiting ones, and every sample
 		// loaded since 0.7.0), at most 50 titles per read. A listing deleted since is not counted.
 		const tl = [...new Set(rows.map((row) => clean(row.title).toLowerCase()).filter(Boolean))].slice(0, 50);
 		const where = { tl: { in: tl } };
-		const found = tl.length ? await Promise.all([ctx.storage.directory.query({ where, limit: 100 }), ctx.storage.submissions.query({ where, limit: 100 })]).catch(() => null) : [{ items: [] }, { items: [] }];
+		const found = tl.length ? await Promise.all([ctx.storage.directory.query({ where, limit: 100 }), ctx.storage.submissions.query({ where, limit: 100 })]).catch(nil) : [{ items: [] }, { items: [] }];
 		if (!found) return fail("READ_FAILED", "The directory could not be read just now. Try again in a moment.");
 		const ids: Record<string, string> = {};
 		for (const item of found.flatMap((page) => page.items)) {

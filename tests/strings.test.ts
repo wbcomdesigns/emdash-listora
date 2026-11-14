@@ -67,7 +67,7 @@ describe("visitor wording", () => {
 
 	it("turns error codes into plain sentences", () => {
 		expect(phrase("SIGN_IN_REQUIRED")).toBe("Sign in to continue.");
-		expect(phrase("RATE_LIMITED")).toBe("Too many requests. Try again in an hour.");
+		expect(phrase("RATE_LIMITED")).toBe("Too many requests. Try again when the next hour starts.");
 		expect(phrase("OFFLINE")).toBe("Could not reach the site. Check your connection and try again.");
 		expect(phrase("NOT_A_CODE")).toBe("Something went wrong. Try again.");
 		expect(phrase()).toBe("Something went wrong. Try again.");

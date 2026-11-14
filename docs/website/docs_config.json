@@ -54,6 +54,7 @@
       "pages": [
         { "slug": "plugin-and-site-kit", "title": "Plugin, site kit, and host" },
         { "slug": "routes", "title": "Plugin routes" },
+        { "slug": "outside-sync", "title": "Sync listings from an outside source" },
         { "slug": "site-kit", "title": "Site kit" }
       ]
     },

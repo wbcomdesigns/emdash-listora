@@ -11,7 +11,7 @@ import { mirrorRating, moveRating, partOf, starsOf } from "./lib/ratings";
 import { openRef, refKey, sealRef } from "./lib/refs";
 import { loadSettings, photosOn, type Settings } from "./lib/settings";
 import { LISTINGS, PLACE_FIELDS, SUBMITTER_IS_OWNER, shownTypes, typeBySlug } from "./lib/types";
-import { asBoolean, asNumber, asRecord, asString, asStringArray, nowIso, parseJson, readCursor } from "./lib/util";
+import { asBoolean, asNumber, asRecord, asString, asStringArray, nowIso, parseJson, readCursor, none, notApplied } from "./lib/util";
 
 type Ctx = PluginContext;
 export type Member = { id: string; name: string | null; email?: string | null; role: number };
@@ -188,7 +188,7 @@ export async function submit(routeCtx: { user?: unknown; input: unknown }, ctx: 
 	if (termCalls && ctx.taxonomies?.addEntryTerms) {
 		let term = settings.terms[wanted];
 		if (!term && spend(b)) term = (await ctx.taxonomies.getTerms("listing_category").catch(() => [])).find((item) => item.slug === wanted)?.id ?? "";
-		if (term && spend(b)) await ctx.taxonomies.addEntryTerms(LISTINGS, created.id, "listing_category", [term]).catch(() => undefined);
+		if (term && spend(b)) await ctx.taxonomies.addEntryTerms(LISTINGS, created.id, "listing_category", [term]).catch(none);
 	}
 
 	// Moderation off means the listing goes live now, not into a queue nobody reads.
@@ -197,7 +197,7 @@ export async function submit(routeCtx: { user?: unknown; input: unknown }, ctx: 
 		spend(b, 2);
 		published = await publishNow(ctx, created.id);
 		const status = published ? "approved" : "pending";
-		await ctx.storage.submissions.updateIf(created.id, { where: { status: "approving" }, set: { status, ...(published ? {} : { expires_at: 0 }) } }).catch(() => undefined);
+		await ctx.storage.submissions.updateIf(created.id, { where: { status: "approving" }, set: { status, ...(published ? {} : { expires_at: 0 }) } }).catch(none);
 	}
 	return { ok: true, listing: { id: created.id, slug: created.slug, title: parsed.data.title }, pendingReview: !published };
 }
@@ -470,7 +470,7 @@ export async function photo(routeCtx: { user?: unknown; input: unknown; request:
 	if (!limit || !ctx.media?.upload) return fail("PHOTOS_OFF", "Photos are not turned on for this site.");
 	const mine = { member_id: user.id, status: { in: ["pending", "approved"] } };
 	spend(b);
-	let taken = (await ctx.storage.submissions.updateIf(listingId, { where: { ...mine, photo_n: { lt: limit } }, delta: { photo_n: { inc: 1 } } }).catch(() => ({ applied: false as const }))).applied;
+	let taken = (await ctx.storage.submissions.updateIf(listingId, { where: { ...mine, photo_n: { lt: limit } }, delta: { photo_n: { inc: 1 } } }).catch(notApplied)).applied;
 	let counted = false;
 	if (!taken) {
 		spend(b);
@@ -480,11 +480,11 @@ export async function photo(routeCtx: { user?: unknown; input: unknown; request:
 		spend(b, 2);
 		const have = await ctx.storage.photos.count({ listingId, status: { in: ["pending", "approving", "approved"] } });
 		if (have >= limit) return fail("LIMIT", `This listing already has ${limit} photos. Remove one that is waiting, or ask the site to remove one.`);
-		taken = (await ctx.storage.submissions.updateIf(listingId, { where: { ...mine, photo_n: null }, set: { photo_n: have + 1 } }).catch(() => ({ applied: false as const }))).applied;
+		taken = (await ctx.storage.submissions.updateIf(listingId, { where: { ...mine, photo_n: null }, set: { photo_n: have + 1 } }).catch(notApplied)).applied;
 		if (!taken) return fail("BUSY", "Another photo is being added to this listing. Try again in a moment.");
 		counted = true;
 	}
-	const release = () => ctx.storage.submissions.updateIf(listingId, { where: { photo_n: { gte: 1 } }, delta: { photo_n: { dec: 1 } } }).catch(() => undefined);
+	const release = () => ctx.storage.submissions.updateIf(listingId, { where: { photo_n: { gte: 1 } }, delta: { photo_n: { dec: 1 } } }).catch(none);
 	if (!counted) {
 		spend(b, 2);
 		const limited = await rateLimited(ctx, "photo", user.id);
@@ -537,12 +537,12 @@ export async function photoRemove(routeCtx: { user?: unknown; input: unknown }, 
 	const GONE = fail("NOT_FOUND", "That photo is not available to remove.");
 	// Take the row out of "pending" first, in the database, for this member only. If an admin is
 	// approving it at this moment, only one of the two can win, and the file is deleted only by the winner.
-	const claimed = id ? await ctx.storage.photos.updateIf(id, { where: { status: "pending", member_id: user.id }, set: { status: "removing" } }).catch(() => ({ applied: false as const })) : { applied: false as const };
+	const claimed = id ? await ctx.storage.photos.updateIf(id, { where: { status: "pending", member_id: user.id }, set: { status: "removing" } }).catch(notApplied) : { applied: false as const };
 	if (!claimed.applied) return GONE;
 	const row = asRecord(claimed.data);
 	await ctx.media?.delete?.(asString(row.mediaId)).catch(() => false);
 	await ctx.storage.photos.delete(id);
-	await ctx.storage.submissions.updateIf(asString(row.listingId), { where: { photo_n: { gte: 1 } }, delta: { photo_n: { dec: 1 } } }).catch(() => undefined);
+	await ctx.storage.submissions.updateIf(asString(row.listingId), { where: { photo_n: { gte: 1 } }, delta: { photo_n: { dec: 1 } } }).catch(none);
 	return { ok: true, id };
 }
 
@@ -839,7 +839,7 @@ async function eraseStep(ctx: Ctx, memberId: string) {
 			}
 			for (const row of waiting) {
 				await ctx.media?.delete?.(asString(row.mediaId)).catch(() => false);
-				await ctx.storage.submissions.updateIf(asString(row.listingId), { where: { photo_n: { gte: 1 } }, delta: { photo_n: { dec: 1 } } }).catch(() => undefined);
+				await ctx.storage.submissions.updateIf(asString(row.listingId), { where: { photo_n: { gte: 1 } }, delta: { photo_n: { dec: 1 } } }).catch(none);
 			}
 			const gone = [...kept, ...waiting].map((row) => row.id);
 			if (gone.length) await ctx.storage.photos.deleteMany(gone);

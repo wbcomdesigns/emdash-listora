@@ -1,6 +1,6 @@
 import type { PluginContext } from "emdash/plugin";
 
-import { cardOf, matches, whereOf, orderOf, readFilters, readPosition, readRows, readSlotRows, scanned, slotOf, slotRefusal, visible, type DirRow } from "./lib/directory";
+import { cardOf, catWhere, fits, matches, whereOf, orderOf, readFilters, readPosition, readRows, readSlotRows, scanned, slotOf, slotRefusal, visible, type DirRow } from "./lib/directory";
 import { withType } from "./lib/catalog";
 import { clean } from "./lib/edits";
 import { ownerOf, publicListing } from "./lib/listings-query";
@@ -9,7 +9,7 @@ import { readRating } from "./lib/ratings";
 import { loadSettings, type Settings } from "./lib/settings";
 import { budget } from "./lib/budget";
 import { indexReady, nudgeUpgrade } from "./lib/upgrade";
-import { asNumber, asRecord, asString, nowIso, readCursor } from "./lib/util";
+import { asNumber, asRecord, asString, nowIso, readCursor, nil, none } from "./lib/util";
 import { NO_LISTING, plainEmail } from "./member";
 
 type Ctx = PluginContext;
@@ -25,10 +25,13 @@ const BUILDING = fail("INDEX_BUILDING", "The directory is being prepared after a
 
 /**
  * The directory index is still being built after an update. EmDash runs no hook on an update, so the
- * visitor's request starts the upgrade when nothing has run it for two minutes. Up to two calls.
+ * visitor's request starts the upgrade when nothing has run it for two minutes. A short mark taken
+ * with a compare-and-set first, so of a stream of visitors one a minute gets that far and may write
+ * the task (#91). Up to four calls.
  */
 async function building(ctx: Ctx, settings: Settings) {
-	await nudgeUpgrade(ctx, settings, budget(1));
+	const mark = await ctx.kv.getVersioned<number>("state:nudge").catch(nil);
+	if (Date.now() - (Number(mark?.value) || 0) > 60_000 && (await ctx.kv.compareAndSet("state:nudge", mark?.revision ?? null, Date.now()).catch(nil))?.applied) await nudgeUpgrade(ctx, settings, budget(3));
 	return BUILDING;
 }
 const READ_FAILED = fail("READ_FAILED", "The directory could not be read just now. Try again in a moment.");
@@ -39,7 +42,8 @@ const BAD_POSITION = fail("VALIDATION_ERROR", "That page of results could not be
  * exact city) are part of the read; the rest (text, place, feature, distance) are checked row by row over at most SCAN_READS
  * storage pages. The answer carries `cursor` for the next page, and `total` only when it is exact.
  * Pages go by cursor: `page` above 1 is refused, never answered with the wrong rows. A slot sort
- * (`sort` n1 to n3, `order` asc or desc) is taken only with a type that fills that slot.
+ * (`sort` n1 to n3, `order` asc or desc) is taken only with a type that fills that slot. A category
+ * is read from its category rows, each page with its listings' own rows (two calls a page).
  * Worst case 7 calls: settings and six pages (a scan), or settings, two counts and two pages (a slot sort).
  */
 export async function listings(input: unknown, ctx: Ctx) {
@@ -55,27 +59,32 @@ export async function listings(input: unknown, ctx: Ctx) {
 	const slot = slotOf(f);
 	const perPage = Math.min(Math.max(Math.floor(asNumber(raw.per_page) ?? PER_PAGE), 1), 60);
 	const where = whereOf(f);
+	const cat = Boolean(f.category);
 	const scan = scanned(f);
 	const now = Date.now();
-	const keep = (row: DirRow) => visible(row, now) && (!scan || matches(cardOf(row), f));
+	const keep = (row: DirRow) => visible(row, now) && fits(row, where) && (!scan || matches(cardOf(row), f));
 	const card = (row: DirRow) => withType(cardOf(row), settings.types);
-	// `ids` (100 at most, from EmDash's site search): those listings that pass the filters, in the order sent. Two calls.
+	// `ids` (100 at most, from EmDash's site search): those listings that pass the filters, in the order sent. Two calls, three in a category.
 	const ids = asString(raw.ids).split(",").filter(Boolean).slice(0, 100);
 	try {
 		if (ids.length) {
-			const rows = await ctx.storage.directory.getMany(ids);
-			const items = ids.map((id) => ({ ...asRecord(rows.get(id)), id }) as DirRow).filter((row) => keep(row) && Object.entries(where).every(([field, value]) => row[field] === value));
+			const [rows, inCat] = await Promise.all([ctx.storage.directory.getMany(ids), cat ? ctx.storage.dircats.getMany(ids.map((id) => `${f.category}:${id}`)) : null]);
+			const items = ids.map((id) => ({ ...asRecord(rows.get(id)), id }) as DirRow).filter((row) => keep(row) && (!inCat || inCat.has(`${f.category}:${row.id}`)));
 			return { ok: true, items: items.map(card), total: null, per_page: items.length, cursor: null };
 		}
+		// Read twice a page (100 at most): a listing past its date that the daily task has not marked yet
+		// is left out, and must not leave the page short.
+		const reads = scan ? (cat ? 3 : SCAN_READS) : slot ? 2 : 1;
+		const limit = scan ? 100 : Math.min(perPage * 2, 100);
+		const source = cat ? catWhere(f) : where;
 		// The total leaves out listings past their date that the daily task has not marked yet: two counts.
+		// In a category, one count of its rows; a listing past its date counts there until the daily task marks it.
 		const [page, never, later] = await Promise.all([
-			slot
-				? readSlotRows(ctx, where, slot, f.order, keep, perPage, from, scan ? SCAN_READS : 2, scan ? 100 : perPage)
-				: readRows(ctx, where, orderOf(f), keep, perPage, from, scan ? SCAN_READS : 1, scan ? 100 : perPage),
-			scan ? null : ctx.storage.directory.count({ ...where, exp: 0 }),
-			scan ? null : ctx.storage.directory.count({ ...where, exp: { gt: now } }),
+			slot ? readSlotRows(ctx, source, slot, f.order, keep, perPage, from, reads, limit, cat) : readRows(ctx, source, orderOf(f), keep, perPage, from, reads, limit, undefined, cat),
+			scan ? null : cat ? ctx.storage.dircats.count(source) : ctx.storage.directory.count({ ...where, exp: 0 }),
+			scan || cat ? 0 : ctx.storage.directory.count({ ...where, exp: { gt: now } }),
 		]);
-		return { ok: true, items: page.rows.map(card), total: scan ? null : (never ?? 0) + (later ?? 0), per_page: perPage, cursor: page.next };
+		return { ok: true, items: page.rows.map(card), total: never === null ? null : never + later, per_page: perPage, cursor: page.next };
 	} catch {
 		return READ_FAILED;
 	}
@@ -111,15 +120,21 @@ export async function mapPoints(input: unknown, ctx: Ctx) {
 	if (from === null) return BAD_POSITION;
 	const f = readFilters(raw);
 	const now = Date.now();
+	const where = whereOf(f);
+	const cat = Boolean(f.category);
 	try {
+		// In a category each page is two calls, so half the pages.
 		const page = await readRows(
 			ctx,
-			whereOf(f),
+			cat ? catWhere(f) : where,
 			undefined,
-			(row) => visible(row, now) && row.lat !== null && row.lng !== null && row.lat !== undefined && (!scanned(f) || matches(cardOf(row), f)),
+			(row) => visible(row, now) && fits(row, where) && row.lat !== null && row.lng !== null && row.lat !== undefined && (!scanned(f) || matches(cardOf(row), f)),
 			800,
 			from,
-			8,
+			cat ? 4 : 8,
+			100,
+			undefined,
+			cat,
 		);
 		return {
 			ok: true,
@@ -248,6 +263,6 @@ export async function contact(input: unknown, request: { requestMeta?: unknown }
 		notice: owner ? "waiting" : "none",
 		createdAt: nowIso(),
 	});
-	if (owner) await ctx.storage.notice_queue.put(id, { listingId, tries: 0 }).catch(() => undefined);
+	if (owner) await ctx.storage.notice_queue.put(id, { listingId, tries: 0 }).catch(none);
 	return { ok: true, id };
 }

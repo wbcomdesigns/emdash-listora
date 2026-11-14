@@ -11,7 +11,8 @@ import directoryPage from "../site-kit/pages/listings/index.astro?raw";
 import listingPage from "../site-kit/pages/listings/[slug].astro?raw";
 import submitPage from "../site-kit/pages/listings/submit.astro?raw";
 import { editPatch } from "../src/lib/edits";
-import { createPluginRuntimeTestHost, loadSample, publishListing, SAMPLE, settle, upgraded } from "./site";
+import { createPluginRuntimeTestHost, loadSample, minutesUntil, publishListing, SAMPLE, settle, upgraded } from "./site";
+import { asRecord } from "../src/lib/util";
 
 /** 0.8.0 step 7b (issue #102): the fixes from walk A, and the chips and poll slot added after step 7. */
 
@@ -125,9 +126,10 @@ describe("an owner's own type in the directory", () => {
 		const id = await publishListing(host, { title: "Late Watch", listing_type: "gadgets", type_fields: JSON.stringify({ kind: "Watch" }) });
 		expect(await host.inspect.storage.get<Record<string, unknown>>("directory", id)).not.toHaveProperty("ch");
 		await host.fixtures.plugin.setting("types", [GADGETS]);
+		// The hourly run finds the row out of date and starts the chain, which writes it a minute later.
 		await host.transport.invokeHook("cron", { name: "sweep", scheduledAt: new Date().toISOString() });
 		await settle();
-		expect(await host.inspect.storage.get<Record<string, unknown>>("directory", id)).toMatchObject({ ch: "Watch" });
+		await minutesUntil(host, async () => asRecord(await host.inspect.storage.get("directory", id)).ch === "Watch", 3);
 	});
 
 	it("has the composite index the chip filter reads", () => {

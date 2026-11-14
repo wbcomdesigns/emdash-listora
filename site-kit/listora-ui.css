@@ -2089,3 +2089,23 @@ textarea.listora-input {
 		flex-direction: column;
 	}
 }
+
+/* Tap targets of at least --listora-tap-target on phones (#87): card titles, breadcrumb links and the
+   map's zoom buttons measured 22, 17 and 30px at 390. */
+@media (max-width: 640px) {
+	.listora-card-body h3 a,
+	.listora-detail__breadcrumb a {
+		display: inline-flex;
+		align-items: center;
+		min-height: var(--listora-tap-target);
+	}
+	.listora-detail__breadcrumb ol {
+		align-items: center;
+	}
+	.listora-map.leaflet-container .leaflet-bar a,
+	.listora-detail .leaflet-container .leaflet-bar a {
+		width: var(--listora-tap-target);
+		height: var(--listora-tap-target);
+		line-height: var(--listora-tap-target);
+	}
+}

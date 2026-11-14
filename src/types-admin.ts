@@ -23,7 +23,7 @@ import {
 	type ListingType,
 	type TypeField,
 } from "./lib/types";
-import { asBoolean, asRecord, asString } from "./lib/util";
+import { asBoolean, asRecord, asString, nil, none, kContext, kDivider, kHeader, kActions } from "./lib/util";
 import { SWEEP } from "./tasks";
 
 /**
@@ -53,7 +53,7 @@ const nameIn = (list: ReadonlyArray<readonly [string, string]>, value: string) =
 const fail = (message: string): Toast => ({ message, type: "error" });
 
 function page(title: string, toast: Toast | undefined, blocks: BlockMap[]): Response {
-	return { blocks: [{ type: "header", text: title }, ...blocks], toast };
+	return { blocks: [kHeader(title), ...blocks], toast };
 }
 
 /** A select from a fixed list, offering the current value too when it is not on the list (set before the list existed). */
@@ -171,7 +171,7 @@ async function renderList(ctx: Ctx, settings: Settings, b: Budget, offset: numbe
 	const at = Math.min(Math.max(0, Math.floor(offset) || 0), Math.max(0, types.length - 1));
 	const shown = types.slice(at, at + TYPES_PAGE);
 	// One count per row. Without room (a call that already spent its calls), the column says "-".
-	const counts = shown.length && spend(b, shown.length) ? await Promise.all(shown.map((type) => ctx.storage.directory.count({ type: type.slug }).catch(() => null))) : [];
+	const counts = shown.length && spend(b, shown.length) ? await Promise.all(shown.map((type) => ctx.storage.directory.count({ type: type.slug }).catch(nil))) : [];
 	// Five columns, the type's name (the button that opens it) first: a phone shows the way in
 	// without scrolling sideways. Block Kit tables have no narrow-screen layout of their own.
 	const rows = shown.map((type, index) => ({
@@ -183,7 +183,7 @@ async function renderList(ctx: Ctx, settings: Settings, b: Budget, offset: numbe
 	}));
 	const custom = types.filter((type) => !type.builtin).length;
 	return page("Listing types", toast, [
-		{ type: "context", text: "Types group your listings and decide which extra fields the listing form asks for. Built-in types can be edited or hidden. Your own types can be deleted while no listing uses them. Choose a type's name to edit it and its fields." },
+		kContext("Types group your listings and decide which extra fields the listing form asks for. Built-in types can be edited or hidden. Your own types can be deleted while no listing uses them. Choose a type's name to edit it and its fields."),
 		{ type: "stats", items: [{ label: "Types", value: types.length }, { label: "Hidden", value: types.filter((type) => type.hidden).length }] },
 		{
 			type: "table",
@@ -198,14 +198,14 @@ async function renderList(ctx: Ctx, settings: Settings, b: Budget, offset: numbe
 			],
 			rows,
 		},
-		{ type: "context", text: `${types.length} types, ${TYPES_PAGE} per page. Listings counts published listings, and listings that were published once.` },
-		...(at > 0 ? [{ type: "actions", elements: [{ type: "button", label: "Previous page", action_id: "types_page", value: { cursor: String(Math.max(0, at - TYPES_PAGE)) } }] }] : []),
-		{ type: "divider" },
-		{ type: "header", text: "Add a type" },
+		kContext(`${types.length} types, ${TYPES_PAGE} per page. Listings counts published listings, and listings that were published once.`),
+		...(at > 0 ? [kActions([{ type: "button", label: "Previous page", action_id: "types_page", value: { cursor: String(Math.max(0, at - TYPES_PAGE)) } }])] : []),
+		kDivider,
+		kHeader("Add a type"),
 		...(custom >= MAX_CUSTOM_TYPES
-			? [{ type: "context", text: `This site has ${MAX_CUSTOM_TYPES} types of its own, the most it can have. Delete one you no longer use to add another.` }]
+			? [kContext(`This site has ${MAX_CUSTOM_TYPES} types of its own, the most it can have. Delete one you no longer use to add another.`)]
 			: [
-					{ type: "context", text: "Add its fields on the next screen." },
+					kContext("Add its fields on the next screen."),
 					{
 						type: "form",
 						block_id: "type_add",
@@ -220,7 +220,7 @@ async function renderType(ctx: Ctx, settings: Settings, b: Budget, slug: string,
 	const type = settings.types.find((item) => item.slug === slug);
 	if (!type) return renderList(ctx, settings, b, 0, toast ?? fail("That type no longer exists."));
 	const token = typeToken(type);
-	const count = spend(b) ? await ctx.storage.directory.count({ type: slug }).catch(() => null) : null;
+	const count = spend(b) ? await ctx.storage.directory.count({ type: slug }).catch(nil) : null;
 	const ref = `${slug}|${token}`;
 	const fieldRows = type.fields.map((field) => ({
 		label: field.label,
@@ -232,13 +232,11 @@ async function renderType(ctx: Ctx, settings: Settings, b: Budget, slug: string,
 		edit: { type: "button", label: "Edit", action_id: "field_open", value: `${slug}|${field.key}` },
 	}));
 	return page(type.name, toast, [
-		{ type: "actions", elements: [{ type: "button", label: "Back to all types", action_id: "types_page", value: { cursor: "0" } }] },
+		kActions([{ type: "button", label: "Back to all types", action_id: "types_page", value: { cursor: "0" } }]),
 		{ type: "stats", items: [{ label: "Listings", value: count == null ? "-" : count }, { label: "Fields", value: type.fields.length }] },
-		{ type: "context", text: type.hidden ? "Hidden: not offered for new listings. Listings that have it still show it." : "Shown: offered on the listing form." },
+		kContext(type.hidden ? "Hidden: not offered for new listings. Listings that have it still show it." : "Shown: offered on the listing form."),
 		{ type: "form", block_id: `type|${ref}`, fields: typeFormFields(drafts.type ? draftType(drafts.type) : type), submit: { label: "Save type", action_id: "type_save" } },
-		{
-			type: "actions",
-			elements: [
+		kActions([
 				{ type: "button", label: type.hidden ? "Show on the form" : "Hide from the form", action_id: type.hidden ? "type_show" : "type_hide", value: ref },
 				...(type.builtin
 					? []
@@ -252,12 +250,11 @@ async function renderType(ctx: Ctx, settings: Settings, b: Budget, slug: string,
 								confirm: { title: `Delete ${type.name}?`, text: "Only while no listing uses it. This cannot be undone.", confirm: "Delete", deny: "Cancel", style: "danger" },
 							},
 						]),
-			],
-		},
-		...(type.builtin ? [{ type: "context", text: "Built-in types can be hidden, not deleted." }] : []),
-		{ type: "divider" },
-		{ type: "header", text: "Fields" },
-		{ type: "context", text: "Extra details the listing form asks for. Removing a field keeps what listings already have, but it is no longer shown or asked for." },
+			]),
+		...(type.builtin ? [kContext("Built-in types can be hidden, not deleted.")] : []),
+		kDivider,
+		kHeader("Fields"),
+		kContext("Extra details the listing form asks for. Removing a field keeps what listings already have, but it is no longer shown or asked for."),
 		fieldRows.length
 			? {
 					type: "table",
@@ -274,9 +271,9 @@ async function renderType(ctx: Ctx, settings: Settings, b: Budget, slug: string,
 					rows: fieldRows,
 				}
 			: { type: "empty", title: "No extra fields", description: "Add one below. The listing form then asks for it on this type." },
-		{ type: "header", text: "Add a field" },
+		kHeader("Add a field"),
 		...(type.fields.length >= MAX_FIELDS
-			? [{ type: "context", text: `${type.name} has ${MAX_FIELDS} fields, the most a type can have.` }]
+			? [kContext(`${type.name} has ${MAX_FIELDS} fields, the most a type can have.`)]
 			: [{ type: "form", block_id: `field_add|${ref}`, fields: fieldFormFields(drafts.field ? draftField(drafts.field) : fieldShown(null)), submit: { label: "Add field", action_id: "field_add" } }]),
 	]);
 }
@@ -287,11 +284,9 @@ function renderField(settings: Settings, slug: string, key: string, toast?: Toas
 	if (!type || !field) return null;
 	const ref = `${slug}|${key}|${typeToken(type)}`;
 	return page(`${type.name}: ${field.label}`, toast, [
-		{ type: "actions", elements: [{ type: "button", label: `Back to ${type.name}`, action_id: "type_open", value: slug }] },
+		kActions([{ type: "button", label: `Back to ${type.name}`, action_id: "type_open", value: slug }]),
 		{ type: "form", block_id: `field|${ref}`, fields: fieldFormFields(draft ? draftField(draft) : fieldShown(field)), submit: { label: "Save field", action_id: "field_save" } },
-		{
-			type: "actions",
-			elements: [
+		kActions([
 				{
 					type: "button",
 					label: "Remove field",
@@ -300,8 +295,7 @@ function renderField(settings: Settings, slug: string, key: string, toast?: Toas
 					value: ref,
 					confirm: { title: `Remove ${field.label}?`, text: "Listings keep what was entered, but it is no longer shown or asked for.", confirm: "Remove", deny: "Cancel", style: "danger" },
 				},
-			],
-		},
+			]),
 	]);
 }
 
@@ -338,8 +332,8 @@ async function change(ctx: Ctx, settings: Settings, b: Budget, slug: string, tok
  */
 async function startBackfill(ctx: Ctx, b: Budget): Promise<void> {
 	if (!spend(b, 2)) return;
-	await ctx.kv.set(SWEEP, "").catch(() => undefined);
-	await ctx.cron?.schedule("sweep-more", { schedule: new Date().toISOString() }).catch(() => undefined);
+	await ctx.kv.set(SWEEP, "").catch(none);
+	await ctx.cron?.schedule("sweep-more", { schedule: new Date().toISOString() }).catch(none);
 }
 
 /** Add a type: a new slug, so nothing can be overwritten; the guarded write stops two adds at once. */

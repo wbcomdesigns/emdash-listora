@@ -328,7 +328,17 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 	form.querySelectorAll<HTMLInputElement>('input[name="listing_type"]').forEach((input) => {
 		input.addEventListener("change", renderTypeFields);
 	});
+	// While typing: the "Enter a title." error clears as soon as there is one, and the duplicate check
+	// runs once typing pauses, not only when the field loses focus (#87).
+	let dupTimer: ReturnType<typeof setTimeout> | undefined;
+	document.getElementById("title")?.addEventListener("input", (event) => {
+		const value = (event.target as HTMLInputElement).value;
+		if (value.trim()) setFieldError("title", "title-error", false);
+		clearTimeout(dupTimer);
+		dupTimer = setTimeout(() => checkDuplicate(value), 600);
+	});
 	document.getElementById("title")?.addEventListener("blur", (event) => {
+		clearTimeout(dupTimer);
 		checkDuplicate((event.target as HTMLInputElement).value);
 	});
 	document.querySelectorAll<HTMLButtonElement>("#wizard-steps button").forEach((button) => {

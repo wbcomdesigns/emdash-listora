@@ -1,14 +1,14 @@
 import type { PluginContext } from "emdash/plugin";
 
-import { budget, spend, type Budget } from "./lib/budget";
-import { categoryOf, listingPart, setPluginFields } from "./lib/directory";
+import { budget, left, spend, type Budget } from "./lib/budget";
+import { catRows, catsOf, listingPart, readPosition, setPluginFields, writePosition } from "./lib/directory";
 import { getListing, patchListing } from "./lib/listings-query";
 import { HOUR, windowOf } from "./lib/rates";
 import { drainRatingQueue, readRating } from "./lib/ratings";
 import { KEY, loadSettings, type Settings } from "./lib/settings";
 import { LISTINGS, NOTIFY_CRON } from "./lib/types";
 import { upgradeDone, upgradeStep } from "./lib/upgrade";
-import { asNumber, asRecord, asString } from "./lib/util";
+import { asNumber, asRecord, asString, asStringArray, nil, none } from "./lib/util";
 import { EMAIL_RE, emailKey } from "./member";
 
 type Ctx = PluginContext;
@@ -54,7 +54,7 @@ async function ownerAddress(ctx: Ctx, b: Budget, owner: string, row: Record<stri
 	const onRow = asString(row.owner_email);
 	if (EMAIL_RE.test(onRow)) return onRow;
 	if (!spend(b)) return "";
-	const kept = asString(await ctx.kv.get<string>(emailKey(owner)).catch(() => null));
+	const kept = asString(await ctx.kv.get<string>(emailKey(owner)).catch(nil));
 	return EMAIL_RE.test(kept) ? kept : "";
 }
 
@@ -73,7 +73,7 @@ export async function notifyOwners(ctx: Ctx, running?: string): Promise<void> {
 	if (running === "notify" && settings.tasksFor !== TASKS) {
 		// First hourly run after an update: schedule every task, and send the notices a minute later.
 		await scheduleAll(ctx, settings);
-		await ctx.cron?.schedule("notify-more", { schedule: soon() }).catch(() => undefined);
+		await ctx.cron?.schedule("notify-more", { schedule: soon() }).catch(none);
 		return;
 	}
 	spend(b);
@@ -144,7 +144,7 @@ export async function notifyOwners(ctx: Ctx, running?: string): Promise<void> {
 				text: `Visitors sent messages about your listing${site ? ` on ${site}` : ""}.\n\nSign in to your account on the site and open Messages to read them.`,
 			});
 			sent = true;
-			await ctx.storage.submissions.updateIf(listingId, { where: {}, set: { noticed: now } }).catch(() => undefined);
+			await ctx.storage.submissions.updateIf(listingId, { where: {}, set: { noticed: now } }).catch(none);
 		} catch (error) {
 			b.used -= 1;
 			if (NO_PROVIDER.test(error instanceof Error ? error.message : String(error))) {
@@ -162,12 +162,12 @@ export async function notifyOwners(ctx: Ctx, running?: string): Promise<void> {
 			}
 		}
 	}
-	if (back.length && spend(b)) await ctx.storage.notice_queue.putMany(back).catch(() => undefined);
+	if (back.length && spend(b)) await ctx.storage.notice_queue.putMany(back).catch(none);
 	// What the Messages page tells the admin: the site cannot send email, or it can again. With no
 	// provider the failed send's mark and the next run's call are free for it.
-	if ((noProvider ? !settings.noMail : sent && settings.noMail) && spend(b)) await ctx.settings.set(KEY.mail, noProvider ? "none" : "").catch(() => undefined);
+	if ((noProvider ? !settings.noMail : sent && settings.noMail) && spend(b)) await ctx.settings.set(KEY.mail, noProvider ? "none" : "").catch(none);
 	if (noProvider) return;
-	if ((due.length > picked.length || page.hasMore) && spend(b)) await ctx.cron?.schedule(nextStep(running, "notify-more"), { schedule: soon() }).catch(() => undefined);
+	if ((due.length > picked.length || page.hasMore) && spend(b)) await ctx.cron?.schedule(nextStep(running, "notify-more"), { schedule: soon() }).catch(none);
 }
 
 /**
@@ -191,14 +191,14 @@ export async function expireAndWarn(ctx: Ctx, running?: string): Promise<void> {
 		const listing = await getListing(ctx, item.id);
 		if (!listing || listing.status !== "published" || asRecord(listing.data).listing_status === "expired") {
 			b.used -= 1;
-			await ctx.storage.directory.updateIf(item.id, { where: {}, set: { vis: false } }).catch(() => undefined);
+			await ctx.storage.directory.updateIf(item.id, { where: {}, set: { vis: false } }).catch(none);
 			continue;
 		}
 		const patched = await patchListing(ctx, item.id, { listing_status: "expired" }, settings.fields, listing);
 		if (patched.state === "busy") await setPluginFields(ctx, item.id, { exp: now + DAY });
 	}
 	if (due.items.length > worked || (due.items.length && due.hasMore)) {
-		if (spend(b)) await ctx.cron?.schedule(nextStep(running, "expire-more"), { schedule: soon() }).catch(() => undefined);
+		if (spend(b)) await ctx.cron?.schedule(nextStep(running, "expire-more"), { schedule: soon() }).catch(none);
 		return;
 	}
 	if (due.items.length || !settings.emailExpiry || !ctx.email) return;
@@ -244,10 +244,10 @@ export async function expireAndWarn(ctx: Ctx, running?: string): Promise<void> {
 		for (const id of ids) {
 			spend(b);
 			const exp = asNumber(asRecord(waiting.find((item) => item.id === id)?.data).exp) ?? 0;
-			await ctx.storage.directory.updateIf(id, { where: { exp }, set: { warned: exp } }).catch(() => undefined);
+			await ctx.storage.directory.updateIf(id, { where: { exp }, set: { warned: exp } }).catch(none);
 		}
 	}
-	if ((left || soonPage.hasMore) && spend(b)) await ctx.cron?.schedule(nextStep(running, "expire-more"), { schedule: soon() }).catch(() => undefined);
+	if ((left || soonPage.hasMore) && spend(b)) await ctx.cron?.schedule(nextStep(running, "expire-more"), { schedule: soon() }).catch(none);
 }
 
 /**
@@ -271,66 +271,105 @@ export async function tidy(ctx: Ctx): Promise<void> {
 export const SWEEP = "state:sweep";
 
 /**
- * Hourly check that the directory index matches the listings, 50 at a time, all of them over the
- * hours: a listing whose content hook did not run (an error, a cut-off call) is put right here, and
- * a type whose sort slots changed gets them filled in (the backfill), and a row from before 0.8.0
- * gets its category copy (one more call each on a site with categories). Nine calls at most. Only rows
- * that differ are written, each as a merge, three per run.
+ * Keeps the directory index matching the listings: a listing whose content hook did not run (an
+ * error, a cut-off call) is put right, a type whose sort slots or chip field changed gets them filled
+ * in, rows from before 0.8.0 get their city copy and category rows, and category rows whose copy went
+ * stale (a rating change) are written again.
  *
- * A run that put something right goes on a minute later (`sweep-more`, alternating names, see
- * nextStep) until the end of the listings, so a backfill takes hours, not weeks. A follow-on run
- * stops when it could write nothing (a row that keeps failing waits for the hourly run).
+ * The hourly run (`sweep`) checks the next 100 listings, from where it stopped (KV). When any need
+ * work and no chain is running, it starts one there. A chain run (`sweep-more`, alternating names,
+ * its position in the task's data) puts a page right: changed rows in one batch write, category rows
+ * in one more, and listings whose categories were never read go to category tasks (`sweep-cats-*`,
+ * seven each, up to four, as many as the call budget leaves; EmDash runs them on its next pass).
+ * It goes on a minute later to the end of the listings. Measured (tests/scale-and-lows.test.ts):
+ * 2,000 listings from before 0.8.0 in 81 minutes on a site with categories (20 without), so about
+ * four hours for 6,000 (one without). Nine calls at most.
  */
-export async function sweep(ctx: Ctx, running = "sweep"): Promise<void> {
-	// Settings, the place, the listings, their rows, the new place and the next run: six calls kept.
-	const b = budget(6);
+export async function sweep(ctx: Ctx, running = "sweep", data?: unknown): Promise<void> {
+	const b = budget(1);
 	const settings = await loadSettings(ctx);
 	if (!upgradeDone(settings) || !settings.fields) return;
-	const cursor = asString(await ctx.kv.get<string>(SWEEP));
-	const page = await ctx.content?.list(LISTINGS, { limit: 50, ...(cursor ? { cursor } : {}) }).catch(() => null);
-	if (!page) return;
-	const have = page.items.length ? await ctx.storage.directory.getMany(page.items.map((item) => item.id)) : new Map<string, unknown>();
-	const missing = page.items.filter((item) => !have.has(item.id) && item.status === "published");
-	const ratings = missing.length && spend(b) ? await ctx.storage.ratings.getMany(missing.map((item) => item.id)) : new Map<string, unknown>();
-	const subs = missing.length && spend(b) ? await ctx.storage.submissions.getMany(missing.map((item) => item.id)) : new Map<string, unknown>();
-	let fixed = true;
-	let wrote = 0;
-	for (const item of page.items) {
-		const stored = asRecord(have.get(item.id));
-		let part = listingPart(item, settings.types);
-		if (have.has(item.id)) {
-			// A row from before 0.8.0 has no category copy: read it (none to read on a site without categories).
-			if (stored.cat === undefined) {
-				const terms = Object.keys(settings.terms).length > 0;
-				if (terms && !spend(b)) {
-					fixed = false;
-					break;
-				}
-				const cat = terms ? await categoryOf(ctx, item.id) : "";
-				if (cat !== undefined) part = { ...part, cat };
-			}
-			const same = Object.entries(part).every(([field, value]) => JSON.stringify(stored[field]) === JSON.stringify(value));
-			if (same) continue;
-			if (!spend(b)) {
-				fixed = false;
-				break;
-			}
-			if ((await ctx.storage.directory.updateIf(item.id, { where: {}, set: part }).catch(() => null))?.applied) wrote += 1;
-		} else if (item.status === "published") {
-			if (!spend(b)) {
-				fixed = false;
-				break;
-			}
-			const rating = readRating(ratings.get(item.id));
-			const exp = asNumber(asRecord(subs.get(item.id)).expires_at) ?? 0;
-			if ((await ctx.storage.directory.compareAndSet(item.id, null, { ...part, exp, warned: 0, avg: rating.average, rc: rating.count, rseq: 0 }).catch(() => null))?.applied) wrote += 1;
+	const chain = running !== "sweep";
+	if (!chain) {
+		spend(b, 2);
+		if ((await ctx.cron?.list())?.some((task) => task.name.startsWith("sweep-more"))) return;
+	}
+	const at = readPosition(chain ? asRecord(data).at : await ctx.kv.get(SWEEP)) ?? { c: "", s: 0 };
+	spend(b, 3);
+	const page = await ctx.content!.list(LISTINGS, { limit: 100, ...(at.c ? { cursor: at.c } : {}) });
+	const items = page.items.slice(at.s);
+	const ids = items.map((item) => item.id);
+	const [have, known] = await Promise.all([ctx.storage.directory.getMany(ids), ctx.storage.dircats.getMany(ids)]);
+	const missing = ids.filter((id, i) => !have.has(id) && items[i]!.status === "published");
+	const [ratings, subs] = missing.length && spend(b, 2) ? await Promise.all([ctx.storage.ratings.getMany(missing), ctx.storage.submissions.getMany(missing)]) : [new Map<string, unknown>(), new Map<string, unknown>()];
+	const terms = Object.keys(settings.terms).length > 0;
+	const put: Array<{ id: string; data: Record<string, unknown>; part: Record<string, unknown> }> = [];
+	const catPut: Array<{ id: string; data: Record<string, unknown> }> = [];
+	const need: string[] = [];
+	for (const item of items) {
+		const stored = have.get(item.id) as Record<string, unknown> | undefined;
+		const published = item.status === "published";
+		if (!stored && !published) continue;
+		const part = listingPart(item, settings.types);
+		const rating = readRating(ratings.get(item.id));
+		const row = stored ? { ...stored, ...part } : { ...part, exp: asNumber(asRecord(subs.get(item.id)).expires_at) ?? 0, warned: 0, avg: rating.average, rc: rating.count, rseq: 0 };
+		if (!stored || Object.entries(part).some(([field, value]) => JSON.stringify(stored[field]) !== JSON.stringify(value))) put.push({ id: item.id, data: row, part });
+		if (!published) continue;
+		const cats = asRecord(known.get(item.id));
+		const rows = catRows(item.id, cats.lid ? asStringArray(cats.cats) : [], row);
+		// Never read: read in a category task. On a site without categories there is nothing to read.
+		if (!cats.lid && terms) need.push(item.id);
+		else if (rows[0]!.data.sig !== cats.sig) catPut.push(...rows);
+	}
+	const next = page.hasMore && page.cursor ? writePosition({ c: page.cursor, s: 0 }) : "";
+	if (!chain) {
+		spend(b);
+		if (put.length || catPut.length || need.length) await ctx.cron?.schedule("sweep-more", { schedule: soon(), data: { at: writePosition(at) } });
+		else await ctx.kv.set(SWEEP, next);
+		return;
+	}
+	if (put.length > 2 || missing.length) {
+		spend(b);
+		// ponytail: one batch write of whole rows, so an expiry or rating copy another call writes to one
+		// of them in the moment since they were read is overwritten. Only bulk work (an update's backfill,
+		// a changed sort field) and new rows come here; a page with one or two changes merges them.
+		await ctx.storage.directory.putMany(put.map(({ id, data }) => ({ id, data })));
+	} else {
+		for (const { id, part } of put) {
+			spend(b);
+			await ctx.storage.directory.updateIf(id, { where: {}, set: part });
 		}
 	}
-	// Cut short: the same page again. Else on to the next one, and round again at the end.
-	const more = fixed ? Boolean(page.hasMore && page.cursor) : true;
-	if (fixed) await ctx.kv.set(SWEEP, more ? page.cursor! : "");
-	const followOn = running !== "sweep";
-	if (more && (wrote > 0 || (followOn && fixed))) await ctx.cron?.schedule(nextStep(running, "sweep-more"), { schedule: soon() }).catch(() => undefined);
+	if (catPut.length && spend(b)) await ctx.storage.dircats.putMany(catPut);
+	const tail = running.endsWith("-2") ? "-2" : "";
+	const lanes = Math.min(Math.ceil(need.length / 7), left(b) - 1, 4);
+	for (let n = 0; n < lanes; n += 1) {
+		spend(b);
+		await ctx.cron?.schedule(`sweep-cats-${"abcd"[n]}${tail}`, { schedule: soon(), data: { ids: need.slice(n * 7, n * 7 + 7) } });
+	}
+	// Listings no task could take: this page again from the first of them.
+	const stop = need[Math.max(lanes, 0) * 7];
+	const pos = stop ? writePosition({ c: at.c, s: at.s + ids.indexOf(stop) }) : next;
+	spend(b);
+	if (pos) await ctx.cron?.schedule(nextStep(running, "sweep-more"), { schedule: soon(), data: { at: pos } });
+	else await ctx.kv.set(SWEEP, "");
+}
+
+/**
+ * A category task of the sweep: the categories of up to seven listings (one call each), and their
+ * category rows written from their directory rows. Nine calls. A listing whose categories could not
+ * be read is left for the next pass.
+ */
+export async function sweepCats(ctx: Ctx, data: unknown): Promise<void> {
+	const ids = asStringArray(asRecord(data).ids).slice(0, 7);
+	if (!ids.length) return;
+	const rows = await ctx.storage.directory.getMany(ids);
+	const out: Array<{ id: string; data: Record<string, unknown> }> = [];
+	for (const id of ids) {
+		const cats = await catsOf(ctx, id);
+		if (cats && rows.has(id)) out.push(...catRows(id, cats, asRecord(rows.get(id))));
+	}
+	if (out.length) await ctx.storage.dircats.putMany(out);
 }
 
 export async function runUpgrade(ctx: Ctx, running?: string): Promise<void> {

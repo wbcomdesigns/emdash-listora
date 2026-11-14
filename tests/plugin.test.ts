@@ -1026,7 +1026,9 @@ describe("types store", () => {
 	it("loads the sample directory from an admin-only kit page that sends the kit's rows in steps", () => {
 		expect(samplePage).toContain("const isAdmin = Number(user?.role) >= 50;");
 		expect(samplePage).toContain('import SAMPLE from "../../lib/listora-sample.json";');
-		expect(samplePage).toContain('api("sample", { step, ...SAMPLE })');
+		expect(samplePage).toContain('api("sample", { step, ...ROWS })');
+		// The sample event is dated two weeks after the day it is loaded (#87), not on a fixed past day.
+		expect(samplePage).toContain("event_start: eventDay");
 		expect(samplePage).toContain('api("sample", { step: "state" })');
 		// Errors in the plugin's own words, never raw exception text.
 		expect(samplePage).not.toMatch(/\.stack|String\(error|error\.message\b/);

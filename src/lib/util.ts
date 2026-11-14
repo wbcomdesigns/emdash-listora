@@ -75,3 +75,15 @@ export function readCursor(value: unknown): string | null | undefined {
 		return null;
 	}
 }
+
+/** Shared `.catch` handlers, one copy each in the bundle (EmDash caps a bundle file at 128 KB). */
+export const none = (): undefined => undefined;
+export const nil = (): null => null;
+export const notApplied = () => ({ applied: false as const });
+
+/** Block Kit blocks every admin page uses, one copy each in the bundle. */
+export const kContext = (text: string) => ({ type: "context", text });
+export const kSection = (text: string) => ({ type: "section", text });
+export const kHeader = (text: string) => ({ type: "header", text });
+export const kDivider = { type: "divider" };
+export const kActions = (elements: unknown[]) => ({ type: "actions", elements });

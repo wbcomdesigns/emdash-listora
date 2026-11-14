@@ -8,7 +8,7 @@ import type { PluginRuntimeTestHost } from "@emdash-cms/plugin-test";
 // @ts-expect-error plain module shared with the lab seed
 import { listingsCollection } from "../site-kit/seed/collection.mjs";
 import { HOUR, visitorKey, windowOf } from "../src/lib/rates";
-import { createPluginRuntimeTestHost, SAMPLE, settle } from "./site";
+import { createPluginRuntimeTestHost, SAMPLE, settle, taskData } from "./site";
 
 /**
  * Bridge calls per entry point, each at the worst case a busy site sets up (see the seeds below).
@@ -128,18 +128,18 @@ const MEASURED: Record<string, number> = {
 	"admin review forget (row with no listing)": 6,
 	"admin review approve (cut off before)": 6,
 	"admin photo_mod approve": 9,
-	"admin photo_mod reject": 6,
-	"admin photo_mod approve (cut off before)": 5,
+	"admin photo_mod reject": 7,
+	"admin photo_mod approve (cut off before)": 6,
 	"admin edit_mod approve": 9,
-	"admin edit_mod reject": 4,
-	"admin edit_mod approve (listing changed since)": 6,
+	"admin edit_mod reject": 5,
+	"admin edit_mod approve (listing changed since)": 7,
 	"admin reply_mod approve": 8,
 	"admin reply_mod reject": 7,
 	"admin review_mod approve": 8,
 	"admin review_mod reject": 6,
 	"admin review_mod approve (500 published)": 8,
 	"admin claim_mod approve": 9,
-	"admin claim_mod reject": 4,
+	"admin claim_mod reject": 5,
 	"admin message_mod ask": 6,
 	"admin message_mod close": 5,
 	"admin message_mod done": 5,
@@ -148,12 +148,12 @@ const MEASURED: Record<string, number> = {
 	"hook plugin:activate": 6,
 	// Plus one (the upgrade task) on a site whose 0.7.0 upgrade has not finished: 8.
 	"cron notify (first run after an update)": 7,
-	"hook content:afterPublish (listing in the index)": 3,
-	"hook content:afterPublish (listing new to the index)": 6,
-	"hook content:afterSave (published, no draft)": 3,
-	"hook content:afterUnpublish": 1,
-	"hook content:afterRestore": 4,
-	"hook content:afterDelete": 2,
+	"hook content:afterPublish (listing in the index)": 5,
+	"hook content:afterPublish (listing new to the index)": 8,
+	"hook content:afterSave (published, no draft)": 4,
+	"hook content:afterUnpublish": 3,
+	"hook content:afterRestore": 6,
+	"hook content:afterDelete": 4,
 	"hook page:metadata": 3,
 	"hook page:metadata (software, unrated)": 3,
 	"cron notify (each run, 100 waiting, 50 owners)": 8,
@@ -162,8 +162,9 @@ const MEASURED: Record<string, number> = {
 	"cron expire (each run, 50 due)": 7,
 	"cron expire (each run, warning 50 owners)": 8,
 	"cron tidy": 5,
-	"cron sweep (each run)": 8,
-	"cron sweep-more (slot backfill, each run)": 8,
+	"cron sweep (each run)": 9,
+	"cron sweep-more (each run)": 9,
+	"cron sweep-cats (seven listings)": 9,
 	// 0.8.0 step 7b: samples already on the site are found by title in the index and the queue (two reads), not in one page of 100 listings.
 	"route sample (start)": 5,
 	"route sample (listings, each step)": 9,
@@ -661,15 +662,36 @@ describe("bridge calls per entry point, worst case", () => {
 	it("cron tidy and sweep", async () => {
 		await measure("cron tidy", () => hook("cron", cronEvent("tidy")));
 		await measure("cron tidy", () => hook("cron", cronEvent("tidy")));
-		// A listing whose content hook never ran: the sweep puts it in the index.
+		// A listing whose content hook never ran, on a site with categories: the hourly run finds work
+		// in its first 100 listings and starts the chain there.
 		const missed = await rt.fixtures.content("listings", { data: { title: "Missed Cafe", listing_type: "restaurant" }, slug: "missed", status: "published" } as never);
-		for (let n = 0; n < 15; n += 1) await measure("cron sweep (each run)", () => hook("cron", cronEvent("sweep")));
-		// The slot backfill (types set in "listings"), run by the follow-on task under both its names.
-		for (let n = 0; n < 15; n += 1) await measure("cron sweep-more (slot backfill, each run)", () => hook("cron", cronEvent(n % 2 ? "sweep-more-2" : "sweep-more")));
+		await rt.fixtures.plugin.setting("state_terms", { cafes: "term-cafes" });
+		taskData.clear();
+		await measure("cron sweep (each run)", () => hook("cron", cronEvent("sweep")));
+		expect(taskData.has("sweep-more")).toBe(true);
+		// While the chain runs, the hourly run leaves it alone.
+		await measure("cron sweep (each run)", () => hook("cron", cronEvent("sweep")));
+		// The chain under both its names (each run's position in its data), the slot backfill (types set
+		// in "listings") and the category tasks it hands listings to.
+		let name = "sweep-more";
+		for (let run = 0; run < 15 && name; run += 1) {
+			const data = taskData.get(name);
+			taskData.delete(name);
+			await measure("cron sweep-more (each run)", () => hook("cron", { ...cronEvent(name), data }));
+			const tail = name.endsWith("-2") ? "-2" : "";
+			for (const lane of ["a", "b", "c", "d"]) {
+				const cats = `sweep-cats-${lane}${tail}`;
+				if (!taskData.has(cats)) continue;
+				const ids = taskData.get(cats);
+				taskData.delete(cats);
+				await measure("cron sweep-cats (seven listings)", () => hook("cron", { ...cronEvent(cats), data: ids }));
+			}
+			name = ["sweep-more", "sweep-more-2"].find((next) => taskData.has(next)) ?? "";
+		}
 		expect((await rt.inspect.storage.list<Record<string, unknown>>("directory")).filter((row) => "n1" in row.data).length).toBeGreaterThan(30);
 		expect(await rt.inspect.storage.get("directory", missed.id)).toMatchObject({ vis: true, title: "Missed Cafe" });
-		// Rows the upgrade built have no category copy: the sweep reads each listing's categories (0.8.0).
-		expect((await rt.inspect.storage.list<Record<string, unknown>>("directory")).filter((row) => "cat" in row.data).length).toBeGreaterThan(10);
+		// Rows the upgrade built have no category rows: the category tasks read each listing's categories (0.8.0).
+		expect((await rt.inspect.storage.list<Record<string, unknown>>("dircats")).filter((row) => Array.isArray(row.data.cats)).length).toBeGreaterThan(30);
 	});
 
 	it("admin type editor", async () => {
@@ -698,6 +720,8 @@ describe("bridge calls per entry point, worst case", () => {
 		const boat = await rt.fixtures.content("listings", { data: { title: "Boat One", listing_type: "boat-hire" }, slug: "boat-one", status: "draft" } as never);
 		expect((await measure("admin type_delete (refused, a listing uses it)", () => types({ type: "block_action", action_id: "type_delete", value: buttonValue(hidden, "type_delete") }))).toast?.type).toBe("error");
 		await (rt.actions.content.trash as (c: string, id: string) => Promise<unknown>)("listings", boat.id);
+		// The trash's afterDelete hook runs deferred: let it finish so its calls are not counted below.
+		await settle();
 		const fresh = await types({ type: "block_action", action_id: "type_open", value: "boat-hire" });
 		expect((await measure("admin type_delete", () => types({ type: "block_action", action_id: "type_delete", value: buttonValue(fresh, "type_delete") }))).toast).toMatchObject({ type: "success" });
 	});
