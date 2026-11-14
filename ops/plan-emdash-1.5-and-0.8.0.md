@@ -108,6 +108,19 @@ Owner decisions (2026-11-13):
 3. Sort slots: three number or date fields per type (`n1` to `n3`), offered once a type is picked.
 4. #83 (0.7.0): a listing a member adds counts as theirs, fixed in code (`SUBMITTER_IS_OWNER`), no admin setting.
 
+### Software type (owner, 2026-11-14)
+
+An 11th built-in type, `software`, for open-source skills, agents, plugins and apps. One type, not one per kind.
+
+- Location-less (item 5): no map, city, hours, directions, Open or Closed, address.
+- Structured data: schema.org `SoftwareApplication` (applicationCategory from "What it is", operatingSystem from "Works with", offers from Price, softwareVersion, aggregateRating from reviews).
+- Fields (the six kinds): What it is (choice: Plugin, Skill, Agent, MCP server, App, Library, Theme; shown as filter chips), Works with (choice: WordPress, EmDash, Claude Code, Cursor, VS Code, npm, Python, Any), Repository (link, main button), Homepage or docs (link), Install command (text, shown escaped in a code box with Copy, never run), Version (text), License (choice), Price (choice: Free, Freemium, Paid), Open source (yes/no), Stars or installs (number), Last release (date), Released (date).
+- Sort slots: stars or installs, last release, released.
+- Links from member-submitted listings carry `rel="nofollow ugc"`.
+- No `network:request` capability (it would make every site re-approve Listora). Live GitHub stars and latest release come from the site kit in the visitor's browser (GitHub's public API), and wbcomplugins.com's nightly sync writes them into the fields.
+- Sample directory gains two or three Software listings so the type shows on a fresh site.
+- Kit: a Software card (logo, one line, kind and platform badges, rating, stars, version and last release, View on GitHub) and a listing page section (Install box, Details, screenshots from the photo feature, reviews, poll, Maintained by / Claim).
+
 Not in 0.8.0: per-type moderation, maps for software, paid features, a native (trusted) block.
 
 Upgrade note for 0.8.0: new indexes mean a short wait (503 `STORAGE_INDEXES_NOT_READY`) after updating, and the changelog says so.
