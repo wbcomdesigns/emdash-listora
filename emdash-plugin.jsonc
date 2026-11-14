@@ -39,7 +39,7 @@
 			"indexes": ["status", "createdAt", "title", "member_id", "tl", "gone", "owner_email"]
 		},
 		"directory": {
-			"indexes": ["vis", "pub", "type", "tl", "feat", "avg", "rc", "exp", ["vis", "type", "n1"], ["vis", "type", "n2"], ["vis", "type", "n3"], ["vis", "cat", "feat"], ["vis", "cy", "feat"]]
+			"indexes": ["vis", "pub", "type", "tl", "feat", "avg", "rc", "exp", ["vis", "type", "n1"], ["vis", "type", "n2"], ["vis", "type", "n3"], ["vis", "type", "ch", "feat"], ["vis", "cat", "feat"], ["vis", "cy", "feat"]]
 		},
 		"events": {
 			"indexes": []

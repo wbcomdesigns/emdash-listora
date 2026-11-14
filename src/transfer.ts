@@ -7,7 +7,7 @@ import { CSV_COLUMNS, csvName, parseCsv, toCsv, unguard } from "./lib/csv";
 import { clean, detailOf, detailText, LINK_RULE, storedDetails, typeValues, webAddress } from "./lib/edits";
 import { fieldsOf } from "./lib/listings-query";
 import { loadSettings, onlyKnown } from "./lib/settings";
-import { LISTINGS, typeBySlug, type ListingType } from "./lib/types";
+import { LISTINGS, PLACE_FIELDS, typeBySlug, type ListingType } from "./lib/types";
 import { asRecord, asString, nowIso, readCursor } from "./lib/util";
 
 type Ctx = PluginContext;
@@ -149,13 +149,15 @@ export async function importCsv(input: unknown, ctx: Ctx) {
 		for (const column of CSV_COLUMNS) data[column] = clean(unguard(source[column] ?? ""), column === "description" ? 5000 : column === "excerpt" ? 280 : 200);
 		if (!data.title) return bad.push({ line, title: "", reason: "It has no title." });
 		if (data.website && !webAddress(data.website)) return bad.push({ line, title: data.title, reason: `Website ${LINK_RULE}` });
-		const number = (value: string, max: number) => value === "" || (Number.isFinite(Number(value)) && Math.abs(Number(value)) <= max);
-		if (!number(data.lat, 90) || !number(data.lng, 180)) return bad.push({ line, title: data.title, reason: "Latitude or longitude is not a valid number." });
 		const wanted = data.listing_type.toLowerCase();
 		const type = settings.types.find((item) => item.slug === wanted) ?? settings.types.find((item) => item.name.toLowerCase() === wanted);
 		if (data.listing_type && !type) return bad.push({ line, title: data.title, reason: `"${data.listing_type}" is not a listing type.` });
-		// The row's type's own details, from the columns named by its field labels. Empty cells are left out.
 		const rowType = type ?? typeBySlug(settings.types, "business");
+		// A type without a location takes no place, as on the listing form: those cells are not stored.
+		if (!rowType.location) for (const column of PLACE_FIELDS) if (column in data) data[column] = "";
+		const number = (value: string, max: number) => value === "" || (Number.isFinite(Number(value)) && Math.abs(Number(value)) <= max);
+		if (!number(data.lat, 90) || !number(data.lng, 180)) return bad.push({ line, title: data.title, reason: "Latitude or longitude is not a valid number." });
+		// The row's type's own details, from the columns named by its field labels. Empty cells are left out.
 		const sent = Object.fromEntries(rowType.fields.filter((field) => !STANDARD.has(csvName(field.label))).map((field) => [field.key, unguard(source[csvName(field.label)] ?? "")]));
 		const details = typeValues(rowType, sent, "import");
 		if (details.error) return bad.push({ line, title: data.title, reason: details.error });

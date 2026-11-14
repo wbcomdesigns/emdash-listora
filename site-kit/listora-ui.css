@@ -1283,6 +1283,12 @@ ul.listora-chips {
 	font-weight: var(--listora-weight-medium);
 }
 
+/* The member who added the listing manages it: a plain note, not the green mark of an approved claim. */
+.listora-detail__claimed-badge.is-author {
+	background: var(--listora-bg-muted);
+	color: var(--listora-fg-default);
+}
+
 .listora-hero {
 	border-radius: var(--listora-radius-lg);
 	overflow: hidden;
@@ -1531,6 +1537,8 @@ ul.listora-chips {
 
 .listora-field {
 	display: grid;
+	/* Rows keep their own height when a grid cell beside them is taller (a helper line under its input). */
+	align-content: start;
 	gap: var(--listora-space-2);
 	margin-bottom: var(--listora-space-4);
 }
@@ -1634,6 +1642,7 @@ textarea.listora-input {
 	display: grid;
 	grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
 	gap: var(--listora-space-4);
+	margin-bottom: var(--listora-space-4);
 }
 
 .listora-form-grid .listora-field {

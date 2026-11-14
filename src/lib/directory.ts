@@ -3,7 +3,7 @@ import type { PluginContext } from "emdash/plugin";
 import { haversineKm, listingFromContent, matchesQuery, type ListingCard } from "./catalog";
 import { EDITABLE } from "./edits";
 import { readRating } from "./ratings";
-import { LISTINGS, mapsSlot, SLOTS, slotsOf, typeBySlug, type ListingType, type Slot } from "./types";
+import { chipField, LISTINGS, mapsSlot, SLOTS, slotsOf, typeBySlug, type ListingType, type Slot } from "./types";
 import { asNumber, asRecord, asString, readCursor } from "./util";
 
 /**
@@ -16,8 +16,9 @@ import { asNumber, asRecord, asString, readCursor } from "./util";
  * listing_category slug, "" for none; written by the content hooks, filled in by the sweep), `feat`
  * (1 when featured), `lat`, `lng`, `ls` (the listing_status field), `card` (what the public routes
  * show, without the long description: keywords go through EmDash's site search), `edit` (the fields
- * an owner may change, as stored, for the change approval screen) and the sort slots `n1` to `n3`
- * (types.ts slotsOf; only on listings whose type maps a field to a slot).
+ * an owner may change, as stored, for the change approval screen), the sort slots `n1` to `n3`
+ * (types.ts slotsOf; only on listings whose type maps a field to a slot) and `ch`, the value of the
+ * type's chip field (only on listings whose type has one).
  * Plugin fields, never written from the listing: `exp` (expiry time in ms, 0 for none), `warned`
  * (the `exp` the owner was warned about), and the rating copy `avg`, `rc`, `rseq` (see ratings.ts).
  *
@@ -59,6 +60,7 @@ export function listingPart(item: Item, types: readonly ListingType[], cat?: str
 		card: shown,
 		edit,
 		...slotsOf(type, card.type_fields),
+		...(chipField(type) ? { ch: asString(card.type_fields[chipField(type)!.key]) } : {}),
 	};
 }
 
@@ -131,6 +133,8 @@ export type Filters = {
 	/** Exact filters the index answers: a listing_category slug and a city (lower case). */
 	category: string;
 	city: string;
+	/** The value of the type's chip field: taken only with a type that has one. */
+	chip: string;
 	location: string;
 	amenity: string;
 	lat: number | null;
@@ -149,6 +153,7 @@ export function readFilters(input: unknown): Filters {
 		type: asString(raw.listing_type || raw.type),
 		category: asString(raw.category).toLowerCase(),
 		city: asString(raw.city_exact).trim().toLowerCase(),
+		chip: asString(raw.chip).slice(0, 80),
 		location: asString(raw.city || raw.location).toLowerCase(),
 		amenity: (asString(raw.amenity) || asString(raw.feature)).toLowerCase(),
 		lat: asNumber(raw.lat),
@@ -159,8 +164,8 @@ export function readFilters(input: unknown): Filters {
 	};
 }
 
-/** The part of a directory read the index answers: listed, and the type, category and city asked for. */
-export const whereOf = (f: Filters): Record<string, string | boolean> => ({ vis: true, ...(f.type ? { type: f.type } : {}), ...(f.category ? { cat: f.category } : {}), ...(f.city ? { cy: f.city } : {}) });
+/** The part of a directory read the index answers: listed, and the type, chip, category and city asked for. */
+export const whereOf = (f: Filters): Record<string, string | boolean> => ({ vis: true, ...(f.type ? { type: f.type } : {}), ...(f.chip ? { ch: f.chip } : {}), ...(f.category ? { cat: f.category } : {}), ...(f.city ? { cy: f.city } : {}) });
 
 /** True when a filter needs the rows read and checked one by one (no index answers it). */
 export const scanned = (f: Filters) => Boolean(f.q || f.location || f.amenity || (f.lat !== null && f.lng !== null));
@@ -182,14 +187,16 @@ export function matches(card: ListingCard, f: Filters): boolean {
 export const slotOf = (f: Filters): Slot | null => (SLOTS.includes(f.sort as Slot) ? (f.sort as Slot) : null);
 
 /**
- * Why a slot sort cannot be answered, or "" when it can. A slot means a different field per type, so
- * it needs a type, and that type must fill the slot.
+ * Why a slot sort or a chip filter cannot be answered, or "" when it can. Both mean a different field
+ * per type, so they need a type, and that type must fill the slot or have a chip field.
  */
 export function slotRefusal(f: Filters, types: readonly ListingType[]): string {
 	const slot = slotOf(f);
-	if (!slot) return "";
-	if (!f.type) return "Choose a listing type to sort by this field.";
-	return mapsSlot(typeBySlug(types, f.type), slot) ? "" : "This listing type has no field to sort by there.";
+	if (!slot && !f.chip) return "";
+	if (!f.type) return "Choose a listing type to sort or filter by this field.";
+	const type = typeBySlug(types, f.type);
+	if (f.chip && !chipField(type)) return "This listing type has no field to filter by.";
+	return !slot || mapsSlot(type, slot) ? "" : "This listing type has no field to sort by there.";
 }
 
 export const orderOf = (f: Filters): Record<string, "asc" | "desc"> =>

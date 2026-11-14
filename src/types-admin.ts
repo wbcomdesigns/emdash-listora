@@ -82,13 +82,14 @@ const SORTS = [
 	{ label: "Sort 3", value: "3" },
 ];
 
-function fieldFormFields(shown: { label: string; kind: FieldKind; options: string; required: boolean; cards: boolean; slot: string }) {
+function fieldFormFields(shown: { label: string; kind: FieldKind; options: string; required: boolean; cards: boolean; slot: string; chip: boolean }) {
 	return [
 		{ type: "text_input", action_id: "label", label: "Label", initial_value: shown.label },
 		{ type: "select", action_id: "kind", label: "Kind", options: FIELD_KINDS.map((kind) => ({ label: KIND_NAMES[kind], value: kind })), initial_value: shown.kind },
 		{ type: "text_input", action_id: "options", label: "Choices, one per line", multiline: true, initial_value: shown.options, condition: { field: "kind", eq: "choice" } },
 		{ type: "toggle", action_id: "required", label: "Required on the listing form", initial_value: shown.required },
 		{ type: "toggle", action_id: "cards", label: "Show on directory cards", initial_value: shown.cards },
+		{ type: "toggle", action_id: "chip", label: "Visitors can filter by it with chips (one field per type)", initial_value: shown.chip, condition: { field: "kind", eq: "choice" } },
 		// One condition per field, so number and date each have their own copy; the save reads the one shown.
 		{ type: "select", action_id: "slot_number", label: "Visitors can sort by it (three sorts per type)", options: SORTS, initial_value: shown.kind === "number" ? shown.slot : "", condition: { field: "kind", eq: "number" } },
 		{ type: "select", action_id: "slot_date", label: "Visitors can sort by it (three sorts per type)", options: SORTS, initial_value: shown.kind === "date" ? shown.slot : "", condition: { field: "kind", eq: "date" } },
@@ -102,13 +103,14 @@ const fieldShown = (field: TypeField | null) => ({
 	required: field?.required === true,
 	cards: field?.cards === true,
 	slot: field?.slot ? String(field.slot) : "",
+	chip: field?.chip === true,
 });
 
 /** What a refused form showed, so the admin's typing is not lost. */
 const draftType = (values: Values) => ({ name: text(values.name, 60), schemaType: asString(values.schema), color: asString(values.color), icon: asString(values.icon), location: asBoolean(values.location) });
 const draftField = (values: Values) => {
 	const kind = FIELD_KINDS.find((item) => item === values.kind) ?? "text";
-	return { label: text(values.label, 80), kind, options: typeof values.options === "string" ? values.options.slice(0, 3000) : "", required: asBoolean(values.required), cards: asBoolean(values.cards), slot: asString(kind === "date" ? values.slot_date : values.slot_number) };
+	return { label: text(values.label, 80), kind, options: typeof values.options === "string" ? values.options.slice(0, 3000) : "", required: asBoolean(values.required), cards: asBoolean(values.cards), slot: asString(kind === "date" ? values.slot_date : values.slot_number), chip: asBoolean(values.chip) };
 };
 
 /** A type from the type form, or why not. `base` is the type being edited (null for a new one). */
@@ -146,6 +148,12 @@ export function fieldFromForm(values: Values, type: ListingType, base: TypeField
 	}
 	if (asBoolean(values.required)) field.required = true;
 	if (asBoolean(values.cards)) field.cards = true;
+	// Only a choice field gives chips (a hidden toggle still sends its value), one per type.
+	if (kind === "choice" && asBoolean(values.chip)) {
+		const other = type.fields.find((item) => item.key !== field.key && item.chip);
+		if (other) return { error: `${other.label} already gives the filter chips. Set ${other.label} to No first.` };
+		field.chip = true;
+	}
 	// Only the sort the form showed for this kind counts: a hidden field still sends its value.
 	const slot = Number(kind === "number" ? values.slot_number : kind === "date" ? values.slot_date : 0);
 	if (slot === 1 || slot === 2 || slot === 3) {
@@ -164,31 +172,29 @@ async function renderList(ctx: Ctx, settings: Settings, b: Budget, offset: numbe
 	const shown = types.slice(at, at + TYPES_PAGE);
 	// One count per row. Without room (a call that already spent its calls), the column says "-".
 	const counts = shown.length && spend(b, shown.length) ? await Promise.all(shown.map((type) => ctx.storage.directory.count({ type: type.slug }).catch(() => null))) : [];
+	// Five columns, the type's name (the button that opens it) first: a phone shows the way in
+	// without scrolling sideways. Block Kit tables have no narrow-screen layout of their own.
 	const rows = shown.map((type, index) => ({
-		name: type.name,
-		made: type.builtin ? "Built in" : "Your own",
-		color: nameIn(TYPE_COLORS, type.color) ?? "Custom colour",
+		name: { type: "button", label: type.name, action_id: "type_open", value: type.slug },
 		listings: counts[index] == null ? "-" : String(counts[index]),
 		location: type.location ? "Yes" : "No",
 		shown: type.hidden ? "Hidden" : "Shown",
-		edit: { type: "button", label: "Edit", action_id: "type_open", value: type.slug },
+		made: type.builtin ? "Built in" : "Your own",
 	}));
 	const custom = types.filter((type) => !type.builtin).length;
 	return page("Listing types", toast, [
-		{ type: "context", text: "Types group your listings and decide which extra fields the listing form asks for. Built-in types can be edited or hidden. Your own types can be deleted while no listing uses them." },
+		{ type: "context", text: "Types group your listings and decide which extra fields the listing form asks for. Built-in types can be edited or hidden. Your own types can be deleted while no listing uses them. Choose a type's name to edit it and its fields." },
 		{ type: "stats", items: [{ label: "Types", value: types.length }, { label: "Hidden", value: types.filter((type) => type.hidden).length }] },
 		{
 			type: "table",
 			page_action_id: "types_page",
 			...(at + TYPES_PAGE < types.length ? { next_cursor: String(at + TYPES_PAGE) } : {}),
 			columns: [
-				{ key: "name", label: "Type" },
-				{ key: "made", label: "Made by" },
-				{ key: "color", label: "Colour" },
+				{ key: "name", label: "Type", format: "element" },
 				{ key: "listings", label: "Listings" },
-				{ key: "location", label: "Has a place" },
+				{ key: "location", label: "Place" },
 				{ key: "shown", label: "On the form", format: "badge" },
-				{ key: "edit", label: "Edit", format: "element" },
+				{ key: "made", label: "Made by" },
 			],
 			rows,
 		},
@@ -222,7 +228,7 @@ async function renderType(ctx: Ctx, settings: Settings, b: Budget, slug: string,
 		options: (field.options ?? []).join(", ") || "-",
 		required: field.required ? "Yes" : "No",
 		cards: field.cards ? "Yes" : "No",
-		sort: field.slot ? `Sort ${field.slot}` : "-",
+		sort: field.slot ? `Sort ${field.slot}` : field.chip ? "Filter chips" : "-",
 		edit: { type: "button", label: "Edit", action_id: "field_open", value: `${slug}|${field.key}` },
 	}));
 	return page(type.name, toast, [
@@ -262,7 +268,7 @@ async function renderType(ctx: Ctx, settings: Settings, b: Budget, slug: string,
 						{ key: "options", label: "Choices" },
 						{ key: "required", label: "Required" },
 						{ key: "cards", label: "On cards" },
-						{ key: "sort", label: "Sort" },
+						{ key: "sort", label: "Sort or filter" },
 						{ key: "edit", label: "Edit", format: "element" },
 					],
 					rows: fieldRows,

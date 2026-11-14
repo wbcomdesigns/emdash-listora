@@ -40,6 +40,9 @@ const typeHasPlace = !type || hasPlace(types, type);
 // A sort slot means a different field per type, so it is offered only once a type is picked.
 const slotSorts = type ? (typeOf(types, type).fields ?? []).filter((field) => field.slot).map((field) => ({ value: `n${field.slot}`, label: field.label })) : [];
 const sort = ["rating", "title", ...slotSorts.map((item) => item.value)].includes(get("sort")) ? get("sort") : "featured";
+// The picked type's chip field ("What it is" for Software): its choices as filter chips, the index answers them.
+const chipField = type ? (typeOf(types, type).fields ?? []).find((field) => field.chip && field.options?.length) : undefined;
+const chip = chipField?.options?.includes(get("chip")) ? get("chip") : "";
 const PER_PAGE = 24;
 
 // Pages go by the position the plugin (or search) hands back. The positions of the pages before
@@ -56,6 +59,7 @@ const listingsRoute = async (query: Record<string, string>) =>
 // The plugin's directory index answers type, category, city and sort, on any number of listings.
 const filters: Record<string, string> = {
 	...(type ? { type } : {}),
+	...(chip ? { chip } : {}),
 	...(category ? { category } : {}),
 	...(city && typeHasPlace ? { city_exact: city } : {}),
 	...(location && typeHasPlace ? { location } : {}),
@@ -133,6 +137,7 @@ const typeChips = [...shownTypes(types), ...(type && !shownTypes(types).some((it
 // Links keep every filter, the sort and the view; a facet link keeps the listing type and swaps only its own filter.
 const base: Record<string, string> = {
 	...(type ? { type } : {}),
+	...(chip ? { chip } : {}),
 	...(q ? { q } : {}),
 	...(location && typeHasPlace ? { location } : {}),
 	...(city && typeHasPlace ? { city } : {}),
@@ -149,7 +154,7 @@ const nextHref = next ? link({ after: next, back: [...back, after || "-"].slice(
 const before = back.at(-1);
 const prevHref = before && before !== "-" ? link({ after: before, page: String(page - 1), ...(back.length > 1 ? { back: back.slice(0, -1).join(",") } : {}), ...listView }) : link(listView);
 const pages = total === null ? 0 : Math.max(page, Math.ceil(Math.max(total - featured.length, 0) / PER_PAGE));
-const facetHref = (key: "category" | "city", value: string) =>
+const facetHref = (key: "category" | "city" | "chip", value: string) =>
 	`/listings/?${new URLSearchParams({ ...(type ? { type } : {}), ...(value ? { [key]: value } : {}) })}`;
 
 function amenityLabel(item: string): string {
@@ -253,8 +258,27 @@ function amenityList(value: unknown): string[] {
 
 		<div id="listora-facets-slot">
 		{
-			categoryFacets.length > 0 || (cityFacets.length > 1 || (city && cityFacets.length > 0)) ? (
+			chipField || categoryFacets.length > 0 || (cityFacets.length > 1 || (city && cityFacets.length > 0)) ? (
 				<nav class="listora-facets" aria-label={S.directory.browse}>
+					{chipField ? (
+						<div class="listora-facets__row">
+							<h2 class="listora-meta" id="facet-chip">{chipField.label}</h2>
+							<ul class="listora-chips" aria-labelledby="facet-chip">
+								{chipField.options!.map((item) => (
+									<li>
+										<a
+											class:list={{ "listora-chip": true, "is-active": chip === item }}
+											href={facetHref("chip", chip === item ? "" : item)}
+											aria-current={chip === item ? "true" : undefined}
+											data-facet
+										>
+											{item}
+										</a>
+									</li>
+								))}
+							</ul>
+						</div>
+					) : null}
 					{categoryFacets.length > 0 ? (
 						<div class="listora-facets__row">
 							<h2 class="listora-meta" id="facet-category">{S.directory.category}</h2>
@@ -492,6 +516,9 @@ function amenityList(value: unknown): string[] {
 	const mapEl = document.getElementById("listora-map");
 	const clearBtn = document.getElementById("listora-clear") as HTMLButtonElement | null;
 	let activeType = new URLSearchParams(location.search).get("type") || "";
+	// The chip picked on this page, kept while the type stays the same.
+	const pageType = activeType;
+	const activeChip = new URLSearchParams(location.search).get("chip") || "";
 	const activeCategory = new URLSearchParams(location.search).get("category") || "";
 	const activeCity = new URLSearchParams(location.search).get("city") || "";
 
@@ -504,6 +531,7 @@ function amenityList(value: unknown): string[] {
 			...(q?.value ? { q: q.value } : {}),
 			...(locationInput?.value ? { location: locationInput.value } : {}),
 			...(activeType ? { type: activeType } : {}),
+			...(activeChip && activeType === pageType ? { chip: activeChip } : {}),
 			...(activeCategory ? { category: activeCategory } : {}),
 			...(activeCity && !locationInput?.closest("[hidden]") ? { city: activeCity } : {}),
 			...(sortValue() !== "featured" ? { sort: sortValue() } : {}),

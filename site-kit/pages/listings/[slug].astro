@@ -34,6 +34,7 @@ import {
 	weekdayIndex,
 } from "../../lib/listora";
 import { copyNamed, minutes, openPhoto, photoAlt, photosOf, S } from "../../lib/listora-strings";
+import { callPluginRoute } from "../../lib/wbcom-kit";
 import "../../styles/listora-ui.css";
 
 const slug = decodeSlug(Astro.params.slug);
@@ -78,6 +79,10 @@ const hasMap = located && Number.isFinite(lat) && Number.isFinite(lng) && lat !=
 const gallery = (Array.isArray(data.gallery) ? data.gallery : []).filter((row: { image?: unknown }) => row?.image) as Array<{ image: never }>;
 const expired = String(data.listing_status || "") === "expired";
 const claimed = Boolean(data.is_claimed);
+// A member manages it: by an approved claim ("Claimed listing") or because they added it ("Managed by
+// its author"). An engine before 0.8.0 has no answer, and the listing reads as claimed, as it did.
+const managedBy = claimed ? String((await callPluginRoute(Astro.locals, "listora", `manager?listingId=${encodeURIComponent(String(data.id))}`).catch(() => null))?.by ?? "") : "";
+const byAuthor = managedBy === "author";
 const services = (() => {
 	try {
 		const parsed = JSON.parse(String(data.services || "[]"));
@@ -345,7 +350,7 @@ const schema = {
 						{
 							data.description ? (
 								<p class="listora-detail__copy">{data.description}</p>
-							) : (
+							) : facts.length || services.length ? null : (
 								<div class="listora-empty">
 									<h2>{S.listing.noDescriptionTitle}</h2>
 									<p>{S.listing.noDescriptionBody}</p>
@@ -394,8 +399,8 @@ const schema = {
 								</p>
 							) : null
 						}
-						{sw && PollSlot ? (
-							<section class="listora-software__poll" aria-label={S.software.poll}>
+						{PollSlot ? (
+							<section class="listora-software__poll" aria-label={S.listing.poll}>
 								<PollSlot collection="listings" id={data.id} />
 							</section>
 						) : null}
@@ -579,12 +584,15 @@ const schema = {
 
 					{
 						claimed ? (
-							<div class="listora-detail__claimed-badge">
+							<div class:list={["listora-detail__claimed-badge", { "is-author": byAuthor }]}>
 								<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
-									<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
-									<polyline points="22 4 12 14.01 9 11.01"></polyline>
+									{byAuthor ? (
+										<Fragment><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></Fragment>
+									) : (
+										<Fragment><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></Fragment>
+									)}
 								</svg>
-								{S.listing.claimed}
+								{byAuthor ? S.listing.managedByAuthor : S.listing.claimed}
 							</div>
 						) : (
 							<div class="listora-detail__claim-card">

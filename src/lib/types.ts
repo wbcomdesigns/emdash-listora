@@ -15,6 +15,8 @@ export type TypeField = {
 	cards?: boolean;
 	/** The sort slot (`n1` to `n3` in the directory index) a number or date field fills. */
 	slot?: 1 | 2 | 3;
+	/** The type's one choice field visitors filter by with chips (`ch` in the directory index). */
+	chip?: boolean;
 };
 
 export type ListingType = {
@@ -83,7 +85,7 @@ export const BUILTIN_TYPES: readonly ListingType[] = [
 		"#4F46E5",
 		"code",
 		[
-			choice("what_it_is", "What it is", ["Plugin", "Skill", "Agent", "MCP server", "App", "Library", "Theme"], { cards: true }),
+			choice("what_it_is", "What it is", ["Plugin", "Skill", "Agent", "MCP server", "App", "Library", "Theme"], { cards: true, chip: true }),
 			choice("works_with", "Works with", ["WordPress", "EmDash", "Claude Code", "Cursor", "VS Code", "npm", "Python", "Any"], { cards: true }),
 			{ key: "repository", label: "Repository", kind: "link" },
 			{ key: "homepage", label: "Homepage or docs", kind: "link" },
@@ -117,6 +119,7 @@ function fieldOf(raw: unknown): TypeField | null {
 	if (kind === "choice") field.options = (Array.isArray(row.options) ? row.options : []).map((option) => text(option, 80)).filter(Boolean).slice(0, 30);
 	if (row.required === true) field.required = true;
 	if (row.cards === true) field.cards = true;
+	if (kind === "choice" && row.chip === true) field.chip = true;
 	if ((kind === "number" || kind === "date") && (row.slot === 1 || row.slot === 2 || row.slot === 3)) field.slot = row.slot;
 	return field;
 }
@@ -206,6 +209,9 @@ export function slotsOf(type: ListingType, values: Record<string, unknown>): Par
 	}
 	return out;
 }
+
+/** The type's chip field (at most one): visitors filter its listings by that choice. */
+export const chipField = (type: ListingType) => type.fields.find((field) => field.chip);
 
 /**
  * A listing's place: what a type without a location neither takes nor shows. A listing keeps what it
@@ -330,8 +336,8 @@ export function withType(stored: unknown, type: ListingType): unknown[] {
 /** The settings record without a custom type. */
 export const withoutType = (stored: unknown, slug: string): unknown[] => (Array.isArray(stored) ? stored : []).filter((row) => asString(asRecord(row).slug) !== slug);
 
-/** The slot map of a type, for telling whether a save changed it. */
-export const slotMap = (type: ListingType) => JSON.stringify(type.fields.filter((field) => field.slot).map((field) => [field.key, field.slot]));
+/** The slot and chip map of a type, for telling whether a save changed what the index keeps. */
+export const slotMap = (type: ListingType) => JSON.stringify(type.fields.filter((field) => field.slot || field.chip).map((field) => [field.key, field.slot, field.chip]));
 
 export const LISTINGS = "listings";
 export const DEMO_MEMBER = "demo-member";

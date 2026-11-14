@@ -36,26 +36,28 @@ export const S = {
 	days: ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"],
 	// The short help under a built-in type's field on the add-a-listing form, by field. Labels come from
 	// the plugin (the owner can rename them in the admin), so they are not here.
+	// Help under a built-in type's own fields on the listing form, by type and field key. A field an
+	// owner added has no help here, even when its key matches a built-in one (fieldHelp below).
 	fieldHelp: {
-		cuisine: "Italian, Korean, and so on.",
-		price_range: "From $ to $$$$.",
-		star_rating: "1 to 5.",
-		beds: "Whole number.",
-		baths: "Whole number.",
-		price: "Asking or nightly rate.",
-		event_start: "Date and time, in this site's time zone.",
-		event_end: "Date and time, in this site's time zone.",
-		salary: "Range is fine.",
-		job_type: "Full-time, contract, or intern.",
-		specialty: "What the practice treats.",
-		program: "Course or school name.",
-		asking_price: "What you want for the item.",
-		place_kind: "Park, museum, or trail.",
-		year_founded: "Four digits if you know it.",
-		install_command: "Shown as text to copy. It is never run.",
-		repository: "Full address, starting with https.",
-		homepage: "Full address, starting with https.",
-	},
+		"restaurant/cuisine": "Italian, Korean, and so on.",
+		"restaurant/price_range": "From $ to $$$$.",
+		"hotel/star_rating": "1 to 5.",
+		"real-estate/beds": "Whole number.",
+		"real-estate/baths": "Whole number.",
+		"real-estate/price": "Asking or nightly rate.",
+		"event/event_start": "Date and time, in this site's time zone.",
+		"event/event_end": "Date and time, in this site's time zone.",
+		"job/salary": "Range is fine.",
+		"job/job_type": "Full-time, contract, or intern.",
+		"healthcare/specialty": "What the practice treats.",
+		"education/program": "Course or school name.",
+		"classified/asking_price": "What you want for the item.",
+		"place/place_kind": "Park, museum, or trail.",
+		"business/year_founded": "Four digits if you know it.",
+		"software/install_command": "Shown as text to copy. It is never run.",
+		"software/repository": "Full address, starting with https.",
+		"software/homepage": "Full address, starting with https.",
+	} as Record<string, string>,
 	directory: {
 		title: "Listings",
 		description: "Browse the directory. Search by type, place, or name.",
@@ -254,6 +256,8 @@ export const S = {
 		today: "today",
 		location: "Location",
 		claimed: "Claimed listing",
+		managedByAuthor: "Managed by its author",
+		poll: "Poll",
 		claimTitle: "Is this your business?",
 		claimHelp: "A claim goes to review. The decision shows in your account, under Claims.",
 		nameError: "Enter your name.",
@@ -302,7 +306,6 @@ export const S = {
 		lastRelease: "Last release",
 		openSource: "Open source",
 		badges: "About this software",
-		poll: "Poll",
 	},
 	account: {
 		title: "Your listings",
@@ -387,6 +390,11 @@ export const S = {
 		rejected: "Not approved",
 	},
 };
+
+/** The help under one of a type's fields on the listing form: only for a built-in type's own field. */
+export function fieldHelp(type: string, key: string): string {
+	return S.fieldHelp[`${type}/${key}`] ?? "";
+}
 
 export function listingCount(n: number): string {
 	return n === 1 ? "1 listing" : `${n} listings`;

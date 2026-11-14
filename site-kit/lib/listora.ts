@@ -11,7 +11,7 @@ export type HourRow = { day: number; open: string; close: string };
 export type ListingTypeInfo = { slug: string; name: string; schemaType?: string; color?: string; icon?: string; hidden?: boolean; location?: boolean; fields?: TypeFieldInfo[] };
 
 /** One of a type's own fields, as the owner set it up in the admin (Listing types). */
-export type TypeFieldInfo = { key: string; label: string; kind: "text" | "number" | "choice" | "link" | "date" | "yesno"; options?: string[]; required?: boolean; cards?: boolean; slot?: number };
+export type TypeFieldInfo = { key: string; label: string; kind: "text" | "number" | "choice" | "link" | "date" | "yesno"; options?: string[]; required?: boolean; cards?: boolean; slot?: number; chip?: boolean };
 
 const KINDS = new Set(["text", "number", "choice", "link", "date", "yesno"]);
 
@@ -27,6 +27,7 @@ function fieldsOf(value: unknown): TypeFieldInfo[] {
 			required: field.required === true,
 			cards: field.cards === true,
 			...([1, 2, 3].includes(field.slot as number) ? { slot: field.slot as number } : {}),
+			...(field.kind === "choice" && field.chip === true ? { chip: true } : {}),
 		}));
 }
 

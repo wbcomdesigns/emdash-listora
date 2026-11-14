@@ -38,6 +38,7 @@ const MEASURED: Record<string, number> = {
 	"route ratings ids (80)": 3,
 	"route reviews (500 on the listing)": 2,
 	"route reviews next page": 2,
+	"route manager": 1,
 	"route contact (guest, owned listing)": 6,
 	"route submit (moderated, category)": 6,
 	"route submit (moderation off, category)": 9,
@@ -163,7 +164,8 @@ const MEASURED: Record<string, number> = {
 	"cron tidy": 5,
 	"cron sweep (each run)": 8,
 	"cron sweep-more (slot backfill, each run)": 8,
-	"route sample (start)": 4,
+	// 0.8.0 step 7b: samples already on the site are found by title in the index and the queue (two reads), not in one page of 100 listings.
+	"route sample (start)": 5,
 	"route sample (listings, each step)": 9,
 	"route sample (related)": 8,
 	"admin save_lifetime (off)": 3,
@@ -416,6 +418,7 @@ describe("bridge calls per entry point, worst case", () => {
 		const first = await measure("route reviews (500 on the listing)", () => route("reviews", { listingId: L[0] }, { method: "GET" }));
 		expect(first).toMatchObject({ ok: true, count: 3 });
 		expect(await measure("route reviews next page", () => route("reviews", { listingId: L[0], cursor: first.cursor }, { method: "GET" }))).toMatchObject({ ok: true });
+		expect(await measure("route manager", () => route("manager", { listingId: L[0] }, { method: "GET" }))).toMatchObject({ ok: true });
 	});
 	it("contact", async () => {
 		const meta = { ip: "203.0.113.7", userAgent: null, referer: null, geo: null };

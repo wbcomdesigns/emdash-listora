@@ -1,4 +1,4 @@
-import type { ListingType, TypeField } from "./types";
+import { PLACE_FIELDS, type ListingType, type TypeField } from "./types";
 import { asRecord, asString, parseJson } from "./util";
 
 /** What an owner may change on their own listing. Type, featured, claimed and dates are not theirs. */
@@ -77,11 +77,12 @@ export type Change = { label: string; was: string; next: string };
  * `type` is the listing's type: its fields decide which extra details an edit may set, and how
  * each is read and named. Details the type no longer has stay on the listing untouched.
  */
-export function editPatch(live: Record<string, unknown>, fields: Record<string, unknown>, type: Fields): { patch: Record<string, string>; changes: Change[] } {
+export function editPatch(live: Record<string, unknown>, fields: Record<string, unknown>, type: Fields & { location?: boolean }): { patch: Record<string, string>; changes: Change[] } {
 	const patch: Record<string, string> = {};
 	const changes: Change[] = [];
 	for (const key of EDITABLE) {
-		if (!(key in fields)) continue;
+		// A type without a location keeps the place it has: no change sets one, even one sent before the owner turned it off.
+		if (!(key in fields) || (type.location === false && (PLACE_FIELDS as readonly string[]).includes(key))) continue;
 		if (key !== "type_fields") {
 			const next = fieldValue(key, fields[key]);
 			const was = asString(live[key]);

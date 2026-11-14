@@ -201,7 +201,7 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 
 <script>
 	import { api, esc, type TypeFieldInfo } from "../../lib/listora";
-	import { S } from "../../lib/listora-strings";
+	import { fieldHelp, S } from "../../lib/listora-strings";
 
 	const form = document.getElementById("listora-submit") as HTMLFormElement | null;
 	if (form) wizard(form);
@@ -256,7 +256,7 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 	/** One of the type's own fields, with the input its kind needs. Every owner-written word is escaped. */
 	function fieldHtml(field: TypeFieldInfo): string {
 		const id = `tf-${field.key}`;
-		const help = (S.fieldHelp as Record<string, string>)[field.key] ?? "";
+		const help = fieldHelp(chosenType().slug, field.key);
 		const required = field.required ? ` required aria-required="true"` : "";
 		const marker = field.required ? ` <span class="listora-req">${esc(S.common.required)}</span>` : "";
 		const described = help ? ` aria-describedby="${id}-help"` : "";

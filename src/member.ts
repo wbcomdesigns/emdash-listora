@@ -356,8 +356,6 @@ export async function edit(routeCtx: { user?: unknown; input: unknown; request: 
 	// Only the fields the form sent, cleaned, and only where they differ from the live listing.
 	const sent: Record<string, unknown> = {};
 	for (const key of EDITABLE) if (key in raw && key !== "type_fields") sent[key] = (parsed.data as Record<string, unknown>)[key];
-	// A type without a location keeps the address it has, and an edit cannot change it.
-	if (!type.location) for (const key of PLACE_FIELDS) delete sent[key];
 	// Only the type's fields that were sent; none sent changes none.
 	const details = typeValues(type, sentDetails(raw), "edit");
 	if (details.error) return fail("VALIDATION_ERROR", details.error);

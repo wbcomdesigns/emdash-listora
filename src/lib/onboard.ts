@@ -50,7 +50,7 @@ const keyOf = (row: Record<string, unknown>) => {
 	return /^[a-z0-9-]{1,60}$/.test(key) ? key : "";
 };
 
-/** The admin route the kit's sample page calls. `state` is one call, `start` four, `listings` nine, `related` eight. */
+/** The admin route the kit's sample page calls. `state` is one call, `start` five, `listings` nine, `related` eight. */
 export async function sampleRoute(input: unknown, ctx: PluginContext) {
 	const raw = asRecord(input);
 	const step = asString(raw.step);
@@ -66,13 +66,20 @@ export async function sampleRoute(input: unknown, ctx: PluginContext) {
 	if (step === "start") {
 		// Part way already: go on from there.
 		if (running(saved)) return answer(saved);
-		// Asked first: listing a missing collection makes EmDash fail inside, beyond this plugin's catch.
-		const result = (await ctx.schema?.getCollection(LISTINGS).catch(() => null)) ? await ctx.content.list(LISTINGS, { limit: 100 }).catch(() => null) : null;
-		if (!result) return fail("NO_COLLECTION", "Create a listings collection first, then load sample data.");
+		if (!(await ctx.schema?.getCollection(LISTINGS).catch(() => null))) return fail("NO_COLLECTION", "Create a listings collection first, then load sample data.");
+		// Samples already on the site, however many listings it has: looked up by their titles (lower
+		// case) in the directory index (published ones) and the queue (waiting ones, and every sample
+		// loaded since 0.7.0), at most 50 titles per read. A listing deleted since is not counted.
+		const tl = [...new Set(rows.map((row) => clean(row.title).toLowerCase()).filter(Boolean))].slice(0, 50);
+		const where = { tl: { in: tl } };
+		const found = tl.length ? await Promise.all([ctx.storage.directory.query({ where, limit: 100 }), ctx.storage.submissions.query({ where, limit: 100 })]).catch(() => null) : [{ items: [] }, { items: [] }];
+		if (!found) return fail("READ_FAILED", "The directory could not be read just now. Try again in a moment.");
 		const ids: Record<string, string> = {};
-		for (const item of result.items) {
-			const match = rows.find((row) => clean(row.title) === asString(asRecord(item.data).title));
-			if (match && keyOf(match)) ids[keyOf(match)] = item.id;
+		for (const item of found.flatMap((page) => page.items)) {
+			const data = asRecord(item.data);
+			if (data.gone === true || data.pub === false) continue;
+			const match = rows.find((row) => clean(row.title).toLowerCase() === asString(data.tl));
+			if (match && keyOf(match)) ids[keyOf(match)] = asString(data.listingId) || item.id;
 		}
 		const next = { step: "listings", ids, created: 0, total: rows.length };
 		return (await claim(next)).applied ? answer(next) : answer(saved, true);

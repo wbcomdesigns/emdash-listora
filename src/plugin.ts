@@ -8,6 +8,7 @@ import { webAddress } from "./lib/edits";
 import { LISTINGS, typeBySlug } from "./lib/types";
 import { asNumber, asRecord, asString } from "./lib/util";
 import { sampleRoute } from "./lib/onboard";
+import { ownerOf } from "./lib/listings-query";
 import { claim, dashboard, edit, favorites, message, photo, photoRemove, privacy, renew, reply, review, submit } from "./member";
 import { contact, duplicate, listings, mapPoints, ratings, reviews, suggest } from "./public";
 import { expireAndWarn, notifyOwners, runUpgrade, scheduleAll, sweep, tidy } from "./tasks";
@@ -168,6 +169,17 @@ const plugin: SandboxedPlugin = {
 		duplicate: { public: true, cacheControl: CACHE, handler: async (routeCtx, ctx) => duplicate(routeCtx.input, ctx) },
 		ratings: { public: true, cacheControl: CACHE, methods: ["GET"], handler: async (routeCtx, ctx) => ratings(routeCtx.input, ctx) },
 		reviews: { public: true, cacheControl: CACHE, methods: ["GET"], handler: async (routeCtx, ctx) => reviews(routeCtx.input, ctx) },
+		// Who manages a listing, for its public page: "claim" when an approved claim moved it to a member,
+		// "author" when the member who added it does, else "". Names no member. One call.
+		manager: {
+			public: true,
+			cacheControl: CACHE,
+			methods: ["GET"],
+			handler: async (routeCtx, ctx) => {
+				const { owner, row } = await ownerOf(ctx, asString(asRecord(routeCtx.input).listingId));
+				return { ok: true, by: owner ? (row.claimed === true ? "claim" : "author") : "" };
+			},
+		},
 		contact: { public: true, methods: ["POST"], handler: async (routeCtx, ctx) => contact(routeCtx.input, routeCtx as { requestMeta?: unknown }, ctx) },
 		submit: { permission: MEMBER, methods: ["POST"], handler: async (routeCtx, ctx) => submit(routeCtx, ctx) },
 		review: { permission: MEMBER, methods: ["POST"], handler: async (routeCtx, ctx) => review(routeCtx, ctx) },
