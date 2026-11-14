@@ -4,7 +4,7 @@ import { haversineKm, listingFromContent, matchesQuery, type ListingCard } from 
 import { EDITABLE } from "./edits";
 import { readRating } from "./ratings";
 import { chipField, choiceOf, LISTINGS, mapsSlot, SLOTS, slotsOf, typeBySlug, type ListingType, type Slot } from "./types";
-import { asNumber, asRecord, asString, asStringArray, readCursor, nil, none, notApplied } from "./util";
+import { asNumber, asRecord, asString, asStringArray, readCursor, nil, none, notApplied, nowIso } from "./util";
 
 /**
  * The stored directory index, one row per listing in `directory` (id = listing id), so every public
@@ -137,10 +137,14 @@ async function writeCats(ctx: Ctx, lid: string, cats: string[], row: Record<stri
 	await ctx.storage.dircats.putMany(rows);
 }
 
-/** Take a listing out of the directory (unpublished, trashed, deleted): no longer listed, no longer a public page, under no category. Three calls. Never throws. */
+/**
+ * Take a listing out of the directory (unpublished, trashed, deleted): no longer listed, no longer a
+ * public page, under no category. `up` moves too, so no sweep job read before this can merge the
+ * listing back in (tasks.ts). Three calls. Never throws.
+ */
 export async function hideListing(ctx: Ctx, id: string): Promise<void> {
 	if (!id) return;
-	await ctx.storage.directory.updateIf(id, { where: {}, set: { vis: false, pub: false } }).catch(none);
+	await ctx.storage.directory.updateIf(id, { where: {}, set: { vis: false, pub: false, up: nowIso() } }).catch(none);
 	const cats = asStringArray(asRecord(await ctx.storage.dircats.get(id).catch(nil)).cats);
 	await ctx.storage.dircats.deleteMany([id, ...cats.map((cat) => `${cat}:${id}`)]).catch(() => 0);
 }

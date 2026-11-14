@@ -11,7 +11,7 @@ import { LISTINGS, shownTypes, typeBySlug } from "./lib/types";
 import { nudgeUpgrade, upgradeDone, upgradeNote, type State } from "./lib/upgrade";
 import { asBoolean, asNumber, asRecord, asString, nowIso, readCursor, nil, none, kContext, kDivider, kHeader, kSection, kActions } from "./lib/util";
 import { CLAIM_TIMEOUT_MS } from "./lib/util";
-import { scheduleAll } from "./tasks";
+import { scheduleAll, soon } from "./tasks";
 import { handleTypes } from "./types-admin";
 
 export type BlockMap = Record<string, unknown> & { type: string };
@@ -77,6 +77,9 @@ const after = (shown: number | undefined, decided: boolean) => (shown === undefi
 /** The guard for a stamped decision: the row is still waiting and is the version the admin saw. */
 const stampWhere = (stamp: string, status = "pending"): Where => (/^\d{4}-\d\d-\d\dT/.test(stamp) ? { status, createdAt: stamp } : { status, rev: stamp });
 
+/** A row put back in its list, with a new version so a click on the old one does not land. */
+const reopened = () => ({ status: "pending", rev: crypto.randomUUID() });
+
 /** A row left mid-decision by a cut-off request, older than any request may run. */
 const stale = (row: Record<string, unknown>) => Date.now() - Date.parse(asString(row.claimedAt) || "0") >= CLAIM_TIMEOUT_MS;
 
@@ -93,7 +96,7 @@ async function whyNot(ctx: Ctx, store: "submissions" | "edits" | "photos" | "rev
 	if ((status === "approving" || status === "rejecting") && stale(row) && spend(b)) {
 		// Only while it still holds that same claim: a new claim always writes a new time. A row from
 		// before claim times were kept (0.6.2) has none.
-		const back = await ctx.storage[store].updateIf(id, { where: { status, claimedAt: asString(row.claimedAt) || null }, set: { status: "pending", rev: crypto.randomUUID() } });
+		const back = await ctx.storage[store].updateIf(id, { where: { status, claimedAt: asString(row.claimedAt) || null }, set: { ...reopened() } });
 		if (back.applied) return { message: "A decision on this item was cut off part way. It is back in the list: check it and decide again.", type: "info" };
 	}
 	if (status === "approving" || status === "rejecting") return { message: "Someone else is deciding this right now. If they do not finish, it returns to the list within a few minutes.", type: "error" };
@@ -360,7 +363,7 @@ async function decideChange(ctx: Ctx, settings: Settings, b: Budget, action: str
 	if (!claim.applied) return back(await whyNot(ctx, "edits", id, b, "Someone already handled that change."));
 	const edit = asRecord(claim.data);
 	const release = async (toast: Toast) => {
-		await ctx.storage.edits.updateIf(id, { where: { status: "approving" }, set: { status: "pending", rev: crypto.randomUUID() } });
+		await ctx.storage.edits.updateIf(id, { where: { status: "approving" }, set: { ...reopened() } });
 		return back(toast);
 	};
 	if (action !== "approve") {
@@ -381,7 +384,7 @@ async function decideChange(ctx: Ctx, settings: Settings, b: Budget, action: str
 	const was = asRecord(edit.was);
 	// Someone changed the listing since the owner did: the screen showed values that are no longer there.
 	if (Object.keys(was).some((key) => JSON.stringify(live[key] ?? "") !== JSON.stringify(was[key] ?? ""))) {
-		await ctx.storage.edits.updateIf(id, { where: { status: "approving" }, set: { status: "pending", rev: crypto.randomUUID(), was: Object.fromEntries(Object.keys(was).map((key) => [key, live[key] ?? ""])) } });
+		await ctx.storage.edits.updateIf(id, { where: { status: "approving" }, set: { ...reopened(), was: Object.fromEntries(Object.keys(was).map((key) => [key, live[key] ?? ""])) } });
 		return back({ message: "The live listing changed since the owner sent this. The page now shows its current values: check them and decide again.", type: "info" });
 	}
 	b.used -= 1;
@@ -472,7 +475,7 @@ async function decidePhoto(ctx: Ctx, settings: Settings, b: Budget, action: stri
 	}
 	// If the approval cannot finish, the photo goes back to waiting with a new version.
 	const release = async (message: string) => {
-		await ctx.storage.photos.updateIf(id, { where: { status: "approving" }, set: { status: "pending", rev: crypto.randomUUID() } });
+		await ctx.storage.photos.updateIf(id, { where: { status: "approving" }, set: { ...reopened() } });
 		return back({ message, type: "error" });
 	};
 	spend(b, 3);
@@ -672,7 +675,7 @@ async function decideClaim(ctx: Ctx, settings: Settings, b: Budget, action: stri
 	const row = asRecord(claim.data);
 	const listingId = asString(row.listingId);
 	const release = async (message: string) => {
-		await ctx.storage.claims.updateIf(id, { where: { status: "approving" }, set: { status: "pending", rev: crypto.randomUUID() } });
+		await ctx.storage.claims.updateIf(id, { where: { status: "approving" }, set: { ...reopened() } });
 		return back({ message, type: "error" });
 	};
 	spend(b, 4);
@@ -831,6 +834,7 @@ async function decideMessage(ctx: Ctx, settings: Settings, b: Budget, value: str
 const siteUrl = (ctx: Ctx, path: string) => (/^https?:\/\//.test(asString(ctx.site?.url)) ? new URL(path, asString(ctx.site.url)).href : "");
 
 export async function renderSettings(ctx: Ctx, settings: Settings, _b: Budget, extra: Extra = {}): Promise<BlockResponse> {
+	const rc = settings.recat;
 	const importUrl = siteUrl(ctx, "/listings/import/");
 	const noStatus = settings.fields ? !settings.fields.includes("listing_status") : false;
 	return page("Listora settings", extra, [
@@ -925,7 +929,25 @@ export async function renderSettings(ctx: Ctx, settings: Settings, _b: Budget, e
 			text: `Import and export: download published listings, or add drafts from a spreadsheet. Nothing goes live until you approve it.${importUrl ? "" : " Open /listings/import/ on your site while signed in."}`,
 		},
 		...(importUrl ? [kActions([{ type: "link", label: "Open import and export", target: { kind: "external", url: importUrl } }])] : []),
+		kDivider,
+		// The version token is the press it follows, so a second press (another tab, a double click) starts nothing.
+		kActions([{ type: "button", action_id: "recat", label: "Refresh categories now", value: String(rc.at) }]),
+		kContext(`A category changed in EmDash's sidebar shows in the directory within a few hours, at once when its listing is published, or when this refresh finishes.${rc.at ? (rc.done ? ` Last finished ${when(ctx, rc.done)}.` : ` Running since ${when(ctx, rc.at)}.`) : ""}`),
 	]);
+}
+
+const when = (ctx: Ctx, at: number) => `${day(ctx, at)}, ${new Date(at).toISOString().slice(11, 16)} (UTC)`;
+
+/** Refresh categories now: every listing's categories read again by the sweep chain (tasks.ts). Four calls at most. */
+async function refreshCats(ctx: Ctx, settings: Settings, b: Budget, token: string): Promise<BlockResponse> {
+	const rc = settings.recat;
+	spend(b, 3);
+	const running = (await ctx.cron?.list())?.some((task) => task.name.startsWith("sweep-more"));
+	if (token !== String(rc.at) || (running && !rc.done && rc.at)) return renderSettings(ctx, settings, b, { toast: { message: "A refresh is already running or just finished.", type: "info" } });
+	await ctx.settings.set(KEY.recat, (settings.recat = { at: Date.now(), done: 0 }));
+	// A chain already running goes back to the first listing by itself.
+	if (!running) await ctx.cron?.schedule("sweep-more", { schedule: soon(), data: { at: "" } });
+	return renderSettings(ctx, settings, b, { toast: { message: "Refreshing categories in the background.", type: "success" } });
 }
 
 /**
@@ -1231,6 +1253,7 @@ export async function handleAdmin(input: unknown, ctx: Ctx): Promise<BlockRespon
 		return renderSetup(ctx, settings, b, action === "kit_done" ? { toast: { message: "Noted. The install guide link stays on this page.", type: "success" } } : {});
 	}
 
+	if (type === "block_action" && action === "recat") return refreshCats(ctx, settings, b, asString(raw.value));
 	if (type === "form_submit" && action.startsWith("save_")) return saveSettings(ctx, settings, b, action, asRecord(raw.values));
 
 	if (type === "block_action" && action === "review") {

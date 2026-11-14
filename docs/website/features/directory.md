@@ -20,7 +20,7 @@ Sort is **Featured**, **Rating**, or **Title**. Once a type is picked, its field
 
 The directory reads one page at a time from Listora's directory index, so filters, sorts and paging work the same on a directory of any size. **Next** and **Previous** move between pages.
 
-A listing filed under several categories is found under each of them. When you change a published listing's categories in the admin, EmDash saves them at once without telling plugins, so the directory follows within about an hour plus one pass over the listings (about 1 hour 20 minutes at 500 listings, 4 hours 40 minutes at 6,000). Publish the listing to show the change at once. After an update to 0.8.0, listings that existed before reach the category, city and chip filters and the sorts as Listora catches up in the background, a hundred listings at a time: within hours, with no admin visit.
+A listing filed under several categories is found under each of them. When you change a published listing's categories in the admin, EmDash saves them at once without telling plugins, so the directory follows within about an hour plus one pass over the listings (about 1 hour 20 minutes at 500 listings, 4 hours 40 minutes at 6,000). Publish the listing to show the change at once, or choose **Refresh categories now** under the tabs on the Settings page to read every listing's categories again in the background; the line under the button says when it started and when it finished, and pressing it again while it runs starts nothing. After an update to 0.8.0, listings that existed before reach the category, city and chip filters and the sorts as Listora catches up in the background, a hundred listings at a time: within hours, with no admin visit.
 
 ## Cards and the featured row
 

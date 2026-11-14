@@ -14,7 +14,7 @@ import { EMAIL_RE, emailKey } from "./member";
 type Ctx = PluginContext;
 
 /** One minute from now, as a one-shot task time: work left over carries on without waiting an hour. */
-const soon = () => new Date(Date.now() + 60_000).toISOString();
+export const soon = () => new Date(Date.now() + 60_000).toISOString();
 
 /**
  * The name for the next one-shot step. EmDash deletes a one-shot task's row when the run ends (by
@@ -283,7 +283,9 @@ export const STALE = 3_600_000;
  * Publishing a listing reads them at once (its content hook). Otherwise a change shows within about
  * an hour plus one pass over the listings: 28 listings a minute, so about 1 hour 20 minutes on a site
  * of 500 listings and 4 hours 40 minutes at 6,000. The hourly run also refreshes the settings' map of
- * category slugs, so a category added or renamed is found by its new slug.
+ * category slugs, so a category added or renamed is found by its new slug. Refresh categories now
+ * (admin) makes every read before the press stale: the chain goes from the first listing to the last
+ * and then records when it finished (settings `state_recat`).
  *
  * The hourly run (`sweep`) checks the next 100 listings, from where it stopped (KV). When any need
  * work and no chain is running, it starts one there. A chain run (`sweep-more`, alternating names,
@@ -305,7 +307,12 @@ export async function sweep(ctx: Ctx, running = "sweep", data?: unknown): Promis
 		const map = termMap(await ctx.taxonomies?.getTerms("listing_category").catch(nil));
 		if (JSON.stringify(map) !== JSON.stringify(settings.terms) && spend(b)) await ctx.settings.set(KEY.terms, (settings.terms = map));
 	}
-	const at = readPosition(chain ? asRecord(data).at : await ctx.kv.get(SWEEP)) ?? { c: "", s: 0 };
+	// Refresh categories now (admin): every listing's categories read before the press are stale. A
+	// chain started before it, or by the hourly run, goes back to the first listing and carries it (r).
+	const pending = settings.recat.done ? 0 : settings.recat.at;
+	const r = chain ? pending : 0;
+	let at = readPosition(chain ? asRecord(data).at : await ctx.kv.get(SWEEP)) ?? { c: "", s: 0 };
+	if (r && asNumber(asRecord(data).r) !== r) at = { c: "", s: 0 };
 	spend(b, 3);
 	const page = await ctx.content!.list(LISTINGS, { limit: 100, ...(at.c ? { cursor: at.c } : {}) });
 	const items = page.items.slice(at.s);
@@ -327,13 +334,14 @@ export async function sweep(ctx: Ctx, running = "sweep", data?: unknown): Promis
 		const rating = readRating(ratings.get(item.id));
 		const row = stored ? { ...stored, ...part } : { ...part, exp: asNumber(asRecord(subs.get(item.id)).expires_at) ?? 0, warned: 0, avg: rating.average, rc: rating.count, rseq: 0 };
 		if (!stored) make.push({ id: item.id, data: row });
-		else if (Object.entries(part).some(([field, value]) => JSON.stringify(stored[field]) !== JSON.stringify(value))) jobs.push([item.id, part, stored.up ?? null]);
+		// A row ahead of the listing read (a newer save, or hidden since: hideListing moves `up`) is left alone.
+		else if (!(Date.parse(asString(stored.up)) > Date.parse(asString(part.up))) && Object.entries(part).some(([field, value]) => JSON.stringify(stored[field]) !== JSON.stringify(value))) jobs.push([item.id, part, stored.up ?? null]);
 		if (!published) continue;
 		const cats = asRecord(known.get(item.id));
 		const old = asStringArray(cats.cats);
 		const read = asNumber(cats.at) ?? 0;
 		// Never read, or an hour old: read again. On a site without categories there is nothing to read.
-		if (terms && !(now - read < STALE)) jobs.push([item.id, old, catCopy(row)]);
+		if (terms && !(now - read < STALE && read >= pending)) jobs.push([item.id, old, catCopy(row)]);
 		else {
 			const rows = catRows(item.id, old, row, read);
 			if (rows[0]!.data.sig !== cats.sig) catPut.push(...rows);
@@ -342,7 +350,7 @@ export async function sweep(ctx: Ctx, running = "sweep", data?: unknown): Promis
 	const next = page.hasMore && page.cursor ? writePosition({ c: page.cursor, s: 0 }) : "";
 	if (!chain) {
 		spend(b);
-		if (make.length || jobs.length || catPut.length) await ctx.cron?.schedule("sweep-more", { schedule: soon(), data: { at: writePosition(at) } });
+		if (make.length || jobs.length || catPut.length || pending) await ctx.cron?.schedule("sweep-more", { schedule: soon(), data: { at: writePosition(at) } });
 		else await ctx.kv.set(SWEEP, next);
 		return;
 	}
@@ -358,7 +366,9 @@ export async function sweep(ctx: Ctx, running = "sweep", data?: unknown): Promis
 	const stop = jobs[Math.max(lanes, 0) * 7]?.[0] as string | undefined;
 	const pos = stop ? writePosition({ c: at.c, s: at.s + ids.indexOf(stop) }) : next;
 	spend(b);
-	if (pos) await ctx.cron?.schedule(nextStep(running, "sweep-more"), { schedule: soon(), data: { at: pos } });
+	if (pos) await ctx.cron?.schedule(nextStep(running, "sweep-more"), { schedule: soon(), data: { at: pos, r } });
+	// The last listing of a refresh: the admin page says when it finished.
+	else if (r) await ctx.settings.set(KEY.recat, { at: r, done: Date.now() });
 	else await ctx.kv.set(SWEEP, "");
 }
 

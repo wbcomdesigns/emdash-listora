@@ -6,7 +6,7 @@ import { publishNow } from "./listings-query";
 import { V } from "./ratings";
 import { loadSettings, onlyKnown } from "./settings";
 import { DEMO_MEMBER, LISTINGS } from "./types";
-import { asNumber, asRecord, asString, nowIso, nil } from "./util";
+import { asNumber, asRecord, asString, fail, nowIso, nil, READ_FAILED } from "./util";
 
 /**
  * The sample directory. Its rows live in the site kit (`lib/listora-sample.json`); the kit's admin-only
@@ -40,7 +40,6 @@ export async function sampleState(ctx: PluginContext): Promise<SampleState> {
 	return { running: running(saved), done: saved.step === "done", created: saved.created, total: saved.total };
 }
 
-const fail = (code: string, message: string) => ({ ok: false, error: { code, message } });
 const list = (value: unknown) => (Array.isArray(value) ? value.slice(0, MAX_ROWS).map(asRecord) : []);
 /** A row's key from the kit's file: plain letters, digits and dashes. */
 /** The named text fields of a row, each cleaned and capped. */
@@ -73,7 +72,7 @@ export async function sampleRoute(input: unknown, ctx: PluginContext) {
 		const tl = [...new Set(rows.map((row) => clean(row.title).toLowerCase()).filter(Boolean))].slice(0, 50);
 		const where = { tl: { in: tl } };
 		const found = tl.length ? await Promise.all([ctx.storage.directory.query({ where, limit: 100 }), ctx.storage.submissions.query({ where, limit: 100 })]).catch(nil) : [{ items: [] }, { items: [] }];
-		if (!found) return fail("READ_FAILED", "The directory could not be read just now. Try again in a moment.");
+		if (!found) return READ_FAILED;
 		const ids: Record<string, string> = {};
 		for (const item of found.flatMap((page) => page.items)) {
 			const data = asRecord(item.data);

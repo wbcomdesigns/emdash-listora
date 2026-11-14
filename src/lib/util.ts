@@ -44,6 +44,11 @@ export function parseJson<T>(value: unknown, fallback: T): T {
 	}
 }
 
+/** A route's refusal, the same shape everywhere. */
+export const fail = (code: string, message: string) => ({ ok: false, error: { code, message } });
+export const invalid = (message: string) => fail("VALIDATION_ERROR", message);
+export const READ_FAILED = fail("READ_FAILED", "The directory could not be read just now. Try again in a moment.");
+
 export function nowIso(): string {
 	return new Date().toISOString();
 }

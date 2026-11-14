@@ -9,11 +9,10 @@ import { readRating } from "./lib/ratings";
 import { loadSettings, type Settings } from "./lib/settings";
 import { budget } from "./lib/budget";
 import { indexReady, nudgeUpgrade } from "./lib/upgrade";
-import { asNumber, asRecord, asString, nowIso, readCursor, nil, none } from "./lib/util";
+import { asNumber, asRecord, asString, fail, invalid, nowIso, READ_FAILED, readCursor, nil, none } from "./lib/util";
 import { NO_LISTING, plainEmail } from "./member";
 
 type Ctx = PluginContext;
-const fail = (code: string, message: string) => ({ ok: false, error: { code, message } });
 
 export const PER_PAGE = 24;
 const REVIEWS_PER_PAGE = 20;
@@ -34,8 +33,7 @@ async function building(ctx: Ctx, settings: Settings) {
 	if (Date.now() - (Number(mark?.value) || 0) > 60_000 && (await ctx.kv.compareAndSet("state:nudge", mark?.revision ?? null, Date.now()).catch(nil))?.applied) await nudgeUpgrade(ctx, settings, budget(3));
 	return BUILDING;
 }
-const READ_FAILED = fail("READ_FAILED", "The directory could not be read just now. Try again in a moment.");
-const BAD_POSITION = fail("VALIDATION_ERROR", "That page of results could not be read. Start the search again.");
+const BAD_POSITION = invalid("That page of results could not be read. Start the search again.");
 
 /**
  * One page of the directory, from the stored index. Filters the index has (listing type, category,
@@ -51,12 +49,12 @@ export async function listings(input: unknown, ctx: Ctx) {
 	const raw = asRecord(input);
 	const settings = await loadSettings(ctx);
 	if (!indexReady(settings)) return building(ctx, settings);
-	if ((asNumber(raw.page) ?? 1) > 1 && !raw.cursor) return fail("VALIDATION_ERROR", "Ask for the next page with the cursor from the previous answer.");
+	if ((asNumber(raw.page) ?? 1) > 1 && !raw.cursor) return invalid("Ask for the next page with the cursor from the previous answer.");
 	const from = readPosition(raw.cursor);
 	if (from === null) return BAD_POSITION;
 	const f = readFilters(raw);
 	const refused = slotRefusal(f, settings.types);
-	if (refused) return fail("VALIDATION_ERROR", refused);
+	if (refused) return invalid(refused);
 	// A category's rows go by its key; a slug the site does not have matches nothing. One call at most.
 	if (f.category) f.category = (await catKey(ctx, settings.terms, f.category)) || "-";
 	const slot = slotOf(f);
@@ -208,7 +206,7 @@ export async function reviews(input: unknown, ctx: Ctx) {
 	if (!listingId) return { ok: true, items: [], average: 0, count: 0 };
 	// A cursor is the visitor's to change: one storage cannot read is answered in plain words.
 	const cursor = readCursor(raw.cursor);
-	if (cursor === null) return fail("VALIDATION_ERROR", "Those reviews could not be loaded. Reload the page to see the newest reviews.");
+	if (cursor === null) return invalid("Those reviews could not be loaded. Reload the page to see the newest reviews.");
 	const [page, stored] = await Promise.all([
 		ctx.storage.reviews.query({ where: { listingId, status: "published" }, orderBy: { createdAt: "desc" }, limit: REVIEWS_PER_PAGE, ...(cursor ? { cursor } : {}) }),
 		ctx.storage.ratings.get(listingId),
@@ -241,7 +239,7 @@ export async function contact(input: unknown, request: { requestMeta?: unknown }
 	const listingId = asString(raw.listingId || raw.listing_id);
 	const email = asString(raw.email);
 	const message = asString(raw.message);
-	if (!listingId || !message) return fail("VALIDATION_ERROR", "Listing and message are required.");
+	if (!listingId || !message) return invalid("Listing and message are required.");
 	if (asString(raw.company_website)) return fail("SPAM", "Message rejected.");
 	if (email.trim() && !plainEmail(email)) return fail("INVALID_EMAIL", "Enter a full email address, or leave it blank.");
 	const listing = await publicListing(ctx, listingId);

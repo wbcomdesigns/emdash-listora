@@ -109,6 +109,9 @@ const MEASURED: Record<string, number> = {
 	"admin save_lifetime (refused)": 1,
 	"admin save_photos": 2,
 	"admin save_messages": 2,
+	// 0.8.0 step 9c: Refresh categories now (the task list, the press, the chain's first step).
+	"admin recat": 3,
+	"admin recat (again, already running)": 2,
 	"admin page_load /types": 6,
 	"admin types_page": 6,
 	"admin type_add": 4,
@@ -695,6 +698,30 @@ describe("bridge calls per entry point, worst case", () => {
 		expect(await rt.inspect.storage.get("directory", missed.id)).toMatchObject({ vis: true, title: "Missed Cafe" });
 		// Rows the upgrade built have no category rows: the category tasks read each listing's categories (0.8.0).
 		expect((await rt.inspect.storage.list<Record<string, unknown>>("dircats")).filter((row) => Array.isArray(row.data.cats)).length).toBeGreaterThan(30);
+
+		// Refresh categories now (0.8.0 step 9c): the press, a second press, and its chain to the last
+		// listing, every category read again, under the same names and pins as the hourly chain.
+		const recat = (value: string) => admin({ type: "block_action", action_id: "recat", value, page: "/settings" });
+		taskData.clear();
+		expect((await measure("admin recat", () => recat("0"))).toast?.type).toBe("success");
+		expect((await measure("admin recat (again, already running)", () => recat("0"))).toast?.type).toBe("info");
+		name = "sweep-more";
+		for (let run = 0; run < 80 && name; run += 1) {
+			const data = taskData.get(name);
+			taskData.delete(name);
+			await measure("cron sweep-more (each run)", () => hook("cron", { ...cronEvent(name), data }));
+			const tail = name.endsWith("-2") ? "-2" : "";
+			for (const lane of ["a", "b", "c", "d"]) {
+				const fix = `sweep-fix-${lane}${tail}`;
+				if (!taskData.has(fix)) continue;
+				const jobs = taskData.get(fix);
+				taskData.delete(fix);
+				await measure("cron sweep-fix (seven changes)", () => hook("cron", { ...cronEvent(fix), data: jobs }));
+			}
+			name = ["sweep-more", "sweep-more-2"].find((next) => taskData.has(next)) ?? "";
+		}
+		expect(name).toBe("");
+		expect(await rt.inspect.setting("state_recat")).toMatchObject({ done: expect.any(Number) });
 	});
 
 	it("admin type editor", async () => {

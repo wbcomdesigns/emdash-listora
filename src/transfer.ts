@@ -8,10 +8,9 @@ import { clean, detailOf, detailText, LINK_RULE, storedDetails, typeValues, webA
 import { fieldsOf } from "./lib/listings-query";
 import { loadSettings, onlyKnown } from "./lib/settings";
 import { LISTINGS, PLACE_FIELDS, typeBySlug, type ListingType } from "./lib/types";
-import { asRecord, asString, nowIso, readCursor, nil, notApplied } from "./lib/util";
+import { asRecord, asString, fail, invalid, nowIso, READ_FAILED, readCursor, nil, notApplied } from "./lib/util";
 
 type Ctx = PluginContext;
-const fail = (code: string, message: string) => ({ ok: false, error: { code, message } });
 
 /** Listings per export request: seven pages of 100, one call each. */
 const EXPORT_PAGES = 7;
@@ -124,11 +123,11 @@ export async function importCsv(input: unknown, ctx: Ctx) {
 	const raw = asRecord(input);
 	const text = asString(raw.csv);
 	const importing = asString(raw.mode) === "import";
-	if (!text.trim()) return fail("VALIDATION_ERROR", "Choose a file first.");
+	if (!text.trim()) return invalid("Choose a file first.");
 	if (text.length > IMPORT_MAX_CHARS) return fail("TOO_BIG", `That file is too large. Split it into files of up to ${IMPORT_MAX_ROWS} listings.`);
 	const parsed = parseCsv(text);
-	if (parsed.length === 0) return fail("VALIDATION_ERROR", 'No listings found. The first row must be column names, and one of them must be "title".');
-	if (!parsed.some((row) => "title" in row)) return fail("VALIDATION_ERROR", 'This file has no "title" column. The first row must be the column names. Download the sample file to see them.');
+	if (parsed.length === 0) return invalid('No listings found. The first row must be column names, and one of them must be "title".');
+	if (!parsed.some((row) => "title" in row)) return invalid('This file has no "title" column. The first row must be the column names. Download the sample file to see them.');
 	if (parsed.length > IMPORT_MAX_ROWS) return fail("TOO_BIG", `That file has ${parsed.length} rows. Import up to ${IMPORT_MAX_ROWS} at a time.`);
 	if (importing && parsed.length > IMPORT_BATCH) {
 		return fail("TOO_BIG", `This site imports ${IMPORT_BATCH} listings per request. Copy the Listora site kit again: its import page sends a file in batches.`);
@@ -189,7 +188,7 @@ export async function importCsv(input: unknown, ctx: Ctx) {
 			for (const item of [...waiting.items, ...older.items]) known.add(key(asString(asRecord(item.data).title), asString(asRecord(item.data).city)));
 		}
 	} catch {
-		return fail("READ_FAILED", "The directory could not be read just now. Try again in a moment.");
+		return READ_FAILED;
 	}
 	for (const item of candidates) {
 		if (known.has(key(item.data.title, item.data.city))) duplicates.push({ line: item.line, title: item.data.title, city: item.data.city });

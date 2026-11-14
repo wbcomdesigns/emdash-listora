@@ -13,6 +13,7 @@ Listing types you can edit, custom fields and a built-in Software type. No new p
 - New      - Filter chips for one choice field per type, such as What it is for Software.
 - New      - Visitors can sort a picked type by up to three of its number or date fields, highest or lowest first, such as stars or last release.
 - New      - A listing a member added shows Managed by its author, whether it was approved in Listora's queue or published from EmDash's content screen, and Claimed listing stays for approved claims.
+- New      - A Refresh categories now button on the Settings page reads every listing's categories again in the background and says when it finished.
 - New      - The sample directory loads from its own page in the site kit and now adds 17 listings, including 3 Software listings.
 - Improve  - The directory pages through the plugin's index, so filters and sorts work on any number of listings.
 - Improve  - Keyword search uses EmDash's own site search.
@@ -25,7 +26,7 @@ Listing types you can edit, custom fields and a built-in Software type. No new p
 - Fix      - CSV import stores no address for a type without a place, and the forms no longer ask for amenities on one.
 - Fix      - A required yes or no field can be answered No.
 - Fix      - A field labelled Constructor works like any other.
-- Fix      - The background catch-up never undoes a renewal or a new rating made at the same moment.
+- Fix      - The background catch-up never undoes a renewal or a new rating made at the same moment, and never shows a listing unpublished while it ran.
 - Fix      - Admin decision buttons no longer carry a stale waiting count.
 - Fix      - Messages sent before 0.7.1 say whether the owner was told.
 - Fix      - Card titles, breadcrumbs and map zoom are easier to tap on a phone.
