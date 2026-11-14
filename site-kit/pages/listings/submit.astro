@@ -42,7 +42,7 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 			<li><button type="button" data-step="5">{S.submit.stepPreview}</button></li>
 		</ol>
 
-		<div id="listora-status" class="listora-status" hidden></div>
+		<div id="listora-status" class="listora-status" role="status" aria-live="polite" hidden></div>
 		<p id="dup-warning" class="listora-status" data-tone="error" hidden></p>
 
 		<form id="listora-submit" class="listora-form" novalidate>

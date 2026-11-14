@@ -8,6 +8,7 @@ Fixes from the first walk of 0.7.0 on a Cloudflare site. Copy the kit again afte
 
 - Fix      - After an update, the first visitor to the directory starts the data upgrade, so it no longer waits for an admin to open a Listora page.
 - Fix      - Importing a spreadsheet on a slow site goes on from where it stopped, never adds a row twice, and says how many rows were added.
+- Fix      - Screen readers announce the message after sending a listing or its changes.
 - Fix      - An import never takes over a draft someone made in the editor, and Continue works however long after the stop it is pressed.
 - Fix      - A request the site could not finish shows a plain message instead of the server's own technical text.
 - Fix      - Turning on listing expiry in the plugin's settings form in Plugins now expires listings on the daily schedule.
