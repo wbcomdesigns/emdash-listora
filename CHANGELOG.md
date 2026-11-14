@@ -8,12 +8,14 @@ Fixes from the first walk of 0.7.0 on a Cloudflare site. Copy the kit again afte
 
 - Fix      - After an update, the first visitor to the directory starts the data upgrade, so it no longer waits for an admin to open a Listora page.
 - Fix      - Importing a spreadsheet on a slow site goes on from where it stopped, never adds a row twice, and says how many rows were added.
+- Fix      - An import never takes over a draft someone made in the editor, and Continue works however long after the stop it is pressed.
 - Fix      - A request the site could not finish shows a plain message instead of the server's own technical text.
 - Fix      - Turning on listing expiry in the plugin's settings form in Plugins now expires listings on the daily schedule.
 - Fix      - Messages says plainly when the site has no email provider and the owner was not told, and the notice goes out once a provider is set up.
 - Fix      - After Send changes for approval, the edit page says the changes are waiting.
 - Fix      - Listing reviews counts owner replies waiting for approval, not only reviews.
 - Fix      - Publishing a listing reads its current revision first, as EmDash requires, on every approval and every scheduled change.
+- Fix      - An approval that meets someone else's unsaved edit to the same listing publishes nothing, so their unfinished change never goes live.
 - Dev      - The site kit uses the shared Wbcom helper (src/lib/wbcom-kit.ts) to reach the plugin, and the setup script never replaces a newer copy of it.
 - Dev      - Delete my data erases only on a POST request, and the route declares GET and POST.
 - Dev      - The settings form limits expiry days to 0 to 3650 and photos per listing to 0 to 20.

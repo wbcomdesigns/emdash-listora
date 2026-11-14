@@ -1619,6 +1619,24 @@ describe("an import cut off part way", () => {
 	});
 });
 
+describe("an import never takes a draft someone made in the editor", () => {
+	it("imports a row as a new listing when the only match is a draft with an author", async () => {
+		const rt = await createPluginRuntimeTestHost();
+		await rt.fixtures.collection(listingsCollection as never);
+		host = { dispose: () => rt.dispose() } as unknown as PluginTestHost;
+		await upgraded(rt);
+		// An editor's own draft, same name and city as a CSV row.
+		const hand = await rt.fixtures.content("listings", { data: { title: "Hand Cafe", city: "Lyon", listing_type: "restaurant" }, slug: "hand-cafe", authorId: "editor-1" } as never);
+		const result = (await rt.transport.invokeRoute("import", { csv: "title,city,listing_type\nHand Cafe,Lyon,restaurant", mode: "import", firstLine: 2 }, { method: "POST" })) as { imported: number };
+		expect(result.imported).toBe(1);
+		// The editor's draft is left out of the queue; the row became its own draft with a queue row.
+		expect(await rt.inspect.storage.get("submissions", hand.id)).toBeNull();
+		const rows = await rt.inspect.storage.list<{ title: string; listingId: string }>("submissions");
+		expect(rows.map((row) => row.data.title)).toEqual(["Hand Cafe"]);
+		expect(rows[0]!.data.listingId).not.toBe(hand.id);
+	});
+});
+
 describe("more than 100 stored rows", () => {
 	// EmDash returns at most 100 rows per storage query, with no error. These read every row.
 	it("finds a pending listing past the first 100 rows, and the queue pages through more than 100", async () => {

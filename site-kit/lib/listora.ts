@@ -350,7 +350,7 @@ if (typeof document !== "undefined") {
  * the id EmDash gives a registry install, then this name (a local install). */
 const PLUGIN = "listora";
 
-export type ApiResult = { ok: boolean; error?: { code?: string; message?: string }; [key: string]: unknown };
+export type ApiResult = { ok: boolean; error?: { code?: string; message?: string; status?: number }; [key: string]: unknown };
 
 /**
  * A refused request as a result. EmDash's own refusals get plain words; a refusal's message passes
@@ -359,7 +359,8 @@ export type ApiResult = { ok: boolean; error?: { code?: string; message?: string
  */
 function failure(json: ApiResult | null, fallback: string, status = 400): ApiResult {
 	if (json?.error?.code === "STORAGE_INDEXES_NOT_READY") return { ok: false, error: { code: "NOT_READY", message: phrase("STORAGE_INDEXES_NOT_READY") } };
-	return { ok: false, error: { code: "FAILED", message: (status < 500 && json?.error?.message) || fallback } };
+	// `status` lets a page tell a refusal (4xx: say it) from the site not answering in time (5xx: try again).
+	return { ok: false, error: { code: "FAILED", message: (status < 500 && json?.error?.message) || fallback, status } };
 }
 
 /** What an owner may upload as a listing photo. Checked again on the server from the file itself. */

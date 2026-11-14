@@ -185,9 +185,11 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 			while (at < records.length) {
 				button.textContent = importProgress(Math.min(at + 2, records.length), records.length);
 				const part = await api("import", { csv: [head, ...records.slice(at, at + 2)].join("\n"), mode: "import", firstLine: at + 2 });
-				// The plugin's own refusal (a code it chose) is shown as it is. Anything else is the site
-				// not answering in time: wait, and send the same rows again, twice at most.
-				if (!part.ok && part.error?.code !== "FAILED" && part.error?.code !== "OFFLINE") return failed(part.error?.message);
+				// A refusal (the plugin's own code, or EmDash's 4xx such as no permission or too large) is shown as
+				// it is. Only no answer or a 5xx is the site not answering in time: wait, and send the same rows
+				// again, twice at most.
+				const timedOut = part.error?.code === "OFFLINE" || (part.error?.code === "FAILED" && (part.error.status ?? 500) >= 500);
+				if (!part.ok && !timedOut) return failed(part.error?.message);
 				if (!part.ok) {
 					if (tries >= 2) return stopped();
 					tries += 1;

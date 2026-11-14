@@ -121,7 +121,7 @@ describe("kit words EmDash's own refusals", () => {
 		const { api } = await import("../site-kit/lib/listora");
 		vi.stubGlobal("fetch", async () => reply(500, { code: "INTERNAL_ERROR", message: "Plugin r_2oeji6rfeg7ovdex exceeded wall-time limit of 30000ms during route:import" }));
 		const result = await api("import", { csv: "title\nA", mode: "import" });
-		expect(result.error).toEqual({ code: "FAILED", message: "Something went wrong. Try again." });
+		expect(result.error).toEqual({ code: "FAILED", message: "Something went wrong. Try again.", status: 500 });
 	});
 
 	it("passes the plugin's own message through", async () => {
@@ -130,7 +130,7 @@ describe("kit words EmDash's own refusals", () => {
 		vi.resetModules();
 		const { api } = await import("../site-kit/lib/listora");
 		vi.stubGlobal("fetch", async () => reply(400, { code: "INVALID", message: "Add a title." }));
-		expect((await api("submit", { title: "" })).error).toEqual({ code: "FAILED", message: "Add a title." });
+		expect((await api("submit", { title: "" })).error).toEqual({ code: "FAILED", message: "Add a title.", status: 400 });
 	});
 });
 

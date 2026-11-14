@@ -25,7 +25,6 @@ export const IMPORT_BATCH = 2;
 /** No new row is started after this long, so a slow site cannot run a request into the 30 s limit. */
 const IMPORT_SECONDS = 15_000;
 /** A draft this new with the same name and city, and no queue row, came from a cut-off import request. */
-const ADOPT_WITHIN = 60 * 60_000;
 /** Rows one check request looks at, and the size of a file the page sends to be checked. */
 const IMPORT_MAX_ROWS = 100;
 const IMPORT_MAX_CHARS = 900_000;
@@ -173,9 +172,13 @@ export async function importCsv(input: unknown, ctx: Ctx) {
 	]);
 	const fields = await fieldsOf(ctx, settings.fields);
 	const orphans = new Map<string, string>();
+	// A draft an import request made before it was cut off: created by the plugin (EmDash records no
+	// author for a plugin's create), same name and city. A draft someone made in the editor has an
+	// author and is never taken. Adoption below also needs it to have no queue row yet.
+	// ponytail: reads the newest 100 drafts; a run left over 100 drafts ago is imported again.
 	for (const item of recent?.items ?? []) {
 		const data = asRecord(item.data);
-		if (started - Date.parse(asString((item as { createdAt?: unknown }).createdAt)) < ADOPT_WITHIN) orphans.set(key(asString(data.title), asString(data.city)), item.id);
+		if (!(item as { authorId?: unknown }).authorId) orphans.set(key(asString(data.title), asString(data.city)), item.id);
 	}
 	let imported = 0;
 	let next: number | undefined;
