@@ -1082,7 +1082,7 @@ export function kitBlocks(ctx: Ctx, settings: Settings): BlockMap[] {
 function onboardBlocks(ctx: Ctx, hasCollection: boolean, listings: boolean, sample: SampleState): BlockMap[] {
 	const url = siteUrl(ctx, "/listings/sample/");
 	const missing = hasCollection
-		? `The listings collection is ready. Load sample data so the first visit shows real NYC cards, reviews, and a claim: 12 listings, plus two waiting for your approval. It runs on the site kit page /listings/sample/ while you keep it open.${url ? "" : " Open it on your site while signed in."}`
+		? `The listings collection is ready. Load sample data so the first visit shows cards, reviews, and a claim: 17 listings (3 Software), two waiting for your approval. It runs on the site kit page /listings/sample/ while you keep it open.${url ? "" : " Open it on your site while signed in."}`
 		: "This site has no listings collection yet. The command above prints the step that creates it. Then load sample data here.";
 	return [
 		{ type: "banner", title: "Get a finished first look", description: missing, variant: hasCollection ? "default" : "alert" },

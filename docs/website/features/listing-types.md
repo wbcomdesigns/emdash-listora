@@ -6,22 +6,21 @@ Open it from the admin menu: Listora, **Listing types**. Every listing has one t
 
 Listora comes with eleven built-in types: Business, Restaurant, Real estate, Hotel, Event, Job, Healthcare, Education, Place, Classified and Software. You can edit and hide them, and add your own.
 
-<!-- Screenshot for the walk: the Listing types list at 1440 -->
+![The Listing types page: counts of types and hidden types, then the list of types five to a page](../images/listing-types-list.webp)
 
 ## The list
 
-The list shows five types to a page, with **Next** and **Previous page**. Each row says:
+The page opens with two counts: **Types** and **Hidden**. The list shows five types to a page, with **Next** and **Previous page**. Each row says:
 
 | Column | What it shows |
 | --- | --- |
-| Type | The name visitors see |
-| Made by | Built in, or Your own |
-| Colour | The type's colour, by name |
+| Type | The name visitors see. It is also the button that opens the type |
 | Listings | Published listings of this type, and listings that were published once |
-| Has a place | Yes when listings of this type have a map, address, city and opening hours |
+| Place | Yes when listings of this type have a map, address, city and opening hours |
 | On the form | Shown (offered for new listings) or Hidden |
+| Made by | Built in, or Your own |
 
-Press **Edit** on a row to open the type.
+Press a type's name to open it. On a phone the name comes first, so the way in is on screen without scrolling sideways. The type's colour shows on its form.
 
 ## Add a type
 
@@ -33,11 +32,11 @@ The form under the list asks for:
 - **Icon on listings without a photo**, from a list of icons.
 - **Listings have a place**. Turn it off for things with no address, such as software or online services.
 
+![The Add a type form: name, schema.org type, colour, icon and the has-a-place switch](../images/listing-types-add-type-form.webp)
+
 Press **Add type**. The type opens, ready for its fields. A site can add up to 40 types of its own.
 
 ## Edit a type
-
-<!-- Screenshot for the walk: one type with its fields table and the Add a field form -->
 
 The type's page has the same form with **Save type**, then:
 
@@ -46,18 +45,37 @@ The type's page has the same form with **Save type**, then:
 
 ## Fields
 
-Below the type form is the table of the type's extra fields, and **Add a field**. Add one field per press of **Add field**:
+Below the type form is the table of the type's extra fields, and **Add a field**. The table shows each field's label, kind, choices, whether it is required and shown on cards, its sort or filter, and **Edit**.
 
-- **Label**. Two fields of one type cannot share a label.
+![The fields table of a type: label, kind, choices, required, on cards, sort or filter and Edit for each field](../images/listing-types-fields-table.webp)
+
+Add one field per press of **Add field**:
+
+![The Add a field form: label, kind, required and show on directory cards](../images/listing-types-add-field-form.webp)
+
+
+- **Label**. Two fields of one type cannot share a label, and a label that matches a standard spreadsheet column (Title, City and the rest) is refused, so every field gets its own CSV column.
 - **Kind**: Text, Number, Choice from a list, Link, Date, or Yes or no.
 - **Choices, one per line**, for a choice field. At least two, up to 30.
 - **Required on the listing form**.
 - **Show on directory cards**.
-- **Visitors can sort by it**, for a number or date field: Sort 1, Sort 2 or Sort 3. Each sort can belong to one field of the type. Listora refuses a sort another field already uses and names that field.
+- **Visitors can sort by it**, for a number or date field: Sort 1, Sort 2 or Sort 3. Each sort can belong to one field of the type. Listora refuses a sort another field already uses and names that field. The sorts show in the directory once a visitor picks the type.
+- **Visitors can filter by it with chips**, for a choice field. One field per type: its choices become chips in the directory once a visitor picks the type. Listora refuses a second one and names the field that has it. Software's **What it is** is its chip field.
 
 Press **Edit** on a field to change it, or to remove it with **Remove field** (it asks once). A removed field's values stay on the listings: they are no longer shown or asked for. A type can have up to 30 fields.
 
-When you save a field's sort, Listora starts filling every listing's sort values straight away, a few listings a minute, so a sort is ready without waiting for the hourly check.
+When you save a field's sort or chips, Listora starts filling every listing's values straight away, a hundred listings a run, so a sort or chip is ready within hours on a large directory without waiting for the hourly check.
+
+## Types without a place
+
+Turn off **Listings have a place** on a type for things with no address: software, online services, remote jobs. Listings of that type then have, on every screen:
+
+- no city, address, state, country or map position on the submit and edit forms, and none stored, even from a CSV import;
+- no map, address, opening hours, directions, or Open and Closed on the listing page;
+- no location box, city chips or map in the directory once the type is picked;
+- no address or position in what search engines are told.
+
+Turning the switch back on shows again whatever a listing stored before it was turned off.
 
 ## Software
 

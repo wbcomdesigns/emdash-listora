@@ -11,7 +11,7 @@ From your site's root folder, with the tag of the Listora version installed on t
 ```bash
 kit="$(mktemp -d)" &&
   git clone --depth 1 \
-    --branch v0.7.1 \
+    --branch v0.8.0 \
     https://github.com/wbcomdesigns/emdash-listora \
     "$kit/emdash-listora" &&
   "$kit/emdash-listora/scripts/add-to-site.sh" .
@@ -31,7 +31,7 @@ Checked on EmDash 1.3.1 with the `blog` template on Node. The Cloudflare lines f
 
 Collection: `npx emdash seed .emdash/listora-seed.json --no-content` in your site (Node 22.16 or later), after the setup command.
 
-Sample rows: Admin, Listora, Get started, **Load sample directory**, which opens `/listings/sample/` (site admins only): 12 NYC listings with reviews and a claim, plus two waiting for approval. The rows are in `lib/listora-sample.json`.
+Sample rows: Admin, Listora, Get started, **Load sample directory**, which opens `/listings/sample/` (site admins only): 17 listings (14 New York places and 3 Software listings) with reviews and a claim; two of them wait for approval. The rows are in `lib/listora-sample.json`.
 
 In Admin, Menus, add four links: `/listings/`, `/listings/submit/`, `/listings/calendar/`, `/account/`.
 

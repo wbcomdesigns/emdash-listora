@@ -26,7 +26,7 @@ Checked on EmDash 1.3.1 with the `blog` template on Node.
    ```bash
    kit="$(mktemp -d)" &&
      git clone --depth 1 \
-       --branch v0.7.1 \
+       --branch v0.8.0 \
        https://github.com/wbcomdesigns/emdash-listora \
        "$kit/emdash-listora" &&
      "$kit/emdash-listora/scripts/add-to-site.sh" .
@@ -71,7 +71,7 @@ Start the site and open each one:
 | `/listings/calendar/` | The events calendar |
 | `/account/` | A sign-in prompt, or the owner dashboard when signed in |
 
-To see it full first, open the admin, Listora, Get started, and choose **Load sample directory**. That opens the kit page `/listings/sample/` (site admins only), which adds 12 listings with reviews, plus two waiting in the Listings queue so you can try an approval. Keep the page open while it loads. Then set your options under Listora, Settings. Import and export is at `/listings/import/` for site admins.
+To see it full first, open the admin, Listora, Get started, and choose **Load sample directory**. That opens the kit page `/listings/sample/` (site admins only), which adds 17 listings (14 New York places and 3 Software listings) with reviews; two of them wait in the Listings queue so you can try an approval. Keep the page open while it loads. Then set your options under Listora, Settings. Import and export is at `/listings/import/` for site admins.
 
 ## Optional: a Listings block inside post and page text
 

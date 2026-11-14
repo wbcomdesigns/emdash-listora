@@ -17,6 +17,7 @@ import {
 	placeFor,
 	shownTypes,
 	typeName as nameOf,
+	offersCalendar,
 	typeOf,
 } from "../../lib/listora";
 import { listingCount, pageNumber, pageOf, resultCount, saveNamed, S } from "../../lib/listora-strings";
@@ -374,7 +375,10 @@ function amenityList(value: unknown): string[] {
 					<a class:list={{ "is-active": view !== "list" }} href={link({ ...here, view: "grid" })}>{S.directory.grid}</a>
 					<a class:list={{ "is-active": view === "list" }} href={link({ ...here, view: "list" })}>{S.directory.list}</a>
 				</div>
-				<a class="listora-btn listora-btn--ghost" href="/listings/calendar/">{S.directory.calendar}</a>
+				{/* The calendar lists events only: no link once another type is picked. */}
+				<div id="listora-calendar-slot" hidden={!offersCalendar(type)}>
+					<a class="listora-btn listora-btn--ghost" href="/listings/calendar/">{S.directory.calendar}</a>
+				</div>
 			</div>
 		</div>
 
@@ -524,7 +528,7 @@ function amenityList(value: unknown): string[] {
 
 	// The parts of the page a search changes. Live search loads this same page for the new
 	// query and swaps them in, so there is one way a card is drawn: the server's.
-	const LIVE = ["listora-count", "listora-facets-slot", "listora-featured-slot", "listora-toolbar-count", "listora-sort-slot", "listora-view-toggle", "listora-results", "listora-pager-slot"];
+	const LIVE = ["listora-count", "listora-facets-slot", "listora-featured-slot", "listora-toolbar-count", "listora-sort-slot", "listora-view-toggle", "listora-calendar-slot", "listora-results", "listora-pager-slot"];
 
 	function searchUrl(extra: Record<string, string> = {}): string {
 		const params = new URLSearchParams({
@@ -572,7 +576,7 @@ function amenityList(value: unknown): string[] {
 			if (!from || !to) continue;
 			to.innerHTML = from.innerHTML;
 			if (id === "listora-results") to.className = from.className;
-			if (id === "listora-sort-slot") to.hidden = from.hidden;
+			if (id === "listora-sort-slot" || id === "listora-calendar-slot") to.hidden = from.hidden;
 		}
 		history.replaceState(null, "", url);
 		fillRatings();

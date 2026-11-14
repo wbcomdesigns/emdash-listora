@@ -21,3 +21,6 @@ Yes, with one extra step. The kit includes a Listings block for post and page te
 
 **Can I move listings in from a spreadsheet?**
 Yes. A site admin can import a CSV file at `/listings/import/`. Rows are checked first and arrive as drafts, up to 100 per file.
+
+**Can I add my own listing types and fields?**
+Yes. Listora, Listing types: add types, give each its own fields, and turn off the place for things with no address. A Software type is built in.

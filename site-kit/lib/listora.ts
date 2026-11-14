@@ -67,6 +67,9 @@ export const hasPlace = (types: ListingTypeInfo[], slug: unknown) => typeOf(type
 export const placeFor = (types: ListingTypeInfo[], data: { listing_type?: unknown; city?: unknown; state?: unknown; country?: unknown }) =>
 	hasPlace(types, data.listing_type) ? placeOf(data) : "";
 
+/** The calendar lists Event listings only, so the directory links to it with no type picked or Event picked. */
+export const offersCalendar = (type: string) => !type || type === "event";
+
 /** The schema.org type for a listing page. A type the site does not know is a plain Thing. */
 export function schemaType(types: ListingTypeInfo[], slug: unknown): string {
 	const found = types.find((item) => item.slug === String(slug || "business"));
@@ -330,6 +333,12 @@ export function storedDetails(data: Record<string, unknown>): Record<string, unk
 /** One detail: from `type_fields`, or from its own field for a listing saved before 0.8.0. */
 export function detailValue(data: Record<string, unknown>, stored: Record<string, unknown>, key: string): unknown {
 	return key in stored ? stored[key] : OWN_FIELD_DETAILS.has(key) ? data[key] : undefined;
+}
+
+/** An event's start and end as stored text, from `type_fields` (0.8.0) or the fields 0.7.x wrote. */
+export function eventDates(data: Record<string, unknown>): { start: string; end: string } {
+	const stored = storedDetails(data);
+	return { start: String(detailValue(data, stored, "event_start") || ""), end: String(detailValue(data, stored, "event_end") || "") };
 }
 
 const MONTHS = (style: "long" | "short", locale?: string) =>

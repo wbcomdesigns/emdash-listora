@@ -135,7 +135,7 @@ export const S = {
 		title: "Load the sample directory",
 		description: "Fill a new directory with sample listings, reviews and a claim.",
 		heading: "Sample directory",
-		intro: "Adds 12 NYC listings with reviews, saved listings and a claim waiting for you, plus two listings waiting for your approval. Keep this page open while it loads. Loading again adds only what is missing.",
+		intro: "Adds 17 listings (14 New York places and 3 Software listings) with reviews, saved listings and a claim waiting for you. Two of the listings wait for your approval. Keep this page open while it loads. Loading again adds only what is missing.",
 		load: "Load sample directory",
 		again: "Load again",
 		resume: "Continue loading",

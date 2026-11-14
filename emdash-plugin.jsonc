@@ -10,7 +10,7 @@
 	"repo": "https://github.com/wbcomdesigns/emdash-listora",
 	"author": { "name": "Wbcom Designs", "url": "https://wbcomdesigns.com", "email": "security@wbcomdesigns.com" },
 	"security": { "email": "security@wbcomdesigns.com" },
-	"description": "A moderated local directory: search, a map, 10 listing types, member submissions, reviews, claims and a dashboard.",
+	"description": "A moderated directory: search, a map, editable listing types with custom fields, a Software type, member submissions, reviews and claims.",
 	"sections": {
 		"description": { "file": "./docs/registry/description.md" },
 		"installation": { "file": "./docs/registry/installation.md" },
