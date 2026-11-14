@@ -3,6 +3,7 @@ import type { PluginContext } from "emdash/plugin";
 import { haversineKm, listingFromContent, matchesQuery, type ListingCard } from "./catalog";
 import { EDITABLE } from "./edits";
 import { readRating } from "./ratings";
+import { mapsSlot, SLOTS, slotsOf, typeBySlug, type ListingType, type Slot } from "./types";
 import { asNumber, asRecord, asString, readCursor } from "./util";
 
 /**
@@ -11,9 +12,10 @@ import { asNumber, asRecord, asString, readCursor } from "./util";
  *
  * Listing fields (written from the published listing by the content hooks, the upgrade and the
  * hourly sweep): `vis` (published and not expired), `title`, `tl` (title in lower case), `slug`,
- * `type`, `city`, `cl` (city in lower case), `feat` (1 when featured), `lat`, `lng`, `ls` (the
- * listing_status field), `card` (what the public routes show) and `edit` (the fields an owner may
- * change, as stored, for the change approval screen).
+ * `type`, `city`, `feat` (1 when featured), `lat`, `lng`, `ls` (the listing_status field), `card`
+ * (what the public routes show), `edit` (the fields an owner may change, as stored, for the change
+ * approval screen) and the sort slots `n1` to `n3` (types.ts slotsOf; only on listings whose type
+ * maps a field to a slot).
  * Plugin fields, never written from the listing: `exp` (expiry time in ms, 0 for none), `warned`
  * (the `exp` the owner was warned about), and the rating copy `avg`, `rc`, `rseq` (see ratings.ts).
  *
@@ -26,8 +28,8 @@ type Item = { id: string; slug: string | null; status: string; data: Record<stri
 
 export type DirRow = Record<string, unknown> & { id: string };
 
-/** The listing part of a row. Nothing here is ever written by a rating or expiry change. */
-export function listingPart(item: Item): Record<string, unknown> {
+/** The listing part of a row, with the sort slots its type maps. Nothing here is ever written by a rating or expiry change. */
+export function listingPart(item: Item, types: readonly ListingType[]): Record<string, unknown> {
 	const card = listingFromContent(item);
 	const data = asRecord(item.data);
 	const edit: Record<string, unknown> = {};
@@ -41,13 +43,13 @@ export function listingPart(item: Item): Record<string, unknown> {
 		slug: card.slug,
 		type: card.listing_type,
 		city: card.city,
-		cl: card.city.toLowerCase(),
 		feat: card.is_featured ? 1 : 0,
 		lat: card.lat,
 		lng: card.lng,
 		ls: card.listing_status,
 		card: shown,
 		edit,
+		...slotsOf(typeBySlug(types, card.listing_type), card.type_fields),
 	};
 }
 
@@ -57,9 +59,9 @@ export function listingPart(item: Item): Record<string, unknown> {
  * starting expiry date (`expOf`, from its submission row): four calls. A row that has no expiry date
  * yet takes the starting one too. Never throws.
  */
-export async function indexListing(ctx: Ctx, item: Item, expOf: () => Promise<number>): Promise<void> {
+export async function indexListing(ctx: Ctx, item: Item, types: readonly ListingType[], expOf: () => Promise<number>): Promise<void> {
 	if (!item?.id) return;
-	const part = listingPart(item);
+	const part = listingPart(item, types);
 	const merged = await ctx.storage.directory.updateIf(item.id, { where: {}, set: part }).catch(() => ({ applied: false as const }));
 	if (merged.applied) {
 		if ((asNumber(asRecord(merged.data).exp) ?? 0) > 0) return;
@@ -116,7 +118,9 @@ export type Filters = {
 	lat: number | null;
 	lng: number | null;
 	radius: number;
-	sort: "featured" | "rating" | "title";
+	sort: "featured" | "rating" | "title" | Slot;
+	/** Direction of a slot sort: most or newest first unless the visitor asks for asc. */
+	order: "asc" | "desc";
 };
 
 export function readFilters(input: unknown): Filters {
@@ -130,7 +134,8 @@ export function readFilters(input: unknown): Filters {
 		lat: asNumber(raw.lat),
 		lng: asNumber(raw.lng),
 		radius: asNumber(raw.radius) ?? 8,
-		sort: sort === "rating" || sort === "title" ? sort : "featured",
+		sort: sort === "rating" || sort === "title" || SLOTS.includes(sort as Slot) ? (sort as Filters["sort"]) : "featured",
+		order: asString(raw.order) === "asc" ? "asc" : "desc",
 	};
 }
 
@@ -150,6 +155,20 @@ export function matches(card: ListingCard, f: Filters): boolean {
 	return true;
 }
 
+/** The sort slot asked for, if any. */
+export const slotOf = (f: Filters): Slot | null => (SLOTS.includes(f.sort as Slot) ? (f.sort as Slot) : null);
+
+/**
+ * Why a slot sort cannot be answered, or "" when it can. A slot means a different field per type, so
+ * it needs a type, and that type must fill the slot.
+ */
+export function slotRefusal(f: Filters, types: readonly ListingType[]): string {
+	const slot = slotOf(f);
+	if (!slot) return "";
+	if (!f.type) return "Choose a listing type to sort by this field.";
+	return mapsSlot(typeBySlug(types, f.type), slot) ? "" : "This listing type has no field to sort by there.";
+}
+
 export const orderOf = (f: Filters): Record<string, "asc" | "desc"> =>
 	f.sort === "rating" ? { avg: "desc" } : f.sort === "title" ? { tl: "asc" } : { feat: "desc" };
 
@@ -157,7 +176,7 @@ export const orderOf = (f: Filters): Record<string, "asc" | "desc"> =>
  * A directory position a visitor sends back: the storage cursor of the page it stopped in and how
  * many rows of that page were already used. Base64 of JSON, checked before storage sees it.
  */
-type Position = { c: string; s: number };
+type Position = { c: string; s: number; p?: 1 };
 
 export function readPosition(value: unknown): Position | null | undefined {
 	const text = asString(value);
@@ -169,7 +188,7 @@ export function readPosition(value: unknown): Position | null | undefined {
 		const s = Math.floor(asNumber(raw.s) ?? 0);
 		if (s < 0 || s > 100) return null;
 		if (c && readCursor(c) === null) return null;
-		return { c, s };
+		return raw.p === 1 ? { c, s, p: 1 } : { c, s };
 	} catch {
 		return null;
 	}
@@ -194,9 +213,11 @@ export async function readRows(
 	from: Position | undefined,
 	reads: number,
 	limit = 100,
+	phase?: 1,
 ): Promise<PageResult> {
 	const out: DirRow[] = [];
-	let position: Position = from ?? { c: "", s: 0 };
+	const at = (c: string, s: number): Position => (phase ? { c, s, p: phase } : { c, s });
+	let position: Position = from ?? at("", 0);
 	for (let read = 0; read < reads; read += 1) {
 		const page = await ctx.storage.directory.query({ where, ...(orderBy ? { orderBy } : {}), limit, ...(position.c ? { cursor: position.c } : {}) });
 		const items = page.items.map((item) => ({ ...asRecord(item.data), id: item.id }) as DirRow);
@@ -206,12 +227,43 @@ export async function readRows(
 			if (out.length >= want) {
 				const used = i + 1;
 				const more = used < items.length || Boolean(page.hasMore && page.cursor);
-				const next = used < items.length ? { c: position.c, s: used } : { c: page.cursor ?? "", s: 0 };
+				const next = used < items.length ? at(position.c, used) : at(page.cursor ?? "", 0);
 				return { rows: out, next: more ? writePosition(next) : null, reads: read + 1 };
 			}
 		}
 		if (!page.hasMore || !page.cursor) return { rows: out, next: null, reads: read + 1 };
-		position = { c: page.cursor, s: 0 };
+		position = at(page.cursor, 0);
 	}
 	return { rows: out, next: writePosition(position), reads };
+}
+
+/**
+ * The same, sorted by a slot. Storage puts rows with no value first in a descending order, so the
+ * rows that have a value are read first (a range on the slot, index `[vis, type, slot]`), then the
+ * rows without one (`p: 1` in the position), last in either direction. One more read than readRows
+ * at most, when the first part ends inside the request.
+ */
+export async function readSlotRows(
+	ctx: Ctx,
+	where: Record<string, unknown>,
+	slot: Slot,
+	dir: "asc" | "desc",
+	keep: (row: DirRow) => boolean,
+	want: number,
+	from: Position | undefined,
+	reads: number,
+	limit = 100,
+): Promise<PageResult> {
+	const empty = { ...where, [slot]: null } as never;
+	if (from?.p === 1) return readRows(ctx, empty, undefined, keep, want, from, reads, limit, 1);
+	const first = await readRows(ctx, { ...where, [slot]: { gte: -Number.MAX_VALUE } } as never, { [slot]: dir }, keep, want, from, reads, limit);
+	if (first.next) return first;
+	const left = reads - first.reads;
+	if (left < 1) return { ...first, next: writePosition({ c: "", s: 0, p: 1 }) };
+	const need = want - first.rows.length;
+	const rest = await readRows(ctx, empty, undefined, keep, Math.max(need, 1), undefined, left, limit, 1);
+	const used = first.reads + rest.reads;
+	// The page was already full: only say whether rows without a value follow.
+	if (need < 1) return { rows: first.rows, next: rest.rows.length ? writePosition({ c: "", s: 0, p: 1 }) : null, reads: used };
+	return { rows: [...first.rows, ...rest.rows], next: rest.next, reads: used };
 }

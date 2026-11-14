@@ -39,19 +39,19 @@
 			"indexes": ["status", "createdAt", "title", "member_id", "tl", "gone", "owner_email"]
 		},
 		"directory": {
-			"indexes": ["vis", "pub", "type", "tl", "cl", "feat", "avg", "rc", "exp"]
+			"indexes": ["vis", "pub", "type", "tl", "feat", "avg", "rc", "exp", ["vis", "type", "n1"], ["vis", "type", "n2"], ["vis", "type", "n3"]]
 		},
 		"events": {
-			"indexes": ["savedAt", "contentId", "collection"]
+			"indexes": []
 		},
 		"reviews": {
-			"indexes": ["status", "listingId", "member_id", "createdAt", "reply_status", "reply_by", "stars"]
+			"indexes": ["status", "listingId", "member_id", "createdAt", "reply_status", "reply_by", "stars", ["listingId", "status", "createdAt"]]
 		},
 		"claims": {
 			"indexes": ["status", "listingId", "member_id", "createdAt"]
 		},
 		"favorites": {
-			"indexes": ["member_id", "listingId", "createdAt"]
+			"indexes": ["member_id", "listingId", "createdAt", ["member_id", "createdAt"]]
 		},
 		"photos": {
 			"indexes": ["status", "listingId", "member_id", "createdAt"]
@@ -60,7 +60,7 @@
 			"indexes": ["status", "listingId", "member_id", "createdAt"]
 		},
 		"contacts": {
-			"indexes": ["listingId", "createdAt", "status", "notice", "owner_done"]
+			"indexes": ["listingId", "createdAt", "status", "notice", "owner_done", ["listingId", "createdAt"]]
 		},
 		"notice_queue": {
 			"indexes": ["listingId"]
@@ -73,9 +73,6 @@
 		},
 		"rates": {
 			"indexes": ["w", "who"]
-		},
-		"blocked": {
-			"indexes": ["member_id", "createdAt"]
 		}
 	},
 	"admin": {

@@ -1,6 +1,6 @@
 import type { PluginContext } from "emdash/plugin";
 
-import { cardOf, matches, orderOf, readFilters, readPosition, readRows, scanned, visible, type DirRow } from "./lib/directory";
+import { cardOf, matches, orderOf, readFilters, readPosition, readRows, readSlotRows, scanned, slotOf, slotRefusal, visible, type DirRow } from "./lib/directory";
 import { withType } from "./lib/catalog";
 import { clean } from "./lib/edits";
 import { ownerOf, publicListing } from "./lib/listings-query";
@@ -38,8 +38,9 @@ const BAD_POSITION = fail("VALIDATION_ERROR", "That page of results could not be
  * One page of the directory, from the stored index. Filters the index has (listing type) are part of
  * the read; the rest (text, place, feature, distance) are checked row by row over at most SCAN_READS
  * storage pages. The answer carries `cursor` for the next page, and `total` only when it is exact.
- * Pages go by cursor: `page` above 1 is refused, never answered with the wrong rows.
- * Worst case 7 calls: settings and six pages (a scan), or settings, two counts and one page.
+ * Pages go by cursor: `page` above 1 is refused, never answered with the wrong rows. A slot sort
+ * (`sort` n1 to n3, `order` asc or desc) is taken only with a type that fills that slot.
+ * Worst case 7 calls: settings and six pages (a scan), or settings, two counts and two pages (a slot sort).
  */
 export async function listings(input: unknown, ctx: Ctx) {
 	const raw = asRecord(input);
@@ -49,14 +50,20 @@ export async function listings(input: unknown, ctx: Ctx) {
 	const from = readPosition(raw.cursor);
 	if (from === null) return BAD_POSITION;
 	const f = readFilters(raw);
+	const refused = slotRefusal(f, settings.types);
+	if (refused) return fail("VALIDATION_ERROR", refused);
+	const slot = slotOf(f);
 	const perPage = Math.min(Math.max(Math.floor(asNumber(raw.per_page) ?? PER_PAGE), 1), 60);
 	const where = { vis: true, ...(f.type ? { type: f.type } : {}) };
 	const scan = scanned(f);
 	const now = Date.now();
 	try {
 		// The total leaves out listings past their date that the daily task has not marked yet: two counts.
+		const keep = (row: DirRow) => visible(row, now) && (!scan || matches(cardOf(row), f));
 		const [page, never, later] = await Promise.all([
-			readRows(ctx, where, orderOf(f), (row) => visible(row, now) && (!scan || matches(cardOf(row), f)), perPage, from, scan ? SCAN_READS : 1, scan ? 100 : perPage),
+			slot
+				? readSlotRows(ctx, where, slot, f.order, keep, perPage, from, scan ? SCAN_READS : 2, scan ? 100 : perPage)
+				: readRows(ctx, where, orderOf(f), keep, perPage, from, scan ? SCAN_READS : 1, scan ? 100 : perPage),
 			scan ? null : ctx.storage.directory.count({ ...where, exp: 0 }),
 			scan ? null : ctx.storage.directory.count({ ...where, exp: { gt: now } }),
 		]);

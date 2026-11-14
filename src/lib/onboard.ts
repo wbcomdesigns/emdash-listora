@@ -15,7 +15,7 @@ import { asNumber, asRecord, asString, nowIso } from "./util";
  * until the last one cancels the task. Each step claims
  * its next state with a compare-and-set before it writes, so two steps never load the same listings.
  * Steps: `find` (sample listings already on the site, by title), `listings` (one or two per step), `related`
- * (reviews, a claim, saved listings, a blocked member), `ratings` (the sample ratings and their copy
+ * (reviews, a claim, saved listings), `ratings` (the sample ratings and their copy
  * in the directory index), then done. Loading again skips what is there.
  */
 export const SAMPLE = "state:sample";
@@ -157,7 +157,6 @@ export async function sampleStep(ctx: PluginContext): Promise<void> {
 		}
 		const saves = ["listing-golden-fork", "listing-sakura-house", "listing-greenwich-hotel", "listing-fitlab"].map(id).filter(Boolean);
 		if (saves.length) await ctx.storage.favorites.putMany(saves.map((listingId) => ({ id: `${DEMO_MEMBER}:${listingId}`, data: { member_id: DEMO_MEMBER, listingId, createdAt: now } })));
-		await ctx.storage.blocked.put("blocked-spam", { member_id: "blocked-spam", reason: "Repeat junk reviews", createdAt: now });
 		return;
 	}
 

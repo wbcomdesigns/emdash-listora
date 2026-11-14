@@ -25,7 +25,7 @@ Hook: `content:afterSave` writes an index row in plugin storage.
 
 Capabilities: `content:read`, `content:write`, `content:publish`, `schema:read`.
 
-Storage collections: submissions, events, reviews, claims, favorites, contacts, email_log, blocked.
+Storage collections: submissions, directory, events, reviews, claims, favorites, photos, edits, contacts, notice_queue, ratings, rating_queue, rates.
 
 Settings: require moderation, default listing type, spam keywords.
 

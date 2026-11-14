@@ -72,11 +72,11 @@ describe("health is public and read only", () => {
 	it("writes nothing and does not tell a visitor how many submissions wait", async () => {
 		const site = await directory();
 		await site.invokeRoute("submit", { title: "Waiting Shop", agree_terms: true }, { method: "POST", user: ana });
-		const before = JSON.stringify(await Promise.all(["submissions", "reviews", "claims", "favorites", "blocked"].map((c) => site.storage(c).list())));
+		const before = JSON.stringify(await Promise.all(["submissions", "reviews", "claims", "favorites"].map((c) => site.storage(c).list())));
 		const result = await site.invokeRoute("health");
 		expect(result).toEqual({ ok: true, plugin: "listora", version: expect.any(String), listingsCollection: true });
 		expect(JSON.stringify(result)).not.toMatch(/pending/i);
-		const after = JSON.stringify(await Promise.all(["submissions", "reviews", "claims", "favorites", "blocked"].map((c) => site.storage(c).list())));
+		const after = JSON.stringify(await Promise.all(["submissions", "reviews", "claims", "favorites"].map((c) => site.storage(c).list())));
 		expect(after).toBe(before);
 	});
 });
@@ -976,6 +976,106 @@ describe("types store", () => {
 		for (const type of BUILTIN_TYPES.filter((item) => item.slug !== "software")) {
 			for (const field of type.fields) expect(kitLib, `${type.slug}.${field.key}`).toContain(`key: "${field.key}"`);
 		}
+	});
+});
+
+describe("sort slots", () => {
+	type Row = Record<string, unknown>;
+	const software = (title: string, fields: Record<string, unknown>) => ({ title, listing_type: "software", type_fields: JSON.stringify(fields) });
+
+	it("fills n1 to n3 from the type's field-to-slot map, dates as epoch numbers, and none for a type without one", async () => {
+		const rt = await createPluginRuntimeTestHost();
+		await rt.fixtures.collection(listingsCollection as never);
+		host = { dispose: () => rt.dispose() } as unknown as PluginTestHost;
+		await upgraded(rt);
+		await rt.fixtures.plugin.setting("types", OWNER_TYPES);
+		const app = await publishListing(rt, software("Slot App", { stars: 120, last_release: "2026-10-01", released: "not a date" }));
+		const boat = await publishListing(rt, { title: "Slot Boats", listing_type: "boat-hire", type_fields: JSON.stringify({ berths: "6" }) });
+		const cafe = await publishListing(rt, { title: "Slot Cafe", listing_type: "restaurant" });
+		expect(await rt.inspect.storage.get<Row>("directory", app)).toMatchObject({ n1: 120, n2: Date.parse("2026-10-01"), n3: null });
+		expect(await rt.inspect.storage.get<Row>("directory", boat)).toMatchObject({ n1: 6, n2: null, n3: null });
+		const plain = (await rt.inspect.storage.get<Row>("directory", cafe))!;
+		expect(plain).not.toHaveProperty("n1");
+		// The lower-case city copy is no longer kept (nothing queried it).
+		expect(plain).not.toHaveProperty("cl");
+	});
+
+	it("sorts by a slot only with a type that fills it, rows with a value first in either direction, then the rest", async () => {
+		const rt = await createPluginRuntimeTestHost();
+		await rt.fixtures.collection(listingsCollection as never);
+		host = { dispose: () => rt.dispose() } as unknown as PluginTestHost;
+		await upgraded(rt);
+		for (const [title, stars] of [["Fifty", 50], ["Three hundred", 300], ["None", undefined], ["Ten", 10]] as const) await publishListing(rt, software(title, stars === undefined ? {} : { stars }));
+		await publishListing(rt, { title: "Cafe", listing_type: "restaurant" });
+		const list = (input: Record<string, unknown>) => rt.transport.invokeRoute("listings", input) as Promise<{ ok: boolean; items: Array<{ title: string }>; cursor: string | null; error?: { code: string } }>;
+		const walk = async (input: Record<string, unknown>) => {
+			const titles: string[][] = [];
+			let cursor: string | null = null;
+			do {
+				const page = await list({ ...input, per_page: 2, ...(cursor ? { cursor } : {}) });
+				expect(page.ok).toBe(true);
+				titles.push(page.items.map((item) => item.title));
+				cursor = page.cursor;
+			} while (cursor && titles.length < 6);
+			return titles;
+		};
+		expect(await walk({ type: "software", sort: "n1" })).toEqual([["Three hundred", "Fifty"], ["Ten", "None"]]);
+		expect(await walk({ type: "software", sort: "n1", order: "asc" })).toEqual([["Ten", "Fifty"], ["Three hundred", "None"]]);
+		// A page that ends exactly where the rows with a value end still leads on to the rest.
+		expect(await walk({ type: "software", sort: "n1", per_page: 3 })).toEqual([["Three hundred", "Fifty"], ["Ten", "None"]]);
+		expect(await list({ sort: "n1" })).toMatchObject({ ok: false, error: { code: "VALIDATION_ERROR" } });
+		expect(await list({ type: "restaurant", sort: "n1" })).toMatchObject({ ok: false, error: { code: "VALIDATION_ERROR" } });
+	});
+
+	it("the sweep fills a type's slots after the owner maps a field, going on a minute later until the end", async () => {
+		const rt = await createPluginRuntimeTestHost();
+		await rt.fixtures.collection(listingsCollection as never);
+		host = { dispose: () => rt.dispose() } as unknown as PluginTestHost;
+		for (let i = 0; i < 120; i += 1) await rt.fixtures.content("listings", { data: { title: `Seat ${i}`, listing_type: "restaurant", type_fields: JSON.stringify({ seats: i }) }, slug: `seat-${i}`, status: "published" } as never);
+		await upgraded(rt);
+		const filled = async () => (await rt.inspect.storage.list<Row>("directory")).filter((row) => row.data.n1 === Number(String(row.data.title).slice(5))).length;
+		expect(await filled()).toBe(0);
+		await rt.fixtures.plugin.setting("types", [{ slug: "restaurant", fields: [{ key: "seats", label: "Seats", kind: "number", slot: 1 }] }]);
+		await cron(rt, "sweep");
+		const names = new Set<string>();
+		let clock = Date.now();
+		for (let minute = 0; minute < 200 && (await filled()) < 120; minute += 1) {
+			for (const task of await rt.inspect.scheduledTasks()) names.add(String(task.name));
+			clock += 61_000;
+			rt.scheduled.setTime(new Date(clock));
+			await rt.scheduled.run();
+			await settle();
+		}
+		expect(await filled()).toBe(120);
+		expect(names).toContain("sweep-more");
+		expect(names).toContain("sweep-more-2");
+		// At the end of the listings the follow-on runs stop.
+		for (let minute = 0; minute < 5; minute += 1) {
+			clock += 61_000;
+			rt.scheduled.setTime(new Date(clock));
+			await rt.scheduled.run();
+			await settle();
+		}
+		expect((await rt.inspect.scheduledTasks()).map((task) => String(task.name)).filter((name) => name.startsWith("sweep-more"))).toEqual([]);
+	}, 120_000);
+});
+
+describe("storage indexes", () => {
+	const storage = (JSON.parse(manifestText.replace(/^\s*\/\/.*$/gm, "")) as { storage: Record<string, { indexes: Array<string | string[]> }> }).storage;
+	const has = (collection: string, index: string[]) => storage[collection]!.indexes.some((entry) => JSON.stringify(entry) === JSON.stringify(index));
+
+	it("has a composite index for every filter and order query (Index design)", () => {
+		for (const slot of ["n1", "n2", "n3"]) expect(has("directory", ["vis", "type", slot]), slot).toBe(true);
+		// public.ts reviews, member.ts favorites and dashboard messages.
+		expect(has("reviews", ["listingId", "status", "createdAt"])).toBe(true);
+		expect(has("favorites", ["member_id", "createdAt"])).toBe(true);
+		expect(has("contacts", ["listingId", "createdAt"])).toBe(true);
+	});
+
+	it("drops what nothing queries: the city copy, the old save log's indexes and the block list nobody could fill", () => {
+		expect(storage.directory!.indexes).not.toContain("cl");
+		expect(storage.events!.indexes).toEqual([]);
+		expect(storage).not.toHaveProperty("blocked");
 	});
 });
 

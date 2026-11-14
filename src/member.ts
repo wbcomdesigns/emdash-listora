@@ -203,7 +203,7 @@ export async function submit(routeCtx: { user?: unknown; input: unknown }, ctx: 
 
 /* ---- Reviews ---- */
 
-/** Worst case 9: the listing, the block list, its owner, rate limit (2), the old review and the new one, the rating (2). */
+/** Worst case 8: the listing, its owner, rate limit (2), the old review and the new one, the rating (2). */
 export async function review(routeCtx: { user?: unknown; input: unknown }, ctx: Ctx) {
 	const user = userOf(routeCtx);
 	if (!user) return SIGN_IN;
@@ -213,7 +213,6 @@ export async function review(routeCtx: { user?: unknown; input: unknown }, ctx: 
 	if (!listingId || !body) return fail("VALIDATION_ERROR", "Listing and review text are required.");
 	const listing = await publicListing(ctx, listingId);
 	if (!listing) return NO_LISTING;
-	if (await ctx.storage.blocked.exists(user.id)) return fail("BLOCKED", "This member cannot review.");
 	// A rating an owner gives their own listing would not be a review.
 	if ((await ownerOf(ctx, listingId)).owner === user.id) return fail("OWN_LISTING", "You cannot review your own listing.");
 	const limited = await rateLimited(ctx, "review", user.id);

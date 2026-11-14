@@ -1,4 +1,4 @@
-import { asRecord, asString } from "./util";
+import { asNumber, asRecord, asString } from "./util";
 
 /** The six kinds of extra field a listing type can have (SCOPE.md decisions). */
 export const FIELD_KINDS = ["text", "number", "choice", "link", "date", "yesno"] as const;
@@ -181,6 +181,30 @@ export function typeBySlug(types: readonly ListingType[], slug: unknown): Listin
 			fields: [],
 		}
 	);
+}
+
+export const SLOTS = ["n1", "n2", "n3"] as const;
+export type Slot = (typeof SLOTS)[number];
+
+/** True when the type fills this sort slot from one of its fields. */
+export const mapsSlot = (type: ListingType, slot: Slot) => type.fields.some((field) => `n${field.slot}` === slot);
+
+/**
+ * A listing's sort slots (`n1` to `n3` in the directory index), from its type's field-to-slot map:
+ * a number each, a date as epoch milliseconds, null when the listing has no readable value. A type
+ * that maps no field gives nothing, so its index rows carry no slots at all (and an update from a
+ * version without slots rewrites no row).
+ */
+export function slotsOf(type: ListingType, values: Record<string, unknown>): Partial<Record<Slot, number | null>> {
+	const mapped = type.fields.filter((field) => field.slot);
+	if (!mapped.length) return {};
+	const out: Record<Slot, number | null> = { n1: null, n2: null, n3: null };
+	for (const field of mapped) {
+		const value = values[field.key];
+		const time = field.kind === "date" && typeof value === "string" ? Date.parse(value) : null;
+		out[`n${field.slot}` as Slot] = time === null ? asNumber(value) : Number.isFinite(time) ? time : null;
+	}
+	return out;
 }
 
 /** The types offered for a new listing. */

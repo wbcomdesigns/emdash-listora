@@ -272,12 +272,17 @@ export const SWEEP = "state:sweep";
 
 /**
  * Hourly check that the directory index matches the listings, 50 at a time, all of them over the
- * hours: a listing whose content hook did not run (an error, a cut-off call) is put right here.
- * Nine calls at most. Only rows that differ are written, each as a merge.
+ * hours: a listing whose content hook did not run (an error, a cut-off call) is put right here, and
+ * a type whose sort slots changed gets them filled in (the backfill). Nine calls at most. Only rows
+ * that differ are written, each as a merge, three per run.
+ *
+ * A run that put something right goes on a minute later (`sweep-more`, alternating names, see
+ * nextStep) until the end of the listings, so a backfill takes hours, not weeks. A follow-on run
+ * stops when it could write nothing (a row that keeps failing waits for the hourly run).
  */
-export async function sweep(ctx: Ctx): Promise<void> {
-	// Settings, the place, the listings, their rows and the new place: five calls kept.
-	const b = budget(5);
+export async function sweep(ctx: Ctx, running = "sweep"): Promise<void> {
+	// Settings, the place, the listings, their rows, the new place and the next run: six calls kept.
+	const b = budget(6);
 	const settings = await loadSettings(ctx);
 	if (!upgradeDone(settings) || !settings.fields) return;
 	const cursor = asString(await ctx.kv.get<string>(SWEEP));
@@ -288,9 +293,10 @@ export async function sweep(ctx: Ctx): Promise<void> {
 	const ratings = missing.length && spend(b) ? await ctx.storage.ratings.getMany(missing.map((item) => item.id)) : new Map<string, unknown>();
 	const subs = missing.length && spend(b) ? await ctx.storage.submissions.getMany(missing.map((item) => item.id)) : new Map<string, unknown>();
 	let fixed = true;
+	let wrote = 0;
 	for (const item of page.items) {
 		const stored = asRecord(have.get(item.id));
-		const part = listingPart(item);
+		const part = listingPart(item, settings.types);
 		if (have.has(item.id)) {
 			const same = Object.entries(part).every(([field, value]) => JSON.stringify(stored[field]) === JSON.stringify(value));
 			if (same) continue;
@@ -298,7 +304,7 @@ export async function sweep(ctx: Ctx): Promise<void> {
 				fixed = false;
 				break;
 			}
-			await ctx.storage.directory.updateIf(item.id, { where: {}, set: part }).catch(() => undefined);
+			if ((await ctx.storage.directory.updateIf(item.id, { where: {}, set: part }).catch(() => null))?.applied) wrote += 1;
 		} else if (item.status === "published") {
 			if (!spend(b)) {
 				fixed = false;
@@ -306,11 +312,14 @@ export async function sweep(ctx: Ctx): Promise<void> {
 			}
 			const rating = readRating(ratings.get(item.id));
 			const exp = asNumber(asRecord(subs.get(item.id)).expires_at) ?? 0;
-			await ctx.storage.directory.compareAndSet(item.id, null, { ...part, exp, warned: 0, avg: rating.average, rc: rating.count, rseq: 0 }).catch(() => undefined);
+			if ((await ctx.storage.directory.compareAndSet(item.id, null, { ...part, exp, warned: 0, avg: rating.average, rc: rating.count, rseq: 0 }).catch(() => null))?.applied) wrote += 1;
 		}
 	}
-	// Cut short: the same page again next hour. Else on to the next one, and round again at the end.
-	if (fixed) await ctx.kv.set(SWEEP, page.hasMore && page.cursor ? page.cursor : "");
+	// Cut short: the same page again. Else on to the next one, and round again at the end.
+	const more = fixed ? Boolean(page.hasMore && page.cursor) : true;
+	if (fixed) await ctx.kv.set(SWEEP, more ? page.cursor! : "");
+	const followOn = running !== "sweep";
+	if (more && (wrote > 0 || (followOn && fixed))) await ctx.cron?.schedule(nextStep(running, "sweep-more"), { schedule: soon() }).catch(() => undefined);
 }
 
 export async function runUpgrade(ctx: Ctx, running?: string): Promise<void> {

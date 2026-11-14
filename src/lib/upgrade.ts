@@ -87,7 +87,7 @@ export async function upgradeStep(ctx: PluginContext, settings: Settings, b: Bud
 			.map((item) => {
 				const rating = readRating(ratings.get(item.id));
 				const expires = Date.parse(asString(asRecord(item.data).expires_at));
-				return { id: item.id, data: { ...listingPart(item), exp: Number.isFinite(expires) ? expires : 0, warned: 0, avg: rating.average, rc: rating.count, rseq: 0 } };
+				return { id: item.id, data: { ...listingPart(item, settings.types), exp: Number.isFinite(expires) ? expires : 0, warned: 0, avg: rating.average, rc: rating.count, rseq: 0 } };
 			});
 		if (rows.length) await ctx.storage.directory.putMany(rows);
 		const more = Boolean(page?.hasMore && page.cursor);

@@ -29,6 +29,7 @@ const MEASURED: Record<string, number> = {
 	"route listings (first page)": 4,
 	"route listings (next page)": 4,
 	"route listings (filtered, nothing matches)": 6,
+	"route listings (slot sort, no listing has a value)": 5,
 	"route search": 2,
 	"route search suggest": 2,
 	"route search map": 6,
@@ -41,8 +42,8 @@ const MEASURED: Record<string, number> = {
 	"route submit (moderated, category)": 6,
 	"route submit (moderation off, category)": 9,
 	"route submit (moderation off, nothing kept, new category)": 8,
-	"route review (first, listing with 500 reviews)": 7,
-	"route review (rewrite of a published one)": 9,
+	"route review (first, listing with 500 reviews)": 6,
+	"route review (rewrite of a published one)": 8,
 	"route claims": 5,
 	"route favorites GET (100 saved)": 1,
 	"route favorites GET ids (100)": 1,
@@ -134,11 +135,11 @@ const MEASURED: Record<string, number> = {
 	"hook plugin:activate": 6,
 	// Plus one (the upgrade task) on a site whose 0.7.0 upgrade has not finished: 8.
 	"cron notify (first run after an update)": 7,
-	"hook content:afterPublish (listing in the index)": 1,
-	"hook content:afterPublish (listing new to the index)": 4,
-	"hook content:afterSave (published, no draft)": 1,
+	"hook content:afterPublish (listing in the index)": 2,
+	"hook content:afterPublish (listing new to the index)": 5,
+	"hook content:afterSave (published, no draft)": 2,
 	"hook content:afterUnpublish": 1,
-	"hook content:afterRestore": 2,
+	"hook content:afterRestore": 3,
 	"hook content:afterDelete": 2,
 	"hook page:metadata": 3,
 	"cron notify (each run, 100 waiting, 50 owners)": 8,
@@ -148,6 +149,7 @@ const MEASURED: Record<string, number> = {
 	"cron expire (each run, warning 50 owners)": 8,
 	"cron tidy": 5,
 	"cron sweep (each run)": 9,
+	"cron sweep-more (slot backfill, each run)": 8,
 	"admin load_sample (start)": 6,
 	"cron sample (each step)": 9,
 	"admin save_lifetime (off)": 3,
@@ -163,6 +165,8 @@ const MEASURED: Record<string, number> = {
 	"2000: route ratings all (next part)": 8,
 	"2000: route duplicate": 2,
 	"2000: route export (one part of 700)": 8,
+	"2000: route listings (software by stars, each page)": 5,
+	"2000: route listings (software by stars, nothing matches the text)": 3,
 };
 
 /** Every entry above MAX_BRIDGE_CALLS. Empty since 0.7.0, and the last test holds it there. */
@@ -374,6 +378,12 @@ describe("bridge calls per entry point, worst case", () => {
 		expect(await measure("route listings (next page)", () => route("listings", { cursor: first.cursor }))).toMatchObject({ ok: true });
 		const scan = await measure("route listings (filtered, nothing matches)", () => route("listings", { q: "zzzz", type: "restaurant", city: "Town 1", amenity: "wifi", lat: 40.2, lng: -73.2, radius: 50, sort: "rating" }));
 		expect(scan).toMatchObject({ ok: true, items: [], total: null });
+		// From here on restaurants sort by a slot no listing has a value for: every sort reads past the
+		// empty first part, the hooks fill slots, and the sweep backfills all 500 rows.
+		await rt.fixtures.plugin.setting("types", [{ slug: "restaurant", fields: [{ key: "seats", label: "Seats", kind: "number", slot: 1 }] }]);
+		const sorted = await measure("route listings (slot sort, no listing has a value)", () => route("listings", { type: "restaurant", sort: "n1" }));
+		expect(sorted).toMatchObject({ ok: true, total: 450 });
+		expect((sorted as unknown as { items: unknown[] }).items).toHaveLength(24);
 	});
 	it("search", async () => {
 		expect(await measure("route search", () => route("search", { q: "place", sort: "title" }))).toMatchObject({ ok: true });
@@ -632,6 +642,9 @@ describe("bridge calls per entry point, worst case", () => {
 		// A listing whose content hook never ran: the sweep puts it in the index.
 		const missed = await rt.fixtures.content("listings", { data: { title: "Missed Cafe", listing_type: "restaurant" }, slug: "missed", status: "published" } as never);
 		for (let n = 0; n < 15; n += 1) await measure("cron sweep (each run)", () => hook("cron", cronEvent("sweep")));
+		// The slot backfill (types set in "listings"), run by the follow-on task under both its names.
+		for (let n = 0; n < 15; n += 1) await measure("cron sweep-more (slot backfill, each run)", () => hook("cron", cronEvent(n % 2 ? "sweep-more-2" : "sweep-more")));
+		expect((await rt.inspect.storage.list<Record<string, unknown>>("directory")).filter((row) => "n1" in row.data).length).toBeGreaterThan(30);
 		expect(await rt.inspect.storage.get("directory", missed.id)).toMatchObject({ vis: true, title: "Missed Cafe" });
 	});
 
@@ -692,7 +705,8 @@ describe("a directory of 2000 listings", () => {
 		await rt.fixtures.collection(listingsCollection as never);
 		for (let i = 0; i < 2000; i += 1) {
 			const made = await rt.fixtures.content("listings", {
-				data: { title: `Spot ${pad(i, 4)}`, listing_type: i % 2 ? "restaurant" : "hotel", city: `Town ${i % 40}`, lat: 40 + i / 10_000, lng: -73, amenities: "wifi", listing_status: "live", is_featured: i % 50 === 0 },
+				// Every tenth is Software; half of those have a star count (sort slot 1).
+				data: { title: `Spot ${pad(i, 4)}`, listing_type: i % 10 === 0 ? "software" : i % 2 ? "restaurant" : "hotel", type_fields: i % 20 === 0 ? JSON.stringify({ stars: i }) : "", city: `Town ${i % 40}`, lat: 40 + i / 10_000, lng: -73, amenities: "wifi", listing_status: "live", is_featured: i % 50 === 0 },
 				slug: `spot-${pad(i, 4)}`,
 				status: "published",
 			} as never);
@@ -730,6 +744,16 @@ describe("a directory of 2000 listings", () => {
 		expect(Object.keys((rest as { ratings: Record<string, unknown> }).ratings).length).toBeGreaterThan(0);
 		expect(await measure("2000: route duplicate", () => route("duplicate", { title: "Spot 1999" }))).toMatchObject({ ok: true, matches: [expect.objectContaining({ title: "Spot 1999" })] });
 		await measure("2000: route export (one part of 700)", () => route("export", { part: "1" }, { method: "GET" }));
+		// 200 Software listings by stars, most first: 100 with a count, then 100 without, page by page.
+		const seen: string[] = [];
+		let cursor: string | null = null;
+		do {
+			const page = (await measure("2000: route listings (software by stars, each page)", () => route("listings", { type: "software", sort: "n1", ...(cursor ? { cursor } : {}) }))) as unknown as { items: Array<{ id: string; type_fields: { stars?: number } }>; cursor: string | null };
+			seen.push(...page.items.map((item) => item.id));
+			cursor = page.cursor;
+		} while (cursor && seen.length < 400);
+		expect(new Set(seen).size).toBe(200);
+		expect(await measure("2000: route listings (software by stars, nothing matches the text)", () => route("listings", { type: "software", sort: "n1", q: "zzzz" }))).toMatchObject({ ok: true, items: [] });
 	});
 
 	it("keeps every entry within the budget", () => {

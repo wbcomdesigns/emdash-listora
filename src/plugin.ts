@@ -26,15 +26,17 @@ type Item = { id: string; slug: string | null; status: string; data: Record<stri
 const itemOf = (content: unknown) => content as Item;
 
 /**
- * A listing changed state: bring its directory row up to date. One call when the row exists (a
- * merge), four when the listing is new to the index (its rating and its starting expiry date are
- * read). A plugin's own publish runs this too, after the call that published.
+ * A listing changed state: bring its directory row up to date. Two calls when the row exists (the
+ * settings, for the type's sort slots, and a merge), five when the listing is new to the index (its
+ * rating and its starting expiry date are read). A plugin's own publish runs this too, after the
+ * call that published.
  */
 async function indexFromHook(ctx: PluginContext, content: unknown): Promise<void> {
 	const item = itemOf(content);
 	if (!item?.id) return;
 	if (item.status !== "published") return hideListing(ctx, item.id);
-	await indexListing(ctx, item, async () => asNumber(asRecord(await ctx.storage.submissions.get(item.id).catch(() => null)).expires_at) ?? 0);
+	const { types } = await loadSettings(ctx);
+	await indexListing(ctx, item, types, async () => asNumber(asRecord(await ctx.storage.submissions.get(item.id).catch(() => null)).expires_at) ?? 0);
 }
 
 /**
@@ -63,7 +65,7 @@ const plugin: SandboxedPlugin = {
 				if (task === "notify" || task === "notify-more") await notifyOwners(ctx, event.name);
 				else if (task === "expire" || task === "expire-more") await expireAndWarn(ctx, event.name);
 				else if (task === "tidy") await tidy(ctx);
-				else if (task === "sweep") await sweep(ctx);
+				else if (task === "sweep" || task === "sweep-more") await sweep(ctx, event.name);
 				else if (task === "upgrade") await runUpgrade(ctx, event.name);
 				else if (event.name === "sample") await sampleStep(ctx);
 			},
