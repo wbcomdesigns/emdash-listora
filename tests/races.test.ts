@@ -1,10 +1,10 @@
 import { PluginBridge } from "@emdash-cms/cloudflare/sandbox";
 import { afterEach, describe, expect, it } from "vitest";
-import { createPluginRuntimeTestHost, type PluginRuntimeTestHost } from "@emdash-cms/plugin-test";
+import type { PluginRuntimeTestHost } from "@emdash-cms/plugin-test";
 
 // @ts-expect-error plain module shared with the lab seed
 import { listingsCollection } from "../site-kit/seed/collection.mjs";
-import { cron, eraseAll, settle, upgraded } from "./site";
+import { createPluginRuntimeTestHost, cron, eraseAll, settle, upgraded } from "./site";
 
 /**
  * Every stored counter and every claim, raced. Calls sent together interleave at each bridge call;

@@ -1,11 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { validateBlockResponse } from "@emdash-cms/blocks/server";
 
-import {
-	createPluginRuntimeTestHost,
-	createPluginTestHost,
-	type PluginTestHost,
-} from "@emdash-cms/plugin-test";
+import { createPluginTestHost, type PluginTestHost } from "@emdash-cms/plugin-test";
 
 import manifestText from "../emdash-plugin.jsonc?raw";
 import kitLib from "../site-kit/lib/listora.ts?raw";
@@ -16,7 +12,7 @@ import { parseCsv, toCsv, unguard } from "../src/lib/csv";
 // @ts-expect-error plain module shared with the lab seed
 import { listingsCollection } from "../site-kit/seed/collection.mjs";
 import { imageUrl, jsonForScript, placeholderHtml, safeImageUrl } from "../site-kit/lib/listora";
-import { cron, eraseAll, publishListing, settle, untilDone, upgraded } from "./site";
+import { createPluginRuntimeTestHost, cron, eraseAll, publishListing, settle, untilDone, upgraded } from "./site";
 
 let host: PluginTestHost | undefined;
 
@@ -429,6 +425,15 @@ describe("member routes", () => {
 		expect(left.map((row) => row.id)).toEqual([`rev-${a}-ben`]);
 	});
 
+	it("erases only on a POST: a GET shows the data and removes nothing", async () => {
+		const { a } = await directory();
+		await host!.invokeRoute("review", { listingId: a, body: "Mine." }, { method: "POST", user: ana });
+		expect(await host!.invokeRoute("privacy", { action: "erase" }, { method: "GET", user: ana })).toMatchObject({ ok: false, error: { code: "METHOD_NOT_ALLOWED" } });
+		expect((await host!.storage("reviews").list()).map((row) => row.id)).toEqual([`rev-${a}-ana`]);
+		expect(await host!.invokeRoute("privacy", {}, { method: "GET", user: ana })).toMatchObject({ ok: true, reviews: [expect.objectContaining({ body: "Mine." })] });
+		expect(await host!.invokeRoute("privacy", { action: "erase" }, { method: "PUT", user: ana })).not.toMatchObject({ ok: true });
+	});
+
 	it("limits a member to eight writes inside one window", async () => {
 		const { a } = await directory();
 		const send = (_n: number) =>
@@ -582,6 +587,26 @@ describe("contact messages", () => {
 		const during = JSON.stringify(await rt.admin.loadPage("/messages"));
 		expect(during).not.toContain("Owner notified");
 		expect(during).toContain("Notice goes out within the hour");
+	});
+
+	it("says plainly when the site cannot send email and the owner was not told", async () => {
+		const { a, rt } = await directory();
+		await rt.fixtures.plugin.storage("contacts", "msg-1", { listingId: a, name: "Vee", message: "Hello", status: "new", notice: "waiting", createdAt: "2026-11-01T00:00:00.000Z" });
+		await rt.fixtures.plugin.storage("notice_queue", "msg-1", { listingId: a, tries: 0 });
+		await rt.fixtures.plugin.setting("state_mail", "none");
+		const page = JSON.stringify(await rt.admin.loadPage("/messages"));
+		expect(page).toContain("This site cannot send email");
+		expect(page).toContain("Not notified: this site cannot send email");
+		expect(page).not.toContain("Notice goes out within the hour");
+	});
+
+	it("Listing reviews counts an owner reply waiting below, not only reviews (walk L7)", async () => {
+		const { a, rt } = await directory();
+		await rt.fixtures.plugin.storage("reviews", `rev-${a}-ana`, { listingId: a, member_id: "ana", author: "ana", stars: 4, body: "Good.", status: "published", reply_status: "pending", reply_draft: "Thank you.", reply_rev: "r1", createdAt: "2026-11-01T00:00:00.000Z" });
+		const page = JSON.stringify(await rt.admin.loadPage("/reviews"));
+		expect(page).toContain('{"label":"Reviews waiting","value":0}');
+		expect(page).toContain('{"label":"Owner replies waiting","value":1}');
+		expect(page).toContain("The owner replies waiting are below.");
 	});
 
 	it("opens a message before delete, and only the confirm button removes it", async () => {
@@ -878,6 +903,31 @@ describe("listing expiry", () => {
 			error: { code: "NOT_RENEWABLE" },
 		});
 		expect((await dash()).can_renew).toBeUndefined();
+	});
+
+	it("expiry switched on from EmDash's own settings form runs on the daily schedule", async () => {
+		const rt = await createPluginRuntimeTestHost();
+		await rt.fixtures.collection(listingsCollection as never);
+		host = { dispose: () => rt.dispose() } as unknown as PluginTestHost;
+		await upgraded(rt);
+		// Scheduled from the start, while expiry is still off.
+		expect((await rt.inspect.scheduledTasks()).map((task) => String(task.name))).toContain("expire");
+		// The generated form (manifest settingsSchema) runs no plugin code: no Block Kit save.
+		await rt.actions.plugin.updateSettings({ expiry_days: 1 });
+		await rt.transport.invokeRoute("submit", { title: "Form Cafe", listing_type: "restaurant", agree_terms: true }, { method: "POST", user: ana });
+		const id = (await rt.inspect.storage.list("submissions"))[0].id;
+		await rt.transport.invokeRoute("admin", { type: "block_action", action_id: "review", value: `approve:${id}`, page: "/queue" });
+		await settle();
+		const row = await rt.inspect.storage.get<Record<string, unknown>>("directory", id);
+		expect(Number(row?.exp)).toBeGreaterThan(Date.now());
+		// Its date has passed (the task reads the real clock), and EmDash's scheduler reaches 03:00.
+		await rt.fixtures.plugin.storage("directory", id, { ...row, exp: Date.now() - 1000 });
+		const later = new Date(Date.now() + 86_400_000);
+		later.setUTCHours(3, 1, 0, 0);
+		rt.scheduled.setTime(later);
+		await rt.scheduled.run();
+		await settle();
+		expect((await rt.inspect.content.get("listings", id))?.data).toMatchObject({ listing_status: "expired" });
 	});
 
 	it("warns the owner once per expiry date, again after a renewal, and not when switched off", async () => {
@@ -1380,8 +1430,15 @@ describe("owner photos", () => {
 		expect(await route("photo_remove", { id: photos[1].id }, { method: "POST", user: ana })).toMatchObject({ ok: true });
 		expect(await rt.inspect.media(photos[1].data.mediaId)).toMatchObject({ success: false });
 
-		// Approving the other puts it on the listing, and it cannot then be removed by the owner.
-		expect((await admin("photo_mod", `approve|${photos[0].data.rev}|${photos[0].id}`)).toast?.type).toBe("success");
+		// Approving the other puts it on the listing, and it cannot then be removed by the owner. The
+		// click is the value the page draws, which carries the waiting count it showed (1): the page
+		// drawn after the decision starts from it.
+		const drawn = JSON.stringify(await route("admin", { type: "page_load", page: "/photos" }));
+		const approve = drawn.match(new RegExp(`approve:\\d+\\|${photos[0].data.rev}\\|${photos[0].id}`))?.[0];
+		expect(approve).toBe(`approve:1|${photos[0].data.rev}|${photos[0].id}`);
+		const decided = await admin("photo_mod", approve!);
+		expect(decided.toast?.type).toBe("success");
+		expect(JSON.stringify(decided)).toContain('{"label":"Waiting","value":0}');
 		expect(await rt.inspect.storage.get("photos", photos[0].id)).toMatchObject({ status: "approved" });
 		expect(await route("photo_remove", { id: photos[0].id }, { method: "POST", user: ana })).toMatchObject({ ok: false });
 		// A second click on the same decision is refused.
@@ -1490,12 +1547,12 @@ describe("spreadsheet import and export", () => {
 		// A file with no title column gets one plain message, not a list of rows.
 		expect(await route("import", { csv: "name,city\nCafe,Lyon", mode: "check" }, { method: "POST" })).toMatchObject({ ok: false, error: { code: "VALIDATION_ERROR" } });
 
-		// The kit sends the file three rows at a time, with each batch's first line number.
+		// The kit sends the file two rows at a time, with each batch's first line number.
 		const batches = async () => {
 			let imported = 0;
 			const bad: number[] = [];
-			for (let at = 0; at < lines.length; at += 3) {
-				const part = (await route("import", { csv: [header, ...lines.slice(at, at + 3)].join("\n"), mode: "import", firstLine: at + 2 }, { method: "POST" })) as Check;
+			for (let at = 0; at < lines.length; at += 2) {
+				const part = (await route("import", { csv: [header, ...lines.slice(at, at + 2)].join("\n"), mode: "import", firstLine: at + 2 }, { method: "POST" })) as Check;
 				expect(part.ok).toBe(true);
 				imported += part.imported ?? 0;
 				bad.push(...part.bad.map((row) => row.line));
@@ -1522,6 +1579,61 @@ describe("spreadsheet import and export", () => {
 		// which this in-process test does not exercise. scripts/prove-lab.sh checks it on a real
 		// site as a guest and as a subscriber.
 		expect(await route("import", {}, { method: "POST" })).toMatchObject({ ok: false, error: { code: "VALIDATION_ERROR" } });
+	});
+});
+
+describe("an import cut off part way", () => {
+	it("goes on from where it stopped, and a batch sent again never adds a listing twice", async () => {
+		const rt = await createPluginRuntimeTestHost();
+		await rt.fixtures.collection(listingsCollection as never);
+		host = { dispose: () => rt.dispose() } as unknown as PluginTestHost;
+		await upgraded(rt);
+		const route = (input: Record<string, unknown>) => rt.transport.invokeRoute("import", input, { method: "POST" }) as Promise<{ ok: boolean; imported: number; duplicates: Array<{ line: number }> }>;
+		const header = "title,city,listing_type";
+		const lines = ["Cut Cafe,Lyon,restaurant", "Cut Bakery,Lyon,restaurant", "Late Bar,Nice,restaurant", "Late Deli,Nice,restaurant"];
+		// The first batch was stopped by the host after its drafts were created, before their queue
+		// rows were written: two drafts in Content, nothing in the queue.
+		for (const line of lines.slice(0, 2)) {
+			const [title, city] = line.split(",");
+			await rt.actions.content.create("listings", { data: { title, city, listing_type: "restaurant" } } as never);
+		}
+		await settle();
+		// The kit sends that batch again, then the rest.
+		let imported = 0;
+		for (let at = 0; at < lines.length; at += 2) imported += (await route({ csv: [header, ...lines.slice(at, at + 2)].join("\n"), mode: "import", firstLine: at + 2 })).imported;
+		expect(imported).toBe(4);
+		const drafts = (await rt.inspect.content.list("listings")).map((item) => String(item.data.title)).sort();
+		expect(drafts).toEqual(["Cut Bakery", "Cut Cafe", "Late Bar", "Late Deli"]);
+		const queue = await rt.inspect.storage.list<{ title: string; status: string }>("submissions");
+		expect(queue.map((row) => [row.data.title, row.data.status]).sort()).toEqual([
+			["Cut Bakery", "pending"],
+			["Cut Cafe", "pending"],
+			["Late Bar", "pending"],
+			["Late Deli", "pending"],
+		]);
+		// The whole file once more: every row is already waiting.
+		const again = await route({ csv: [header, ...lines.slice(0, 2)].join("\n"), mode: "import", firstLine: 2 });
+		expect(again).toMatchObject({ ok: true, imported: 0 });
+		expect(again.duplicates.map((row) => row.line)).toEqual([2, 3]);
+		expect(await rt.inspect.content.list("listings")).toHaveLength(4);
+	});
+});
+
+describe("an import never takes a draft someone made in the editor", () => {
+	it("imports a row as a new listing when the only match is a draft with an author", async () => {
+		const rt = await createPluginRuntimeTestHost();
+		await rt.fixtures.collection(listingsCollection as never);
+		host = { dispose: () => rt.dispose() } as unknown as PluginTestHost;
+		await upgraded(rt);
+		// An editor's own draft, same name and city as a CSV row.
+		const hand = await rt.fixtures.content("listings", { data: { title: "Hand Cafe", city: "Lyon", listing_type: "restaurant" }, slug: "hand-cafe", authorId: "editor-1" } as never);
+		const result = (await rt.transport.invokeRoute("import", { csv: "title,city,listing_type\nHand Cafe,Lyon,restaurant", mode: "import", firstLine: 2 }, { method: "POST" })) as { imported: number };
+		expect(result.imported).toBe(1);
+		// The editor's draft is left out of the queue; the row became its own draft with a queue row.
+		expect(await rt.inspect.storage.get("submissions", hand.id)).toBeNull();
+		const rows = await rt.inspect.storage.list<{ title: string; listingId: string }>("submissions");
+		expect(rows.map((row) => row.data.title)).toEqual(["Hand Cafe"]);
+		expect(rows[0]!.data.listingId).not.toBe(hand.id);
 	});
 });
 
@@ -1719,6 +1831,36 @@ describe("scheduled tasks on EmDash 1.5's own scheduler", () => {
 		expect(names).toContain("upgrade-2");
 	});
 
+	it("after an update, the first visitor to the directory starts the upgrade (no admin visit)", async () => {
+		const rt = await createPluginRuntimeTestHost();
+		host = { dispose: () => rt.dispose() } as unknown as PluginTestHost;
+		let clock = Date.now();
+		const minute = async () => {
+			clock += 61_000;
+			rt.scheduled.setTime(new Date(clock));
+			await rt.scheduled.run();
+			await settle();
+		};
+		const done = async () => (await rt.inspect.setting<{ done?: boolean }>("upgrade_0_7"))?.done === true;
+		// The install's own upgrade runs to the end on the empty site, so its task is gone.
+		for (let i = 0; i < 20 && !(await done()); i += 1) await minute();
+		expect(await done()).toBe(true);
+		// Then the site looks like a 0.6.x site just updated from the registry: listings with no index
+		// rows, no upgrade state, and no upgrade task (EmDash runs no hook on an update).
+		await rt.fixtures.collection(listingsCollection as never);
+		for (let i = 0; i < 3; i += 1) await rt.fixtures.content("listings", { data: { title: `Cafe ${i}`, listing_type: "restaurant" }, slug: `cafe-${i}`, status: "published" } as never);
+		await rt.fixtures.plugin.setting("upgrade_0_7", {});
+		await rt.fixtures.plugin.kv("state:upgrade_0_7", {});
+		expect((await rt.inspect.scheduledTasks()).map((task) => String(task.name))).not.toContain("upgrade");
+		// A visitor opens the directory: still being prepared, but the upgrade is now due.
+		expect(await rt.transport.invokeRoute("listings", {})).toMatchObject({ ok: false, error: { code: "INDEX_BUILDING" } });
+		expect((await rt.inspect.scheduledTasks()).map((task) => String(task.name))).toContain("upgrade");
+		// EmDash's own scheduler carries it to the end, a step a minute, with no admin page opened.
+		for (let i = 0; i < 20 && !(await done()); i += 1) await minute();
+		expect(await done()).toBe(true);
+		expect(await rt.transport.invokeRoute("listings", {})).toMatchObject({ ok: true, total: 3 });
+	});
+
 	it("the first hourly run after an update schedules every task (no hook runs on an update)", async () => {
 		const rt = await createPluginRuntimeTestHost();
 		host = { dispose: () => rt.dispose() } as unknown as PluginTestHost;
@@ -1728,6 +1870,6 @@ describe("scheduled tasks on EmDash 1.5's own scheduler", () => {
 		await rt.transport.invokeHook("cron", { name: "notify", scheduledAt: new Date().toISOString() });
 		const tasks = (await rt.inspect.scheduledTasks()).map((task) => String(task.name));
 		expect(tasks).toEqual(expect.arrayContaining(["notify", "tidy", "sweep", "expire", "notify-more"]));
-		expect(await rt.inspect.setting("state_tasks")).toBe("0.7.0");
+		expect(await rt.inspect.setting("state_tasks")).toBe("0.7.1");
 	});
 });

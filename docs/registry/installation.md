@@ -21,7 +21,7 @@ Checked on EmDash 1.3.1 with the `blog` template on Node.
    ```bash
    kit="$(mktemp -d)" &&
      git clone --depth 1 \
-       --branch v0.7.0 \
+       --branch v0.7.1 \
        https://github.com/wbcomdesigns/emdash-listora \
        "$kit/emdash-listora" &&
      "$kit/emdash-listora/scripts/add-to-site.sh" .
@@ -33,4 +33,4 @@ Checked on EmDash 1.3.1 with the `blog` template on Node.
 
 After each update, rerun step 2 with the new tag.
 
-Full guide: https://github.com/wbcomdesigns/emdash-listora/blob/v0.7.0/docs/website/getting-started/install.md
+Full guide: https://github.com/wbcomdesigns/emdash-listora/blob/v0.7.1/docs/website/getting-started/install.md

@@ -140,7 +140,7 @@ Three roles, always in this order: **guest**, **member** (subscriber role), **ad
 | A-14 | Same listing: approve a claim on it | Refused with "has unpublished edits". The claim stays pending | |
 | A-15 | Open Messages after a visitor sent one | Listing name, sender, the full message, date. Mark as handled removes it from the list |
 | A-16 | Open Messages with none waiting | Empty state |
-| A-17 | Messages, Owner column | "Notice goes out within the hour" for a new message on a listing with an owner. After the hourly task: "Owner notified", or "Owner not notified" when there is no owner account or no mail provider. One mail per owner per hour, to their account address, with nothing the visitor typed | notifies the current owner from the hourly task |
+| A-17 | Messages, Owner column | "Notice goes out within the hour" for a new message on a listing with an owner. After the hourly task: "Owner notified", or "Owner not notified" when there is no owner account. With no mail provider: a "This site cannot send email" banner and "Not notified: this site cannot send email" on the message (0.7.1). One mail per owner per hour, to their account address, with nothing the visitor typed | notifies the current owner from the hourly task |
 | A-18 | Turn off "Email the listing owner when a message arrives" and save | Stays off after reload. New messages are stored and marked Owner not notified |
 | A-19 | Set "Listings expire after this many days" to 10, save, reload | Shows 10. A listing approved after that carries a date 10 days ahead | dates a listing on approval |
 | A-20 | A listing past its date, after the daily check | Gone from the directory and search. Its page says it has expired | marks a listing past its date as expired |
@@ -189,6 +189,8 @@ Three roles, always in this order: **guest**, **member** (subscriber role), **ad
 | A-64 | An approval that fails part way (the listing cannot be saved or published) | "Could not publish that listing. It is waiting in the queue again." The row is still in the queue and counted; a click on a listing being approved right now says "Someone else is deciding this listing right now."; a row left "approving" for more than five minutes (the request was cut off) is back in the queue and the counts, and Approve publishes it; the member's account shows "Awaiting approval", never a raw word | an approval that fails part way; a row left approving by a cut-off decision |
 | A-48 | A file over 100 rows, an empty file, a file with no title column | A plain message, nothing imported |
 | A-65 | Settings on a fresh site before its first restart (no site address yet) | The Import and export line names /listings/import/; after a restart it has an Open import and export link | saves each group |
+| A-69 | As an owner, edit a live listing and press Send changes for approval | The form goes away and the page says the changes are waiting, with a link back to your listings (0.7.1) | |
+| A-70 | A review reply waiting, no reviews waiting: open Listing reviews | The stats read Reviews waiting 0 and Owner replies waiting 1; the reply is below (0.7.1) | |
 | A-66 | Admin, Listora, Listing changes and Listing photos | Each change shows its fields as Now and After approval; each photo shows the picture. Approve and Reject work and the page stays where it was | admin edit decisions, admin photo decisions |
 | A-67 | Any admin list with more than 25 items | Next page in the table, then Previous page, back to the top. A decision keeps the page | shows 25 at a time, pages on and back |
 | A-68 | Update a 0.6.3 site to 0.7.0 and open any Listora page | The Bringing your data over banner, then (minutes later) the banner is gone; the directory, ratings and waiting notices are all there | upgrade from 0.6.3 |
@@ -200,14 +202,14 @@ On the Cloudflare test site (`~/code/emdash-plugin-testbed`), registry install, 
 
 | ID | Steps | Expected | Auto |
 | --- | --- | --- | --- |
-| CF-1 | Update 0.6.3 to 0.7.0 with listings, reviews and waiting messages in place; open Listora's admin pages | The data upgrade runs a step a minute and finishes; no admin page fails meanwhile | cron upgrade (each step) |
+| CF-1 | Update 0.6.3 to 0.7.x with listings, reviews and waiting messages in place; open no admin page, only `/_emdash/api/plugins/<id>/listings` once a minute | INDEX_BUILDING at first; within about two minutes of the first request the upgrade runs, a step a minute, and the route answers ok (0.7.1); no admin page fails meanwhile | after an update, the first visitor to the directory starts the upgrade |
 | CF-2 | The EmDash dashboard card | Listora: waiting for you shows four counts (the 0.6.3 walk showed Plugin error (400)) | admin widget waiting |
 | CF-3 | As a member, add a listing with a category, moderation on and off | One draft and one queue row each; live at once with moderation off; nothing half-saved | route submit |
 | CF-4 | As a member, write a review on a listing with many reviews; rewrite it | Saved and pending; the rating drops the rewritten review at once | route review |
 | CF-5 | As the owner, add a photo, remove it, add another; as admin approve it | No file left behind after any failure; the gallery shows the approved photo once | route photo, admin photo_mod |
 | CF-6 | Owner account: every tab, More reviews, reply to a review | Each tab loads; the reply waits for approval | route dashboard, route reply |
 | CF-7 | Admin: approve and reject on every page (queue, changes, photos, reviews, replies, claims, messages) | Each decision lands and the page redraws | admin decisions |
-| CF-8 | Import a 100-row file, then export | 100 drafts in the queue; the export holds every published listing | route import, route export |
+| CF-8 | Import a 100-row file while other admin pages are in use, then export | 100 drafts in the queue, none twice; if the site is slow the page waits and retries, or says how many rows were added and offers Continue from the row it stopped at; never the server's own text (0.7.1). The export holds every published listing | route import, an import cut off part way |
 | CF-9 | A guest message, then wait for the hourly notice | One notice to the owner's account address; the message shows in their account | cron notify |
 | CF-10 | Expiry on with a listing past its date and one inside its last seven days | The next daily run expires one and warns the other's owner | cron expire |
 | CF-11 | Load sample directory on a fresh site | Loading, then 14 listings with reviews a few minutes later | cron sample |

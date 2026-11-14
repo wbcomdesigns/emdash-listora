@@ -42,7 +42,7 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 			<li><button type="button" data-step="5">{S.submit.stepPreview}</button></li>
 		</ol>
 
-		<div id="listora-status" class="listora-status" hidden></div>
+		<div id="listora-status" class="listora-status" role="status" aria-live="polite" hidden></div>
 		<p id="dup-warning" class="listora-status" data-tone="error" hidden></p>
 
 		<form id="listora-submit" class="listora-form" novalidate>
@@ -409,19 +409,8 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 					},
 				});
 			if (!result.ok) throw new Error(result.error?.message || S.submit.couldNot);
-			if (editId) {
-				// Stay on the form with what they sent, and say plainly what happens next.
-				if (status) {
-					status.hidden = false;
-					status.dataset.tone = "success";
-					status.innerHTML = result.unchanged
-						? `${esc(S.submit.unchanged)} <a href="/account/?tab=listings">${esc(S.submit.backListings)}</a>`
-						: `${esc(S.submit.changesWaiting)} <a href="/account/?tab=listings">${esc(S.submit.backListings)}</a>`;
-					status.scrollIntoView({ block: "center" });
-				}
-				return;
-			}
-			// Done: the form and its steps go away, and the member gets the next things to do.
+			// Done: the form and its steps go away, and the member reads what happens next where the
+			// form was (an edit sent from the Preview step left the page looking unchanged).
 			form.reset();
 			form.hidden = true;
 			const steps = document.getElementById("wizard-steps");
@@ -429,10 +418,12 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 			if (status) {
 				status.hidden = false;
 				status.dataset.tone = "success";
-				status.innerHTML =
-					`<p>${esc(result.pendingReview ? S.submit.thanksReview : S.submit.thanksLive)}</p>` +
-					`<div class="listora-actions"><a class="listora-btn" href="/account/?tab=listings">${esc(S.submit.yourListings)}</a>` +
-					`<a class="listora-btn listora-btn--secondary" href="/listings/submit/">${esc(S.submit.addAnother)}</a></div>`;
+				status.innerHTML = editId
+					? `<p>${esc(result.unchanged ? S.submit.unchanged : S.submit.changesWaiting)}</p>` +
+						`<div class="listora-actions"><a class="listora-btn" href="/account/?tab=listings">${esc(S.submit.backListings)}</a></div>`
+					: `<p>${esc(result.pendingReview ? S.submit.thanksReview : S.submit.thanksLive)}</p>` +
+						`<div class="listora-actions"><a class="listora-btn" href="/account/?tab=listings">${esc(S.submit.yourListings)}</a>` +
+						`<a class="listora-btn listora-btn--secondary" href="/listings/submit/">${esc(S.submit.addAnother)}</a></div>`;
 				status.tabIndex = -1;
 				status.focus();
 				status.scrollIntoView({ block: "center" });

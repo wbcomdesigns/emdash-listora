@@ -56,17 +56,23 @@ function day(ctx: Ctx, value: unknown): string {
 
 // A member can rewrite their own pending review or claim. The stamp ties an admin's click to the
 // exact version they were shown, and the decision only lands on that version (a guarded write).
-function stamped(action: string, id: string, data: Record<string, unknown>): string {
-	return `${action}|${versionOf(data)}|${id}`;
+// `shown` is the waiting count the page showed: the page drawn after the decision starts from it
+// instead of counting again, which keeps an approval that publishes within the call budget.
+function stamped(action: string, id: string, data: Record<string, unknown>, shown?: number): string {
+	return `${action}${shown === undefined ? "" : `:${shown}`}|${versionOf(data)}|${id}`;
 }
 /** Random per-write token. Rows written before 0.3.0 fall back to their timestamp. */
 function versionOf(row: Record<string, unknown>): string {
 	return asString(row.rev) || asString(row.createdAt);
 }
-function parseStamped(value: unknown): { action: string; stamp: string; id: string } {
-	const [action = "", stamp = "", ...rest] = asString(value).split("|");
-	return { action, stamp, id: rest.join("|") };
+function parseStamped(value: unknown): { action: string; stamp: string; id: string; shown?: number } {
+	const [head = "", stamp = "", ...rest] = asString(value).split("|");
+	const [action = "", count] = head.split(":");
+	const shown = Number(count);
+	return { action, stamp, id: rest.join("|"), ...(count && Number.isFinite(shown) ? { shown } : {}) };
 }
+/** The waiting count for the page drawn after a decision: one fewer once the item left the list. */
+const after = (shown: number | undefined, decided: boolean) => (shown === undefined ? undefined : Math.max(0, shown - (decided ? 1 : 0)));
 /** The guard for a stamped decision: the row is still waiting and is the version the admin saw. */
 const stampWhere = (stamp: string, status = "pending"): Where => (/^\d{4}-\d\d-\d\dT/.test(stamp) ? { status, createdAt: stamp } : { status, rev: stamp });
 
@@ -118,16 +124,18 @@ type Listed = { rows: Row[]; total: number; next?: string; back: boolean; find: 
 
 /**
  * The page of a list the admin is on: the waiting count and 25 rows from the saved place (two calls).
- * With find, the newest 100 waiting rows are searched (still two calls) and the page says so.
+ * With find, the newest 100 waiting rows are searched (still two calls) and the page says so. After a
+ * decision the count the page showed is passed in (`known`) and only the rows are read (one call).
  */
-async function listRows(ctx: Ctx, def: ListDef, view: View & { at?: string; back?: string[] }, b: Budget): Promise<Listed> {
-	spend(b, 2);
+async function listRows(ctx: Ctx, def: ListDef, view: View & { at?: string; back?: string[] }, b: Budget, known?: number): Promise<Listed> {
+	spend(b, known === undefined ? 2 : 1);
 	const find = view.find.trim().toLowerCase();
 	const at = readCursor(view.at);
-	const [total, page] = await Promise.all([
-		ctx.storage[def.store].count(def.where),
+	const [counted, page] = await Promise.all([
+		known === undefined ? ctx.storage[def.store].count(def.where) : known,
 		ctx.storage[def.store].query({ where: def.where, orderBy: def.order, limit: find ? 100 : PAGE, ...(at && !find ? { cursor: at } : {}) }),
 	]);
+	const total = Math.max(counted, page.items.length);
 	const rows = rowsOf(page.items);
 	if (find) return { rows: rows.filter((row) => def.text(row).includes(find)).slice(0, PAGE), total, back: false, find, scanned: page.hasMore };
 	return { rows, total, next: page.hasMore && page.cursor ? page.cursor : undefined, back: Boolean(view.back?.length), find: "", scanned: false };
@@ -298,7 +306,7 @@ async function decideListing(ctx: Ctx, settings: Settings, b: Budget, action: st
 /* ---- Listing changes (owner edits) ---- */
 
 async function renderChanges(ctx: Ctx, settings: Settings, b: Budget, extra: Extra = {}): Promise<BlockResponse> {
-	const listed = await listRows(ctx, LISTS.changes, viewFor(settings, "changes"), b);
+	const listed = await listRows(ctx, LISTS.changes, viewFor(settings, "changes"), b, extra.total);
 	const blocks: BlockMap[] = [];
 	for (const row of await withTitles(ctx, listed.rows, b)) {
 		if (!row.was) {
@@ -321,8 +329,8 @@ async function renderChanges(ctx: Ctx, settings: Settings, b: Budget, extra: Ext
 			{
 				type: "actions",
 				elements: [
-					{ type: "button", label: "Approve and publish", action_id: "edit_mod", style: "primary", value: stamped("approve", row.id, row) },
-					{ type: "button", label: "Reject", action_id: "edit_mod", value: stamped("reject", row.id, row) },
+					{ type: "button", label: "Approve and publish", action_id: "edit_mod", style: "primary", value: stamped("approve", row.id, row, listed.total) },
+					{ type: "button", label: "Reject", action_id: "edit_mod", value: stamped("reject", row.id, row, listed.total) },
 				],
 			},
 		);
@@ -339,11 +347,12 @@ async function renderChanges(ctx: Ctx, settings: Settings, b: Budget, extra: Ext
 
 /**
  * Approve or reject an owner's change. Approve: the claim, the owner (ownership can move with an
- * approved claim), the listing, the change and publish, then the row removed: nine calls with the page.
+ * approved claim), the listing, the change, the revision and publish, then the row removed, and the page's
+ * rows (the waiting count comes with the click): nine calls.
  * The change only applies when the listing still has the values it was made against.
  */
-async function decideChange(ctx: Ctx, settings: Settings, b: Budget, action: string, id: string, stamp: string): Promise<BlockResponse> {
-	const back = (toast: Toast) => renderChanges(ctx, settings, b, { toast });
+async function decideChange(ctx: Ctx, settings: Settings, b: Budget, action: string, id: string, stamp: string, shown?: number): Promise<BlockResponse> {
+	const back = (toast: Toast, decided = toast.type === "success") => renderChanges(ctx, settings, b, { toast, total: after(shown, decided) });
 	spend(b);
 	const claim = await ctx.storage.edits.updateIf(id, { where: stampWhere(stamp), set: { status: action === "approve" ? "approving" : "rejecting", claimedAt: nowIso() } });
 	if (!claim.applied) return back(await whyNot(ctx, "edits", id, b, "Someone already handled that change."));
@@ -364,7 +373,7 @@ async function decideChange(ctx: Ctx, settings: Settings, b: Budget, action: str
 	if (owner !== asString(edit.member_id)) return release({ message: "The member who sent that change no longer owns the listing. Reject it to clear it.", type: "error" });
 	if (!listing) {
 		await ctx.storage.edits.delete(id);
-		return back({ message: "That listing no longer exists. The change was removed.", type: "info" });
+		return back({ message: "That listing no longer exists. The change was removed.", type: "info" }, true);
 	}
 	const live = asRecord(listing.data);
 	const was = asRecord(edit.was);
@@ -377,7 +386,7 @@ async function decideChange(ctx: Ctx, settings: Settings, b: Budget, action: str
 	// Built by the same function that drew the screen, from the same stored row.
 	const { patch } = editPatch(live, asRecord(edit.fields));
 	if (Object.keys(patch).length > 0) {
-		spend(b, 2);
+		spend(b, 3);
 		const patched = await patchListing(ctx, listingId, patch, settings.fields, listing);
 		if (patched.state === "busy") return release({ message: "That listing has unpublished edits of your own. Publish or discard them, then approve the change.", type: "error" });
 		if (patched.state !== "done") return release({ message: "The change could not be published. It is waiting again. Try once more.", type: "error" });
@@ -390,7 +399,7 @@ async function decideChange(ctx: Ctx, settings: Settings, b: Budget, action: str
 /* ---- Listing photos ---- */
 
 async function renderPhotos(ctx: Ctx, settings: Settings, b: Budget, extra: Extra = {}): Promise<BlockResponse> {
-	const listed = await listRows(ctx, LISTS.photos, viewFor(settings, "photos"), b);
+	const listed = await listRows(ctx, LISTS.photos, viewFor(settings, "photos"), b, extra.total);
 	const blocks: BlockMap[] = (await withTitles(ctx, listed.rows, b)).map((row) => {
 		const title = asString(row.listing_title) || "A listing";
 		const deciding = row.status !== "pending";
@@ -413,12 +422,12 @@ async function renderPhotos(ctx: Ctx, settings: Settings, b: Budget, extra: Extr
 					{
 						type: "actions",
 						elements: [
-							{ type: "button", label: "Approve the photo", action_id: "photo_mod", style: "primary", value: stamped("approve", row.id, row) },
+							{ type: "button", label: "Approve the photo", action_id: "photo_mod", style: "primary", value: stamped("approve", row.id, row, listed.total) },
 							{
 								type: "button",
 								label: "Reject and delete",
 								action_id: "photo_mod",
-								value: stamped("reject", row.id, row),
+								value: stamped("reject", row.id, row, listed.total),
 								confirm: { title: "Delete this photo?", text: "The file is removed. This cannot be undone.", confirm: "Delete", deny: "Cancel" },
 							},
 						],
@@ -443,11 +452,11 @@ async function renderPhotos(ctx: Ctx, settings: Settings, b: Budget, extra: Extr
 
 /**
  * Approve or reject an owner's photo. Approve: the claim, the owner, the listing, the gallery change
- * and publish, the approved mark, then the page: nine calls. Reject: the claim, the file, the row and
+ * the revision and publish, the approved mark, then the page's rows: nine calls. Reject: the claim, the file, the row and
  * the listing's photo count: seven.
  */
-async function decidePhoto(ctx: Ctx, settings: Settings, b: Budget, action: string, id: string, stamp: string): Promise<BlockResponse> {
-	const back = (toast: Toast) => renderPhotos(ctx, settings, b, { toast });
+async function decidePhoto(ctx: Ctx, settings: Settings, b: Budget, action: string, id: string, stamp: string, shown?: number): Promise<BlockResponse> {
+	const back = (toast: Toast, decided = toast.type === "success") => renderPhotos(ctx, settings, b, { toast, total: after(shown, decided) });
 	spend(b);
 	// Claimed in the database before anything is done with its file. The owner removing it at this
 	// same moment also has to move it out of "pending": only one of us can.
@@ -485,7 +494,7 @@ async function decidePhoto(ctx: Ctx, settings: Settings, b: Budget, action: stri
 	const gallery = Array.isArray(data.gallery) ? data.gallery : [];
 	// A reopened approval may already have added this photo before it was cut off.
 	if (!gallery.some((entry) => asString(asRecord(asRecord(entry).image).id) === image.id)) {
-		spend(b, 2);
+		spend(b, 3);
 		// The first photo also becomes the cover when the listing has none.
 		const patched = await patchListing(ctx, listingId, { gallery: [...gallery, { image }], ...(data.featured_image ? {} : { featured_image: image }) }, settings.fields, listing);
 		if (patched.state === "busy") return release("That listing has unpublished edits of your own. Publish or discard them, then approve the photo.");
@@ -541,12 +550,13 @@ async function renderReviews(ctx: Ctx, settings: Settings, b: Budget, extra: Ext
 			]
 		: [];
 	return page("Listing reviews", extra, [
-		stats("Waiting", listed.total),
+		// Both kinds of waiting work: a reply waiting below must not read as "nothing waiting".
+		{ type: "stats", items: [{ label: "Reviews waiting", value: listed.total }, { label: "Owner replies waiting", value: replies.length }] },
 		...listChrome(LISTS.reviews, listed, "reviews"),
 		rows.length === 0
 			? listed.find
 				? { type: "empty", title: "Nothing matches", description: "No waiting review contains that text." }
-				: { type: "empty", title: "No pending reviews", description: "New reviews wait here." }
+				: { type: "empty", title: "No pending reviews", description: replies.length ? "New reviews wait here. The owner replies waiting are below." : "New reviews wait here." }
 			: {
 					type: "table",
 					page_action_id: "reviews_page",
@@ -613,7 +623,7 @@ async function decideReply(ctx: Ctx, settings: Settings, b: Budget, action: stri
 /* ---- Claims ---- */
 
 async function renderClaims(ctx: Ctx, settings: Settings, b: Budget, extra: Extra = {}): Promise<BlockResponse> {
-	const listed = await listRows(ctx, LISTS.claims, viewFor(settings, "claims"), b);
+	const listed = await listRows(ctx, LISTS.claims, viewFor(settings, "claims"), b, extra.total);
 	const rows = (await withTitles(ctx, listed.rows, b)).map((row) => ({
 		listing: asString(row.listing_title) || "A listing",
 		message: asString(row.message),
@@ -624,8 +634,8 @@ async function renderClaims(ctx: Ctx, settings: Settings, b: Budget, extra: Extr
 			action_id: "claim_mod",
 			label: "Review",
 			items: [
-				{ label: "Approve", value: stamped("approve", row.id, row) },
-				{ label: "Reject", value: stamped("reject", row.id, row) },
+				{ label: "Approve", value: stamped("approve", row.id, row, listed.total) },
+				{ label: "Reject", value: stamped("reject", row.id, row, listed.total) },
 			],
 		},
 	}));
@@ -657,8 +667,8 @@ async function renderClaims(ctx: Ctx, settings: Settings, b: Budget, extra: Extr
  * publish), the listing's submission row moved to the claimant, the claim marked approved, then the
  * page: nine calls.
  */
-async function decideClaim(ctx: Ctx, settings: Settings, b: Budget, action: string, id: string, stamp: string): Promise<BlockResponse> {
-	const back = (toast: Toast) => renderClaims(ctx, settings, b, { toast });
+async function decideClaim(ctx: Ctx, settings: Settings, b: Budget, action: string, id: string, stamp: string, shown?: number): Promise<BlockResponse> {
+	const back = (toast: Toast, decided = toast.type === "success") => renderClaims(ctx, settings, b, { toast, total: after(shown, decided) });
 	spend(b);
 	const claim = await ctx.storage.claims.updateIf(id, { where: stampWhere(stamp), set: action === "approve" ? { status: "approving", claimedAt: nowIso() } : { status: "rejected" } });
 	if (!claim.applied) return back(await whyNot(ctx, "claims", id, b, "Someone already handled that item."));
@@ -669,7 +679,7 @@ async function decideClaim(ctx: Ctx, settings: Settings, b: Budget, action: stri
 		await ctx.storage.claims.updateIf(id, { where: { status: "approving" }, set: { status: "pending", rev: crypto.randomUUID() } });
 		return back({ message, type: "error" });
 	};
-	spend(b, 3);
+	spend(b, 4);
 	const listing = await getListing(ctx, listingId);
 	if (!listing || listing.status !== "published") return release("That listing is not public any more. Reject the claim to clear it.");
 	const patched = await patchListing(ctx, listingId, { is_claimed: true, owner_name: asString(row.name) }, settings.fields, listing);
@@ -733,9 +743,11 @@ async function renderMessages(ctx: Ctx, settings: Settings, b: Budget, extra: Ex
 				? settings.emailMessages
 					? "Owner notified"
 					: "Email notices are off"
-				: settings.emailMessages
-					? "Notice goes out within the hour"
-					: "Email notices are off";
+				: !settings.emailMessages
+					? "Email notices are off"
+					: settings.noMail
+						? "Not notified: this site cannot send email"
+						: "Notice goes out within the hour";
 	const table = (await withTitles(ctx, listed.rows, b)).map((row) => ({
 		listing: asString(row.listing_title) || "A listing",
 		from: [asString(row.name), asString(row.email)].filter(Boolean).join(", ") || "No name given",
@@ -755,6 +767,9 @@ async function renderMessages(ctx: Ctx, settings: Settings, b: Budget, extra: Ex
 		},
 	}));
 	return page("Messages", extra, [
+		...(settings.emailMessages && settings.noMail
+			? [{ type: "banner", title: "This site cannot send email", description: "Owners were not told about new messages: the site has no email provider. Set one up under Settings, Email. Waiting notices go out once it works.", variant: "alert" }]
+			: []),
 		stats("New", listed.total),
 		...openedBlocks,
 		...listChrome(LISTS.messages, listed, "messages"),
@@ -946,12 +961,10 @@ async function saveSettings(ctx: Ctx, settings: Settings, b: Budget, actionId: s
 			const days = Number(values.expiry_days);
 			// Refused, never quietly turned into 0: 0 switches expiry off.
 			if (!Number.isInteger(days) || days < 0 || days > 3650) return refuse("Enter a whole number of days from 0 to 3650. Nothing was changed.");
-			spend(b, 3);
+			// The daily check is always scheduled (tasks.ts scheduleAll) and does nothing while expiry is off.
+			spend(b, 2);
 			await ctx.settings.set("expiry_days", days);
 			await ctx.settings.set("email_expiry", asBoolean(values.email_expiry));
-			// The daily check only exists while expiry is on.
-			if (days) await ctx.cron?.schedule("expire", { schedule: "0 3 * * *" });
-			else await ctx.cron?.cancel("expire").catch(() => undefined);
 			Object.assign(settings, { expiryDays: days, emailExpiry: asBoolean(values.email_expiry) });
 			return saved(days ? `Listings now expire after ${days} days.` : "Listings no longer expire.");
 		}
@@ -1130,7 +1143,7 @@ async function renderSetup(ctx: Ctx, settings: Settings, b: Budget, extra: Extra
 
 /* ---- Pages and dispatch ---- */
 
-type Extra = { toast?: Toast; note?: string };
+type Extra = { toast?: Toast; note?: string; total?: number };
 
 function page(title: string, extra: Extra, blocks: BlockMap[]): BlockResponse {
 	return {
@@ -1243,10 +1256,10 @@ export async function handleAdmin(input: unknown, ctx: Ctx): Promise<BlockRespon
 		return decideListing(ctx, settings, b, split === -1 ? value : value.slice(0, split), split === -1 ? "" : value.slice(split + 1));
 	}
 	if (type === "block_action" && action === "message_mod") return decideMessage(ctx, settings, b, asString(raw.value));
-	const stampedAction: Record<string, typeof decideReview> = { edit_mod: decideChange, photo_mod: decidePhoto, review_mod: decideReview, reply_mod: decideReply, claim_mod: decideClaim };
+	const stampedAction: Record<string, (ctx: Ctx, settings: Settings, b: Budget, action: string, id: string, stamp: string, shown?: number) => Promise<BlockResponse>> = { edit_mod: decideChange, photo_mod: decidePhoto, review_mod: decideReview, reply_mod: decideReply, claim_mod: decideClaim };
 	if (type === "block_action" && stampedAction[action]) {
-		const { action: verb, id, stamp } = parseStamped(raw.value);
-		return stampedAction[action](ctx, settings, b, verb, id, stamp);
+		const { action: verb, id, stamp, shown } = parseStamped(raw.value);
+		return stampedAction[action](ctx, settings, b, verb, id, stamp, shown);
 	}
 	return render(ctx, which, settings, b);
 }

@@ -747,10 +747,11 @@ const MORE = { ok: false, error: { code: "MORE", message: "Part of your data is 
  * early. Kept on purpose: the listings they added (those stay in the directory, with the member as the
  * one who can still edit them) and photos already approved on a listing, with the member's name taken off.
  */
-export async function privacy(routeCtx: { user?: unknown; input: unknown }, ctx: Ctx) {
+export async function privacy(routeCtx: { user?: unknown; input: unknown; request: { method: string } }, ctx: Ctx) {
 	const user = userOf(routeCtx);
 	if (!user) return SIGN_IN;
-	if (asString(asRecord(routeCtx.input).action) === "erase") return eraseStep(ctx, user.id);
+	// Erasing changes data, so only a POST may ask for it.
+	if (asString(asRecord(routeCtx.input).action) === "erase") return routeCtx.request.method === "POST" ? eraseStep(ctx, user.id) : fail("METHOD_NOT_ALLOWED", "Send this as a POST.");
 	const mine = { where: { member_id: user.id }, limit: 100 };
 	const [reviews, claims, favorites] = await Promise.all([ctx.storage.reviews.query(mine), ctx.storage.claims.query(mine), ctx.storage.favorites.query(mine)]);
 	// Named fields only: what the member wrote and what it is about. Never version tokens.

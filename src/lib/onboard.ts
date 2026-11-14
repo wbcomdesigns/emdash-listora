@@ -14,14 +14,15 @@ import { asNumber, asRecord, asString, nowIso } from "./util";
  * allows 10 requests per plugin call; 14 listings take 28 and their reviews more), a step a minute
  * until the last one cancels the task. Each step claims
  * its next state with a compare-and-set before it writes, so two steps never load the same listings.
- * Steps: `find` (sample listings already on the site, by title), `listings` (two per step), `related`
+ * Steps: `find` (sample listings already on the site, by title), `listings` (one or two per step), `related`
  * (reviews, a claim, saved listings, a blocked member), `ratings` (the sample ratings and their copy
  * in the directory index), then done. Loading again skips what is there.
  */
 export const SAMPLE = "state:sample";
 /** The 0.4.x to 0.6.x "sample loaded" mark. */
 const OLD_FLAG = "sample_directory_v1";
-const PER_STEP = 2;
+/** Calls a listings step has for creating and publishing: nine, less settings, state, claim, queue rows and the ids. */
+const PER_STEP = 4;
 
 export type SampleState = { running: boolean; done: boolean; created: number; total: number };
 type Saved = { step: string; at: number; ids: Record<string, string>; created: number };
@@ -74,12 +75,21 @@ export async function sampleStep(ctx: PluginContext): Promise<void> {
 	}
 
 	if (saved.step === "listings") {
-		const todo = SAMPLE_LISTINGS.filter((row) => !saved.ids[row.key]).slice(0, PER_STEP);
+		// A published sample costs three calls (create, revision, publish), a waiting one one: as many
+		// as fit in the PER_STEP calls this step has for them.
+		const todo: typeof SAMPLE_LISTINGS = [];
+		let room = PER_STEP;
+		for (const row of SAMPLE_LISTINGS.filter((item) => !saved.ids[item.key])) {
+			const cost = row.pending ? 1 : 3;
+			if (cost > room) break;
+			todo.push(row);
+			room -= cost;
+		}
 		if (!todo.length) {
 			await claim({ ...saved, step: "related" });
 			return;
 		}
-		// Claimed first: of two steps only one creates these two listings.
+		// Claimed first: of two steps only one creates these listings.
 		const marked = { ...saved, ids: { ...saved.ids, ...Object.fromEntries(todo.map((row) => [row.key, "pending"])) } };
 		const claimed = await claim(marked);
 		if (!claimed.applied) return;

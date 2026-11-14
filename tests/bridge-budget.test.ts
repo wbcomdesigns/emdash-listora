@@ -3,12 +3,12 @@ import { countBridgeCalls, MAX_BRIDGE_CALLS } from "./bridge-count";
 
 import { CloudflareSandboxRunner } from "@emdash-cms/cloudflare/sandbox";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { createPluginRuntimeTestHost, type PluginRuntimeTestHost } from "@emdash-cms/plugin-test";
+import type { PluginRuntimeTestHost } from "@emdash-cms/plugin-test";
 
 // @ts-expect-error plain module shared with the lab seed
 import { listingsCollection } from "../site-kit/seed/collection.mjs";
 import { HOUR, visitorKey, windowOf } from "../src/lib/rates";
-import { settle } from "./site";
+import { createPluginRuntimeTestHost, settle } from "./site";
 
 /**
  * Bridge calls per entry point, each at the worst case a busy site sets up (see the seeds below).
@@ -39,7 +39,7 @@ const MEASURED: Record<string, number> = {
 	"route reviews next page": 2,
 	"route contact (guest, owned listing)": 6,
 	"route submit (moderated, category)": 6,
-	"route submit (moderation off, category)": 8,
+	"route submit (moderation off, category)": 9,
 	"route submit (moderation off, nothing kept, new category)": 8,
 	"route review (first, listing with 500 reviews)": 7,
 	"route review (rewrite of a published one)": 9,
@@ -70,8 +70,9 @@ const MEASURED: Record<string, number> = {
 	"route privacy (view)": 3,
 	"route export (500 listings, one part)": 7,
 	"route import check (100 rows)": 9,
-	"route import (one batch of 3)": 8,
-	"route import (one batch of 3, nothing kept)": 9,
+	"route import (one batch of 2)": 8,
+	"route import (one batch of 2, both cut off before)": 7,
+	"route import (one batch of 2, nothing kept)": 9,
 	"admin page_load /setup": 5,
 	"admin page_load /queue": 3,
 	"admin page_load /changes": 5,
@@ -100,35 +101,35 @@ const MEASURED: Record<string, number> = {
 	"admin messages_prev": 6,
 	"admin messages_find": 5,
 	"admin save_submissions": 4,
-	"admin save_lifetime (on)": 4,
+	"admin save_lifetime (on)": 3,
 	"admin save_lifetime (refused)": 1,
 	"admin save_photos": 2,
 	"admin save_messages": 2,
 	"admin kit_show": 4,
 	"admin kit_done": 4,
-	"admin review approve (expiry on)": 7,
+	"admin review approve (expiry on)": 8,
 	"admin review reject": 5,
 	"admin review approve (listing gone)": 7,
 	"admin review forget (row with no listing)": 6,
 	"admin review approve (cut off before)": 6,
 	"admin photo_mod approve": 9,
-	"admin photo_mod reject": 7,
-	"admin photo_mod approve (cut off before)": 6,
+	"admin photo_mod reject": 6,
+	"admin photo_mod approve (cut off before)": 5,
 	"admin edit_mod approve": 9,
-	"admin edit_mod reject": 5,
-	"admin edit_mod approve (listing changed since)": 7,
+	"admin edit_mod reject": 4,
+	"admin edit_mod approve (listing changed since)": 6,
 	"admin reply_mod approve": 8,
 	"admin reply_mod reject": 7,
 	"admin review_mod approve": 8,
 	"admin review_mod reject": 6,
 	"admin review_mod approve (500 published)": 8,
 	"admin claim_mod approve": 9,
-	"admin claim_mod reject": 5,
+	"admin claim_mod reject": 4,
 	"admin message_mod ask": 6,
 	"admin message_mod close": 5,
 	"admin message_mod done": 5,
 	"admin message_mod delete (opened)": 7,
-	"hook plugin:install": 5,
+	"hook plugin:install": 6,
 	"hook plugin:activate": 6,
 	// Plus one (the upgrade task) on a site whose 0.7.0 upgrade has not finished: 8.
 	"cron notify (first run after an update)": 7,
@@ -142,13 +143,13 @@ const MEASURED: Record<string, number> = {
 	"cron notify (each run, 100 waiting, 50 owners)": 8,
 	"cron notify (everyone told within the hour)": 3,
 	"cron notify (email off, 100 waiting)": 3,
-	"cron expire (each run, 50 due)": 9,
+	"cron expire (each run, 50 due)": 7,
 	"cron expire (each run, warning 50 owners)": 8,
 	"cron tidy": 5,
 	"cron sweep (each run)": 9,
 	"admin load_sample (start)": 6,
 	"cron sample (each step)": 9,
-	"admin save_lifetime (off)": 4,
+	"admin save_lifetime (off)": 3,
 	"route privacy (erase, each step)": 9,
 	"2000: cron upgrade (each step)": 9,
 	"2000: route listings (first page)": 4,
@@ -473,11 +474,15 @@ describe("bridge calls per entry point, worst case", () => {
 	it("import", async () => {
 		const csv = ["title,city,listing_type", ...Array.from({ length: 100 }, (_, i) => `Imported ${i},City ${i},restaurant`)].join("\n");
 		expect(await measure("route import check (100 rows)", () => route("import", { csv, mode: "check" }, { method: "POST" }))).toMatchObject({ ok: true, valid: 100 });
-		const batch = ["title,city,listing_type", ...Array.from({ length: 3 }, (_, i) => `Batch ${i},City ${i},restaurant`)].join("\n");
-		expect(await measure("route import (one batch of 3)", () => route("import", { csv: batch, mode: "import" }, { method: "POST" }))).toMatchObject({ ok: true, imported: 3 });
+		const batch = ["title,city,listing_type", ...Array.from({ length: 2 }, (_, i) => `Batch ${i},City ${i},restaurant`)].join("\n");
+		expect(await measure("route import (one batch of 2)", () => route("import", { csv: batch, mode: "import" }, { method: "POST" }))).toMatchObject({ ok: true, imported: 2 });
+		// Drafts a cut-off request created without their queue rows: given them, not created again.
+		for (let i = 0; i < 2; i += 1) await rt.actions.content.create("listings", { data: { title: `Orphan ${i}`, city: `City ${i}`, listing_type: "restaurant" } } as never);
+		const orphans = ["title,city,listing_type", ...Array.from({ length: 2 }, (_, i) => `Orphan ${i},City ${i},restaurant`)].join("\n");
+		expect(await measure("route import (one batch of 2, both cut off before)", () => route("import", { csv: orphans, mode: "import" }, { method: "POST" }))).toMatchObject({ ok: true, imported: 2 });
 		await rt.fixtures.plugin.setting("state_fields", null);
-		const more = ["title,city", ...Array.from({ length: 3 }, (_, i) => `Batch B${i},City ${i}`)].join("\n");
-		expect(await measure("route import (one batch of 3, nothing kept)", () => route("import", { csv: more, mode: "import" }, { method: "POST" }))).toMatchObject({ ok: true, imported: 3 });
+		const more = ["title,city", ...Array.from({ length: 2 }, (_, i) => `Batch B${i},City ${i}`)].join("\n");
+		expect(await measure("route import (one batch of 2, nothing kept)", () => route("import", { csv: more, mode: "import" }, { method: "POST" }))).toMatchObject({ ok: true, imported: 2 });
 		await admin({ type: "page_load", page: "/settings" });
 	});
 
@@ -521,18 +526,19 @@ describe("bridge calls per entry point, worst case", () => {
 		await rt.fixtures.plugin.storage("submissions", D[22]!, { listingId: D[22], title: "Draft 022", status: "approving", claimedAt: at(0), createdAt: at(10_022) });
 		expect((await measure("admin review approve (cut off before)", () => act("review", `approve:${D[22]}`))).toast?.type).toBe("info");
 	});
+	// Values as the page draws them: the waiting count it showed rides along (decisions redraw from it).
 	it("admin photo decisions", async () => {
-		expect((await measure("admin photo_mod approve", () => act("photo_mod", `approve|pr-l3|photo-l3`, "/photos"))).toast?.type).toBe("success");
-		expect((await measure("admin photo_mod reject", () => act("photo_mod", `reject|pr-l4|photo-l4`, "/photos"))).toast?.type).toBe("success");
+		expect((await measure("admin photo_mod approve", () => act("photo_mod", `approve:40|pr-l3|photo-l3`, "/photos"))).toast?.type).toBe("success");
+		expect((await measure("admin photo_mod reject", () => act("photo_mod", `reject:40|pr-l4|photo-l4`, "/photos"))).toast?.type).toBe("success");
 		await rt.fixtures.plugin.storage("photos", "photo-l5", { ...(await rt.inspect.storage.get<Record<string, unknown>>("photos", "photo-l5")), status: "approving", claimedAt: at(0) });
-		expect((await measure("admin photo_mod approve (cut off before)", () => act("photo_mod", `approve|pr-l5|photo-l5`, "/photos"))).toast?.type).toBe("info");
+		expect((await measure("admin photo_mod approve (cut off before)", () => act("photo_mod", `approve:40|pr-l5|photo-l5`, "/photos"))).toast?.type).toBe("info");
 	});
 	it("admin edit decisions", async () => {
-		expect((await measure("admin edit_mod approve", () => act("edit_mod", `approve|ev-5|${L[5]}`, "/changes"))).toast?.type).toBe("success");
-		expect((await measure("admin edit_mod reject", () => act("edit_mod", `reject|ev-6|${L[6]}`, "/changes"))).toast?.type).toBe("success");
+		expect((await measure("admin edit_mod approve", () => act("edit_mod", `approve:40|ev-5|${L[5]}`, "/changes"))).toast?.type).toBe("success");
+		expect((await measure("admin edit_mod reject", () => act("edit_mod", `reject:40|ev-6|${L[6]}`, "/changes"))).toast?.type).toBe("success");
 		// Sent against values the listing no longer has: shown again with the current ones.
 		await put("edits", L[7]!, { listingId: L[7], listing_title: "Place 007", member_id: "ana", fields: { phone: "555-7777" }, was: { phone: "555-0000" }, status: "pending", rev: "ev-7b", createdAt: at(7) });
-		expect((await measure("admin edit_mod approve (listing changed since)", () => act("edit_mod", `approve|ev-7b|${L[7]}`, "/changes"))).toast?.type).toBe("info");
+		expect((await measure("admin edit_mod approve (listing changed since)", () => act("edit_mod", `approve:40|ev-7b|${L[7]}`, "/changes"))).toast?.type).toBe("info");
 	});
 	it("admin reply decisions", async () => {
 		expect((await measure("admin reply_mod approve", () => act("reply_mod", `approve|rr-3|rev-${L[0]}-r003`, "/reviews"))).toast?.type).toBe("success");
@@ -547,8 +553,8 @@ describe("bridge calls per entry point, worst case", () => {
 		expect(await rt.inspect.storage.get("ratings", L[0]!)).toMatchObject({ rc: 3, rsum: 12 });
 	});
 	it("admin claim decisions", async () => {
-		expect((await measure("admin claim_mod approve", () => act("claim_mod", `approve|cv-0|claim-${L[300]}-c000`, "/claims"))).toast?.type).toBe("success");
-		expect((await measure("admin claim_mod reject", () => act("claim_mod", `reject|cv-1|claim-${L[301]}-c001`, "/claims"))).toast?.type).toBe("success");
+		expect((await measure("admin claim_mod approve", () => act("claim_mod", `approve:40|cv-0|claim-${L[300]}-c000`, "/claims"))).toast?.type).toBe("success");
+		expect((await measure("admin claim_mod reject", () => act("claim_mod", `reject:40|cv-1|claim-${L[301]}-c001`, "/claims"))).toast?.type).toBe("success");
 	});
 	it("admin message decisions", async () => {
 		await measure("admin message_mod ask", () => act("message_mod", "ask|contact-a1-0", "/messages"));
@@ -566,7 +572,7 @@ describe("bridge calls per entry point, worst case", () => {
 		// EmDash runs no hook on an update: the first hourly notice run schedules every task.
 		await rt.fixtures.plugin.setting("state_tasks", "0.6.3");
 		await measure("cron notify (first run after an update)", () => hook("cron", cronEvent("notify")), { hook: true });
-		expect(await rt.inspect.setting("state_tasks")).toBe("0.7.0");
+		expect(await rt.inspect.setting("state_tasks")).toBe("0.7.1");
 		const known = await rt.inspect.content.get("listings", L[7]!);
 		await measure("hook content:afterPublish (listing in the index)", () => hook("content:afterPublish", { collection: "listings", content: known }), { hook: true });
 		// A listing new to the index whose submission row has a starting expiry date.

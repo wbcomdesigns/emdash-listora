@@ -28,6 +28,8 @@ export type Settings = {
 	upgrade: Record<string, unknown>;
 	/** Which version last scheduled every task (tasks.ts TASKS). */
 	tasksFor: string;
+	/** The last owner notice failed because the site has no email provider. */
+	noMail: boolean;
 	views: Record<string, View>;
 	raw: Map<string, unknown>;
 };
@@ -40,6 +42,7 @@ export const KEY = {
 	ready: "state_ready",
 	upgrade: "upgrade_0_7",
 	tasks: "state_tasks",
+	mail: "state_mail",
 	view: (list: string) => `view_${list}`,
 } as const;
 
@@ -83,6 +86,7 @@ export async function loadSettings(ctx: PluginContext): Promise<Settings> {
 		ready: all.get(KEY.ready) === true,
 		upgrade: asRecord(all.get(KEY.upgrade)),
 		tasksFor: asString(all.get(KEY.tasks)),
+		noMail: all.get(KEY.mail) === "none",
 		views,
 		raw: all,
 	};

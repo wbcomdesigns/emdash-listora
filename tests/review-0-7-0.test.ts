@@ -1,10 +1,10 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { createPluginRuntimeTestHost, type PluginRuntimeTestHost } from "@emdash-cms/plugin-test";
+import type { PluginRuntimeTestHost } from "@emdash-cms/plugin-test";
 
 // @ts-expect-error plain module shared with the lab seed
 import { listingsCollection } from "../site-kit/seed/collection.mjs";
 import { visitorKey } from "../src/lib/rates";
-import { settle, upgraded } from "./site";
+import { createPluginRuntimeTestHost, settle, upgraded } from "./site";
 
 /** Fixes from the 0.7.0 security review. Each fails on the code before the fix. */
 let rt: PluginRuntimeTestHost | undefined;

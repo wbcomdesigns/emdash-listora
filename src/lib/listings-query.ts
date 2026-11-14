@@ -21,38 +21,31 @@ export async function publicListing(ctx: Ctx, id: string): Promise<Item | null> 
 
 /**
  * Publish a listing's current state, right after this same call created or changed it, or to approve
- * a draft as it is now. One call on Cloudflare, which publishes without a revision. A refusal with no
- * error code reads the revision and tries once with it: the Node sandbox (sandbox-workerd) requires
- * one, and Node has no request limit. A save of the same entry in flight gets one more try. False when the
- * host cannot publish or refused; the listing then keeps its draft and the caller reports a failure.
+ * a draft as it is now. As the docs require (capabilities page), the publish carries the `_rev` read
+ * with getVersioned just before it: two calls, always. `draft` is the draft revision this call's own
+ * update made: when the entry's draft is now another one (an editor saved in between), nothing is
+ * published, so nobody's unfinished edit goes live. A CONFLICT (another save landed between the read
+ * and the publish) is not retried for the same reason. False when the host cannot publish or refused;
+ * the listing then keeps the draft and the caller reports a failure.
  */
-export async function publishNow(ctx: Ctx, id: string): Promise<boolean> {
-	if (!ctx.content?.publish) return false;
-	let rev: string | undefined;
-	for (let attempt = 0; attempt < 2; attempt++) {
-		try {
-			await ctx.content.publish(LISTINGS, id, { _rev: rev as string });
-			return true;
-		} catch (error) {
-			const code = asString((error as { code?: unknown })?.code);
-			// EmDash 1.4+: another save of the entry landed first. CONTENT_ACTION_REENTRANT is not
-			// retried: the action it collides with is still running in this call.
-			if (code === "CONFLICT") continue;
-			// EmDash's own refusals carry a code. The Node sandbox's "revision required" has none.
-			if (code || rev !== undefined || !ctx.content.getVersioned) return false;
-			const versioned = await ctx.content.getVersioned(LISTINGS, id).catch(() => null);
-			if (!versioned?._rev) return false;
-			rev = versioned._rev;
-		}
+export async function publishNow(ctx: Ctx, id: string, draft?: string | null): Promise<boolean> {
+	if (!ctx.content?.publish || !ctx.content.getVersioned) return false;
+	const versioned = await ctx.content.getVersioned(LISTINGS, id).catch(() => null);
+	if (!versioned?._rev) return false;
+	if (draft && (versioned.item as { draftRevisionId?: string | null }).draftRevisionId !== draft) return false;
+	try {
+		await ctx.content.publish(LISTINGS, id, { _rev: versioned._rev });
+		return true;
+	} catch {
+		return false;
 	}
-	return false;
 }
 
 /**
  * Change fields on a published listing and keep it live. Updating a published entry saves a draft,
  * so this publishes again. If the listing already has unpublished edits, publishing would push
  * someone's unfinished work live, so nothing is written and "busy" is returned. Only fields the
- * listings type has are written. Three calls (one when it stops early).
+ * listings type has are written. Four calls (one when it stops early).
  */
 export async function patchListing(
 	ctx: Ctx,
@@ -65,12 +58,13 @@ export async function patchListing(
 	if (!listing || !ctx.content?.update) return { state: "missing" };
 	if (listing.draftRevisionId) return { state: "busy" };
 	const write = onlyKnown(fields, patch);
+	let draft: string | null = null;
 	try {
-		if (Object.keys(write).length) await ctx.content.update(LISTINGS, id, write);
+		if (Object.keys(write).length) draft = (await ctx.content.update(LISTINGS, id, write)).draftRevisionId ?? null;
 	} catch {
 		return { state: "failed" };
 	}
-	if (listing.status === "published" && !(await publishNow(ctx, id))) return { state: "failed" };
+	if (listing.status === "published" && !(await publishNow(ctx, id, draft))) return { state: "failed" };
 	return { state: "done", data: { ...listing.data, ...write } };
 }
 

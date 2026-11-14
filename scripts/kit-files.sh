@@ -2,6 +2,7 @@
 # The one list of kit files: "<path in this repo> <path in the site>", one pair per line.
 # apply-kit.sh copies them, add-to-site.sh backs up a changed one, kit-sums.sh hashes them.
 # ListoraLayout.astro is not listed: it is copied once and never replaced (apply-kit.sh).
+# wbcom-kit.ts is the helper every Wbcom plugin kit shares: apply-kit.sh never replaces a newer copy.
 # Usage: kit-files.sh [<plugin dir>]   (lists what exists in that checkout)
 set -euo pipefail
 PLUGIN="${1:-$(cd "$(dirname "$0")/.." && pwd)}"
@@ -9,6 +10,7 @@ cat <<'MAP'
 site-kit/listora-ui.css src/styles/listora-ui.css
 site-kit/lib/listora.ts src/lib/listora.ts
 site-kit/lib/listora-strings.ts src/lib/listora-strings.ts
+site-kit/lib/wbcom-kit.ts src/lib/wbcom-kit.ts
 site-kit/pages/listings/index.astro src/pages/listings/index.astro
 site-kit/pages/listings/[slug].astro src/pages/listings/[slug].astro
 site-kit/pages/listings/submit.astro src/pages/listings/submit.astro

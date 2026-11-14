@@ -109,6 +109,8 @@ export const S = {
 		checking: "Checking...",
 		tooBig: "That file is too large. Split it into files of up to 100 listings.",
 		importing: "Importing...",
+		continueImport: "Continue",
+		waitingSite: "The site is slow to answer. Trying again in a few seconds...",
 		adminsTitle: "For site admins",
 		adminsBody: "Only a site admin can import or export listings.",
 		queue: "Review them in the queue",
@@ -473,6 +475,11 @@ export function phrase(code?: string): string {
 
 export function importProgress(done: number, total: number): string {
 	return `Importing ${done} of ${total}...`;
+}
+
+/** The import stopped because the site did not answer in time. Nothing is lost and nothing doubles. */
+export function importStopped(imported: number, line: number): string {
+	return `The site took too long to answer, so the import stopped at row ${line} of your file. ${imported} ${imported === 1 ? "listing was" : "listings were"} added as drafts so far. Press Continue to carry on from row ${line}: rows already added are skipped, never added twice.`;
 }
 
 export function exportProgress(rows: number): string {

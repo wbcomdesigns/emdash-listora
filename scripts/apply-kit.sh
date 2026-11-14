@@ -29,8 +29,14 @@ mkdir -p "$LAB/src/layouts"
 [[ -f "$LAB/src/layouts/ListoraLayout.astro" ]] || cp "$PLUGIN/site-kit/layouts/ListoraLayout.astro" "$LAB/src/layouts/ListoraLayout.astro"
 # Every other kit file, from the one list in kit-files.sh. The optional in-text Listings block
 # (src/listora-block/) does nothing until astro.config.mjs lists it (see the install guide).
+# A shared Wbcom file (wbcom-kit.ts) is used by every Wbcom plugin kit on the site. It is copied only
+# when the site's copy is missing or has a lower number on its first line ("wbcom-shared: N").
+shared_version() { local v; v="$(sed -n '1s/.*wbcom-shared: *\([0-9]*\).*/\1/p' "$1" 2>/dev/null)"; echo "${v:-0}"; }
 "$PLUGIN/scripts/kit-files.sh" "$PLUGIN" | while read -r from to; do
 	mkdir -p "$(dirname "$LAB/$to")"
+	if [[ "$(basename "$from")" == wbcom-* && -f "$LAB/$to" ]] && (( $(shared_version "$PLUGIN/$from") <= $(shared_version "$LAB/$to") )); then
+		continue
+	fi
 	cp "$PLUGIN/$from" "$LAB/$to"
 done
 

@@ -27,18 +27,25 @@ export const nextStep = (running: string | undefined, base: string) => (running 
  * Bumped when the set of tasks changes. EmDash runs no hook when a plugin is updated (registry or
  * file), so the hourly notice task, which every earlier version scheduled, schedules the rest.
  */
-export const TASKS = "0.7.0";
+export const TASKS = "0.7.1";
 const DAY = 86_400_000;
 
-/** Every task Listora runs, and the version that scheduled them. Up to six calls. */
+/**
+ * Every task Listora runs, and the version that scheduled them. Up to six calls. The daily expiry
+ * check is always scheduled and returns at once while expiry is off: expiry can be switched on from
+ * EmDash's own settings form (drawn from the manifest), which runs no plugin code.
+ */
 export async function scheduleAll(ctx: Ctx, settings: Settings | null): Promise<void> {
 	await ctx.cron?.schedule("notify", { schedule: NOTIFY_CRON });
 	await ctx.cron?.schedule("tidy", { schedule: "23 * * * *" });
 	await ctx.cron?.schedule("sweep", { schedule: "41 * * * *" });
-	if (settings?.expiryDays) await ctx.cron?.schedule("expire", { schedule: "0 3 * * *" });
+	await ctx.cron?.schedule("expire", { schedule: "0 3 * * *" });
 	if (!settings || !upgradeDone(settings)) await ctx.cron?.schedule("upgrade", { schedule: soon() });
 	await ctx.settings.set(KEY.tasks, TASKS);
 }
+
+/** EmDash's refusal when the site has no email provider (in-process and from the sandbox bridge). */
+const NO_PROVIDER = /no email provider|email is not configured/i;
 
 const siteName = (ctx: Ctx) => asString(ctx.site?.name).replace(/\s+/g, " ").trim().slice(0, 80);
 
@@ -72,6 +79,12 @@ export async function notifyOwners(ctx: Ctx, running?: string): Promise<void> {
 	spend(b);
 	const page = await ctx.storage.notice_queue.query({ limit: 100 });
 	if (!page.items.length) return;
+	if (settings.emailMessages && !ctx.email) {
+		// No email provider (a trusted install leaves ctx.email out): the messages keep waiting, and the
+		// Messages page says the owner was not told. A provider set up later sends them.
+		if (!settings.noMail) await ctx.settings.set(KEY.mail, "none");
+		return;
+	}
 	if (!settings.emailMessages || !ctx.email) {
 		// Notices are off: the messages stay on the site and the queue empties.
 		spend(b);
@@ -116,7 +129,10 @@ export async function notifyOwners(ctx: Ctx, running?: string): Promise<void> {
 	if ((await ctx.storage.notice_queue.deleteMany(claim)) !== claim.length) return;
 	const site = siteName(ctx);
 	const back: Array<{ id: string; data: Record<string, unknown> }> = [];
-	for (const entry of picked) {
+	const rowOf = (id: string) => asRecord(page.items.find((item) => item.id === id)?.data);
+	let sent = false;
+	let noProvider = false;
+	for (const [at, entry] of picked.entries()) {
 		const listingId = [...entry.listings][0]!;
 		const to = await ownerAddress(ctx, b, entry.owner, asRecord(subs.get(listingId)));
 		if (!to) continue;
@@ -127,18 +143,30 @@ export async function notifyOwners(ctx: Ctx, running?: string): Promise<void> {
 				subject: "You have new messages about your listing",
 				text: `Visitors sent messages about your listing${site ? ` on ${site}` : ""}.\n\nSign in to your account on the site and open Messages to read them.`,
 			});
+			sent = true;
 			await ctx.storage.submissions.updateIf(listingId, { where: {}, set: { noticed: now } }).catch(() => undefined);
-		} catch {
+		} catch (error) {
 			b.used -= 1;
+			if (NO_PROVIDER.test(error instanceof Error ? error.message : String(error))) {
+				// The site has no email provider: nobody can be told. This owner's rows and those of the
+				// owners not reached yet go back as they were, to be sent once a provider is set up.
+				noProvider = true;
+				for (const later of picked.slice(at)) for (const id of later.rows) back.push({ id, data: rowOf(id) });
+				break;
+			}
 			// Tried on two more runs, then given up, so a failing address cannot hold the queue.
 			for (const id of entry.rows) {
-				const data = asRecord(page.items.find((item) => item.id === id)?.data);
+				const data = rowOf(id);
 				const tries = (asNumber(data.tries) ?? 0) + 1;
 				if (tries < 3) back.push({ id, data: { ...data, tries } });
 			}
 		}
 	}
 	if (back.length && spend(b)) await ctx.storage.notice_queue.putMany(back).catch(() => undefined);
+	// What the Messages page tells the admin: the site cannot send email, or it can again. With no
+	// provider the failed send's mark and the next run's call are free for it.
+	if ((noProvider ? !settings.noMail : sent && settings.noMail) && spend(b)) await ctx.settings.set(KEY.mail, noProvider ? "none" : "").catch(() => undefined);
+	if (noProvider) return;
 	if ((due.length > picked.length || page.hasMore) && spend(b)) await ctx.cron?.schedule(nextStep(running, "notify-more"), { schedule: soon() }).catch(() => undefined);
 }
 
@@ -146,7 +174,7 @@ export async function notifyOwners(ctx: Ctx, running?: string): Promise<void> {
  * Daily (and a minute later while work is left): listings past their date leave the directory, then
  * owners hear seven days before a listing expires. Same mail rules as the message notice.
  * Expiring a listing changes its listing_status field to "expired" (read, change, publish: three
- * calls); the content hook takes it out of the index. Two per run. A listing with unpublished edits
+ * calls, and the revision the publish needs); the content hook takes it out of the index. One per run. A listing with unpublished edits
  * is tried again a day later. Nine calls at most.
  */
 export async function expireAndWarn(ctx: Ctx, running?: string): Promise<void> {
@@ -158,7 +186,7 @@ export async function expireAndWarn(ctx: Ctx, running?: string): Promise<void> {
 	const due = await ctx.storage.directory.query({ where: { vis: true, exp: { gt: 0, lt: now } }, limit: 3 });
 	let worked = 0;
 	for (const item of due.items) {
-		if (!spend(b, 3)) break;
+		if (!spend(b, 4)) break;
 		worked += 1;
 		const listing = await getListing(ctx, item.id);
 		if (!listing || listing.status !== "published" || asRecord(listing.data).listing_status === "expired") {
