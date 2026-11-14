@@ -1,6 +1,7 @@
 import type { PluginContext } from "emdash/plugin";
 
 import { budget, spend, type Budget } from "./lib/budget";
+import { termMap } from "./lib/directory";
 import { anyType, editPatch } from "./lib/edits";
 import { getListing, ownerOf, patchListing, publishNow } from "./lib/listings-query";
 import { mirrorRating, moveRating, partOf } from "./lib/ratings";
@@ -939,7 +940,7 @@ async function refreshCaches(ctx: Ctx, settings: Settings, b: Budget): Promise<b
 		await ctx.settings.set(KEY.fields, fields);
 		settings.fields = fields;
 	}
-	const map = Object.fromEntries((terms ?? []).map((term) => [term.slug, term.id]));
+	const map = termMap(terms);
 	if (JSON.stringify(map) !== JSON.stringify(settings.terms) && spend(b)) {
 		await ctx.settings.set(KEY.terms, map);
 		settings.terms = map;

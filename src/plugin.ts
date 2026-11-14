@@ -1,7 +1,7 @@
 import type { PluginContext, SandboxedPlugin } from "emdash/plugin";
 
 import { handleAdmin } from "./admin";
-import { catsOf, hideListing, indexListing } from "./lib/directory";
+import { catsOf, hideListing, indexListing, onSite } from "./lib/directory";
 import { readRating } from "./lib/ratings";
 import { loadSettings } from "./lib/settings";
 import { webAddress } from "./lib/edits";
@@ -11,7 +11,7 @@ import { sampleRoute } from "./lib/onboard";
 import { ownerOf } from "./lib/listings-query";
 import { claim, dashboard, edit, favorites, message, photo, photoRemove, privacy, renew, reply, review, submit } from "./member";
 import { contact, duplicate, listings, mapPoints, ratings, reviews, suggest } from "./public";
-import { expireAndWarn, notifyOwners, runUpgrade, scheduleAll, sweep, sweepCats, tidy } from "./tasks";
+import { expireAndWarn, notifyOwners, runUpgrade, scheduleAll, sweep, sweepFix, tidy } from "./tasks";
 import { exportCsv, importCsv } from "./transfer";
 import { PHOTO_MAX_BYTES } from "./lib/photos";
 export { imageType } from "./lib/photos";
@@ -29,17 +29,27 @@ const itemOf = (content: unknown) => content as Item;
 
 /**
  * A listing changed state: bring its directory row up to date. Three calls when the row exists (the
- * settings, for the type's sort slots, its categories and a merge), six when the listing is new to
- * the index (its rating and its starting expiry date are read), then its category rows (one call when
- * they are the same, two or three when not). A plugin's own publish runs this too, after the call
- * that published.
+ * settings, for the type's sort slots, its categories and a merge), six or seven when the listing is
+ * new to the index (its rating and its submission row are read), then its category rows (none to
+ * three calls). A plugin's own publish runs this too, after the call that published.
+ *
+ * A member's listing published from EmDash's own content screen or API, not Listora's queue, still
+ * has its submission waiting: it is approved here with the date the queue would give it, so the
+ * member manages it ("Managed by its author") whichever way it went live. The queue's own approval
+ * marks the row "approving" first, so the two never both decide.
  */
 async function indexFromHook(ctx: PluginContext, content: unknown): Promise<void> {
 	const item = itemOf(content);
 	if (!item?.id) return;
 	if (item.status !== "published") return hideListing(ctx, item.id);
-	const [{ types }, cats] = await Promise.all([loadSettings(ctx), catsOf(ctx, item.id)]);
-	await indexListing(ctx, item, types, async () => asNumber(asRecord(await ctx.storage.submissions.get(item.id).catch(nil)).expires_at) ?? 0, cats);
+	const [settings, cats] = await Promise.all([loadSettings(ctx), catsOf(ctx, item.id)]);
+	await indexListing(ctx, item, settings.types, async () => {
+		const sub = asRecord(await ctx.storage.submissions.get(item.id).catch(nil));
+		if (sub.status !== "pending" || !sub.member_id) return asNumber(sub.expires_at) ?? 0;
+		const exp = settings.expiryDays ? Date.now() + settings.expiryDays * 86_400_000 : 0;
+		await ctx.storage.submissions.updateIf(item.id, { where: { status: "pending" }, set: { status: "approved", expires_at: exp } }).catch(none);
+		return exp;
+	}, cats);
 }
 
 /**
@@ -69,7 +79,7 @@ const plugin: SandboxedPlugin = {
 				else if (task === "expire" || task === "expire-more") await expireAndWarn(ctx, event.name);
 				else if (task === "tidy") await tidy(ctx);
 				else if (task === "sweep" || task === "sweep-more") await sweep(ctx, event.name, event.data);
-				else if (task.startsWith("sweep-cats")) await sweepCats(ctx, event.data);
+				else if (task.startsWith("sweep-fix")) await sweepFix(ctx, event.data);
 				else if (task === "upgrade") await runUpgrade(ctx, event.name);
 				// The per-minute sample task of 0.7.x: the kit's sample page loads it now.
 				else if (event.name === "sample") await ctx.cron?.cancel("sample").catch(none);
@@ -172,14 +182,16 @@ const plugin: SandboxedPlugin = {
 		ratings: { public: true, cacheControl: CACHE, methods: ["GET"], handler: async (routeCtx, ctx) => ratings(routeCtx.input, ctx) },
 		reviews: { public: true, cacheControl: CACHE, methods: ["GET"], handler: async (routeCtx, ctx) => reviews(routeCtx.input, ctx) },
 		// Who manages a listing, for its public page: "claim" when an approved claim moved it to a member,
-		// "author" when the member who added it does, else "". Names no member. One call.
+		// "author" when the member who added it does, else "" (and for a listing that is not on the site).
+		// Names no member. Two calls.
 		manager: {
 			public: true,
 			cacheControl: CACHE,
 			methods: ["GET"],
 			handler: async (routeCtx, ctx) => {
-				const { owner, row } = await ownerOf(ctx, asString(asRecord(routeCtx.input).listingId));
-				return { ok: true, by: owner ? (row.claimed === true ? "claim" : "author") : "" };
+				const id = asString(asRecord(routeCtx.input).listingId);
+				const [{ owner, row }, listed] = await Promise.all([ownerOf(ctx, id), id ? ctx.storage.directory.get(id) : null]);
+				return { ok: true, by: owner && onSite(asRecord(listed)) ? (row.claimed === true ? "claim" : "author") : "" };
 			},
 		},
 		contact: { public: true, methods: ["POST"], handler: async (routeCtx, ctx) => contact(routeCtx.input, routeCtx as { requestMeta?: unknown }, ctx) },

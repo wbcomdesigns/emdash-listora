@@ -1,7 +1,7 @@
 import type { PluginContext } from "emdash/plugin";
 
 import { budget, left, spend, type Budget } from "./lib/budget";
-import { catRows, catsOf, listingPart, readPosition, setPluginFields, writePosition } from "./lib/directory";
+import { catCopy, catRows, catsOf, listingPart, readPosition, setPluginFields, termMap, writePosition } from "./lib/directory";
 import { getListing, patchListing } from "./lib/listings-query";
 import { HOUR, windowOf } from "./lib/rates";
 import { drainRatingQueue, readRating } from "./lib/ratings";
@@ -269,21 +269,30 @@ export async function tidy(ctx: Ctx): Promise<void> {
 }
 
 export const SWEEP = "state:sweep";
+/** A listing's categories are read again once they are this old (EmDash runs no hook when they change). */
+export const STALE = 3_600_000;
 
 /**
  * Keeps the directory index matching the listings: a listing whose content hook did not run (an
- * error, a cut-off call) is put right, a type whose sort slots or chip field changed gets them filled
- * in, rows from before 0.8.0 get their city copy and category rows, and category rows whose copy went
- * stale (a rating change) are written again.
+ * error, a cut-off call) is put right, a type whose sort slots, chip field or choice words changed gets
+ * them filled in, rows from before 0.8.0 get their city copy, and category rows follow the listings.
+ *
+ * Categories: EmDash saves a listing's categories in the admin at once, apart from the entry, runs no
+ * hook for it, and gives a plugin no way to list entries by category (content.list filters only
+ * status, locale and indexed fields). So each listing's categories are read again once an hour old.
+ * Publishing a listing reads them at once (its content hook). Otherwise a change shows within about
+ * an hour plus one pass over the listings: 28 listings a minute, so about 1 hour 20 minutes on a site
+ * of 500 listings and 4 hours 40 minutes at 6,000. The hourly run also refreshes the settings' map of
+ * category slugs, so a category added or renamed is found by its new slug.
  *
  * The hourly run (`sweep`) checks the next 100 listings, from where it stopped (KV). When any need
  * work and no chain is running, it starts one there. A chain run (`sweep-more`, alternating names,
- * its position in the task's data) puts a page right: changed rows in one batch write, category rows
- * in one more, and listings whose categories were never read go to category tasks (`sweep-cats-*`,
- * seven each, up to four, as many as the call budget leaves; EmDash runs them on its next pass).
- * It goes on a minute later to the end of the listings. Measured (tests/scale-and-lows.test.ts):
- * 2,000 listings from before 0.8.0 in 81 minutes on a site with categories (20 without), so about
- * four hours for 6,000 (one without). Nine calls at most.
+ * its position in the task's data) creates the rows a page lacks in one batch write and writes stale
+ * category copies in one more; every other change goes to fix tasks (`sweep-fix-*`, seven changes
+ * each, up to four, as many as the call budget leaves; EmDash runs them on its next pass), which merge
+ * only the listing fields into a row (never the expiry or rating another call may have just written),
+ * and only while the row still holds the save the chain read. It goes on a minute later to the end of
+ * the listings. Nine calls at most.
  */
 export async function sweep(ctx: Ctx, running = "sweep", data?: unknown): Promise<void> {
 	const b = budget(1);
@@ -291,8 +300,10 @@ export async function sweep(ctx: Ctx, running = "sweep", data?: unknown): Promis
 	if (!upgradeDone(settings) || !settings.fields) return;
 	const chain = running !== "sweep";
 	if (!chain) {
-		spend(b, 2);
+		spend(b, 3);
 		if ((await ctx.cron?.list())?.some((task) => task.name.startsWith("sweep-more"))) return;
+		const map = termMap(await ctx.taxonomies?.getTerms("listing_category").catch(nil));
+		if (JSON.stringify(map) !== JSON.stringify(settings.terms) && spend(b)) await ctx.settings.set(KEY.terms, (settings.terms = map));
 	}
 	const at = readPosition(chain ? asRecord(data).at : await ctx.kv.get(SWEEP)) ?? { c: "", s: 0 };
 	spend(b, 3);
@@ -300,12 +311,14 @@ export async function sweep(ctx: Ctx, running = "sweep", data?: unknown): Promis
 	const items = page.items.slice(at.s);
 	const ids = items.map((item) => item.id);
 	const [have, known] = await Promise.all([ctx.storage.directory.getMany(ids), ctx.storage.dircats.getMany(ids)]);
-	const missing = ids.filter((id, i) => !have.has(id) && items[i]!.status === "published");
+	const missing = chain ? ids.filter((id, i) => !have.has(id) && items[i]!.status === "published") : [];
 	const [ratings, subs] = missing.length && spend(b, 2) ? await Promise.all([ctx.storage.ratings.getMany(missing), ctx.storage.submissions.getMany(missing)]) : [new Map<string, unknown>(), new Map<string, unknown>()];
 	const terms = Object.keys(settings.terms).length > 0;
-	const put: Array<{ id: string; data: Record<string, unknown>; part: Record<string, unknown> }> = [];
+	const now = Date.now();
+	const make: Array<{ id: string; data: Record<string, unknown> }> = [];
 	const catPut: Array<{ id: string; data: Record<string, unknown> }> = [];
-	const need: string[] = [];
+	// Fix jobs in listing order: a row's listing fields [id, fields, the save it held], or its categories to read [id, old categories, the copy].
+	const jobs: unknown[][] = [];
 	for (const item of items) {
 		const stored = have.get(item.id) as Record<string, unknown> | undefined;
 		const published = item.status === "published";
@@ -313,42 +326,36 @@ export async function sweep(ctx: Ctx, running = "sweep", data?: unknown): Promis
 		const part = listingPart(item, settings.types);
 		const rating = readRating(ratings.get(item.id));
 		const row = stored ? { ...stored, ...part } : { ...part, exp: asNumber(asRecord(subs.get(item.id)).expires_at) ?? 0, warned: 0, avg: rating.average, rc: rating.count, rseq: 0 };
-		if (!stored || Object.entries(part).some(([field, value]) => JSON.stringify(stored[field]) !== JSON.stringify(value))) put.push({ id: item.id, data: row, part });
+		if (!stored) make.push({ id: item.id, data: row });
+		else if (Object.entries(part).some(([field, value]) => JSON.stringify(stored[field]) !== JSON.stringify(value))) jobs.push([item.id, part, stored.up ?? null]);
 		if (!published) continue;
 		const cats = asRecord(known.get(item.id));
-		const rows = catRows(item.id, cats.lid ? asStringArray(cats.cats) : [], row);
-		// Never read: read in a category task. On a site without categories there is nothing to read.
-		if (!cats.lid && terms) need.push(item.id);
-		else if (rows[0]!.data.sig !== cats.sig) catPut.push(...rows);
+		const old = asStringArray(cats.cats);
+		const read = asNumber(cats.at) ?? 0;
+		// Never read, or an hour old: read again. On a site without categories there is nothing to read.
+		if (terms && !(now - read < STALE)) jobs.push([item.id, old, catCopy(row)]);
+		else {
+			const rows = catRows(item.id, old, row, read);
+			if (rows[0]!.data.sig !== cats.sig) catPut.push(...rows);
+		}
 	}
 	const next = page.hasMore && page.cursor ? writePosition({ c: page.cursor, s: 0 }) : "";
 	if (!chain) {
 		spend(b);
-		if (put.length || catPut.length || need.length) await ctx.cron?.schedule("sweep-more", { schedule: soon(), data: { at: writePosition(at) } });
+		if (make.length || jobs.length || catPut.length) await ctx.cron?.schedule("sweep-more", { schedule: soon(), data: { at: writePosition(at) } });
 		else await ctx.kv.set(SWEEP, next);
 		return;
 	}
-	if (put.length > 2 || missing.length) {
-		spend(b);
-		// ponytail: one batch write of whole rows, so an expiry or rating copy another call writes to one
-		// of them in the moment since they were read is overwritten. Only bulk work (an update's backfill,
-		// a changed sort field) and new rows come here; a page with one or two changes merges them.
-		await ctx.storage.directory.putMany(put.map(({ id, data }) => ({ id, data })));
-	} else {
-		for (const { id, part } of put) {
-			spend(b);
-			await ctx.storage.directory.updateIf(id, { where: {}, set: part });
-		}
-	}
+	if (make.length && spend(b)) await ctx.storage.directory.putMany(make);
 	if (catPut.length && spend(b)) await ctx.storage.dircats.putMany(catPut);
 	const tail = running.endsWith("-2") ? "-2" : "";
-	const lanes = Math.min(Math.ceil(need.length / 7), left(b) - 1, 4);
+	const lanes = Math.min(Math.ceil(jobs.length / 7), left(b) - 1, 4);
 	for (let n = 0; n < lanes; n += 1) {
 		spend(b);
-		await ctx.cron?.schedule(`sweep-cats-${"abcd"[n]}${tail}`, { schedule: soon(), data: { ids: need.slice(n * 7, n * 7 + 7) } });
+		await ctx.cron?.schedule(`sweep-fix-${"abcd"[n]}${tail}`, { schedule: soon(), data: { j: jobs.slice(n * 7, n * 7 + 7) } });
 	}
-	// Listings no task could take: this page again from the first of them.
-	const stop = need[Math.max(lanes, 0) * 7];
+	// Changes no task could take: this page again from the listing of the first of them.
+	const stop = jobs[Math.max(lanes, 0) * 7]?.[0] as string | undefined;
 	const pos = stop ? writePosition({ c: at.c, s: at.s + ids.indexOf(stop) }) : next;
 	spend(b);
 	if (pos) await ctx.cron?.schedule(nextStep(running, "sweep-more"), { schedule: soon(), data: { at: pos } });
@@ -356,20 +363,29 @@ export async function sweep(ctx: Ctx, running = "sweep", data?: unknown): Promis
 }
 
 /**
- * A category task of the sweep: the categories of up to seven listings (one call each), and their
- * category rows written from their directory rows. Nine calls. A listing whose categories could not
- * be read is left for the next pass.
+ * A fix task of the sweep, seven changes at most: each row's listing fields merged in (one call each,
+ * only while the row still holds the save the chain read, so a newer save or another call's expiry
+ * or rating is never written over), and each listing's categories read (one call each), its category
+ * rows written (one) and those of categories it left removed (one). Nine calls. A listing whose
+ * categories could not be read is left for the next pass.
  */
-export async function sweepCats(ctx: Ctx, data: unknown): Promise<void> {
-	const ids = asStringArray(asRecord(data).ids).slice(0, 7);
-	if (!ids.length) return;
-	const rows = await ctx.storage.directory.getMany(ids);
-	const out: Array<{ id: string; data: Record<string, unknown> }> = [];
-	for (const id of ids) {
-		const cats = await catsOf(ctx, id);
-		if (cats && rows.has(id)) out.push(...catRows(id, cats, asRecord(rows.get(id))));
+export async function sweepFix(ctx: Ctx, data: unknown): Promise<void> {
+	const jobs = asRecord(data).j;
+	const put: Array<{ id: string; data: Record<string, unknown> }> = [];
+	const gone: string[] = [];
+	for (const [id, a, b] of (Array.isArray(jobs) ? jobs : []).slice(0, 7) as unknown[][]) {
+		const lid = asString(id);
+		if (!Array.isArray(a)) {
+			await ctx.storage.directory.updateIf(lid, { where: { up: (b as string) ?? null }, set: asRecord(a) }).catch(none);
+			continue;
+		}
+		const cats = await catsOf(ctx, lid);
+		if (!cats) continue;
+		put.push(...catRows(lid, cats, asRecord(b), Date.now()));
+		gone.push(...asStringArray(a).filter((cat) => !cats.includes(cat)).map((cat) => `${cat}:${lid}`));
 	}
-	if (out.length) await ctx.storage.dircats.putMany(out);
+	if (put.length) await ctx.storage.dircats.putMany(put);
+	if (gone.length) await ctx.storage.dircats.deleteMany(gone);
 }
 
 export async function runUpgrade(ctx: Ctx, running?: string): Promise<void> {

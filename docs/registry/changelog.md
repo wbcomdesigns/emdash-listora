@@ -17,9 +17,9 @@ After the update the site shows "finishing an update" for a short time while new
 - New: custom fields per type on the forms, listing page, cards and CSV.
 - New: types without a place hide the map, city, address and hours.
 - New: a Software type with an Install box, live GitHub stars and filter chips.
-- New: sort a type by its number or date fields; Managed by its author badge.
-- Improve: the directory pages through the index; keywords use EmDash search; listings show under every category.
-- Fix: Calendar only for events; sample load no longer duplicates.
+- New: sort a type by its number or date fields, either way; Managed by its author badge.
+- Improve: the directory pages through the index; keywords use EmDash search; listings show under every category, and admin category changes follow within about an hour.
+- Fix: Calendar only for events; sample load no longer duplicates; required yes or no takes No.
 - Compat: needs EmDash 1.2.0 or later.
 
 ## 0.7.1

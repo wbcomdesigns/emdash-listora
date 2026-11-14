@@ -103,7 +103,7 @@ export type TypedCard = ListingCard & { type_name: string; type_color: string };
  */
 export function withType(card: ListingCard, types: readonly ListingType[]): TypedCard {
 	const type = typeBySlug(types, card.listing_type);
-	const place = type.location ? {} : { address: "", city: "", state: "", country: "", postal_code: "", lat: null, lng: null, hours: [], place: "" };
+	const place = type.location ? {} : { address: "", city: "", state: "", country: "", postal_code: "", lat: null, lng: null, hours: [], amenities: [], place: "" };
 	return { ...card, ...place, type_name: type.name, type_color: type.color };
 }
 

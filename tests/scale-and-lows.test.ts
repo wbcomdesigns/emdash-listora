@@ -30,10 +30,13 @@ afterEach(async () => {
 const route = (input: Record<string, unknown>) => rt!.transport.invokeRoute("listings", input, { method: "GET" } as never) as Promise<Page>;
 const ids = async (input: Record<string, unknown>) => (await route(input)).items.map((item) => item.id);
 
+/** The settings' map of category slugs to keys, for the categories `entryCats` files listings under (the upgrade reads the site's own, and this site has none). */
+const TERMS = { cafes: "term-cafes", bakeries: "term-bakeries" };
+
 async function site(): Promise<PluginRuntimeTestHost> {
 	rt = await createPluginRuntimeTestHost();
 	await rt.fixtures.collection(listingsCollection as never);
-	await rt.fixtures.plugin.setting("state_terms", { cafes: "term-cafes", bakeries: "term-bakeries" });
+	await rt.fixtures.plugin.setting("state_terms", TERMS);
 	return rt;
 }
 
@@ -41,6 +44,7 @@ describe("a listing filed under several categories", () => {
 	it("is found under each, leaves a category it is taken out of, and leaves them all when unpublished", async () => {
 		await site();
 		await upgraded(rt!);
+		await rt!.fixtures.plugin.setting("state_terms", TERMS);
 		const listing = await rt!.fixtures.content("listings", { data: { title: "Corner Cafe", listing_type: "restaurant", city: "Bristol" }, slug: "corner-cafe", status: "published" } as never);
 		const publish = () => rt!.transport.invokeHook("content:afterPublish", { collection: "listings", content: listing });
 		entryCats.set(listing.id, ["cafes", "bakeries"]);
@@ -79,11 +83,12 @@ describe("the sort slot's rows without a value", () => {
 
 describe("the sweep on a large directory", () => {
 	// The test host's isolate allows 10,000 open timers and each content create holds some, so the
-	// seed stops at 2,000 listings. The sweep's cost is per 100 listings (four chain runs, one minute
-	// each, when every listing still needs its categories read), so 6,000 listings take three times
-	// the minutes measured here: under five hours.
+	// seed stops at 2,000 listings. The sweep's cost is per listing: here every listing needs its sort
+	// value merged in and its categories read, two calls each in the fix tasks (28 a minute), since a
+	// row is only ever merged into one at a time (step 9b: a batch write could undo a renewal). So
+	// 6,000 listings take three times the minutes measured here: about eight hours, under nine.
 	const N = 2000;
-	it("brings sort slots and category rows up to date at a rate that does 6,000 listings in under five hours, each run within the call budget", async () => {
+	it("brings sort slots and category rows up to date at a rate that does 6,000 listings in under nine hours, each run within the call budget", async () => {
 		await site();
 		// Every run counted on its own: EmDash runs a tick's tasks one after another.
 		let worst = 0;
@@ -109,11 +114,12 @@ describe("the sweep on a large directory", () => {
 			await rt!.actions.plugin.activate();
 			await upgraded(rt!, 400);
 			expect(await rt!.inspect.storage.list("dircats")).toEqual([]);
-			// A site with categories (the upgrade's first step read none from this test host).
-			await rt!.fixtures.plugin.setting("state_terms", { cafes: "term-cafes" });
+			// A site with categories, added after the upgrade read none: the hourly run finds them.
+			await rt!.fixtures.taxonomyDefinition({ name: "listing_category", label: "Listing categories", collections: ["listings"] });
+			await rt!.fixtures.taxonomy({ name: "listing_category", slug: "cafes", label: "Cafes" } as never);
 			// As an update from 0.7.x leaves them: no category rows, and the owner has just mapped a sort field.
 			await rt!.fixtures.plugin.setting("types", [{ slug: "restaurant", fields: [{ key: "seats", label: "Seats", kind: "number", slot: 1 }] }]);
-			const pending = async () => (await rt!.inspect.scheduledTasks()).some((task) => /^sweep-(more|cats)/.test(String(task.name)));
+			const pending = async () => (await rt!.inspect.scheduledTasks()).some((task) => /^sweep-(more|fix)/.test(String(task.name)));
 			await cron(rt!, "sweep");
 			expect(await pending()).toBe(true);
 			const minutes = await minutesUntil(rt!, async () => !(await pending()), 400);
@@ -121,9 +127,8 @@ describe("the sweep on a large directory", () => {
 			const cats = await rt!.inspect.storage.list<Record<string, unknown>>("dircats");
 			expect(rows.filter((row) => row.data.n1 === Number(String(row.data.title).slice(5))).length).toBe(N);
 			expect(cats.filter((row) => Array.isArray(row.data.cats)).length).toBe(N);
-			// One minute per run: about 25 listings' categories a minute. Measured: 81 minutes for 2,000
-			// (20 on a site without categories), so about four hours for 6,000.
-			expect((minutes * 6000) / N).toBeLessThan(300);
+			// Measured: 161 minutes for 2,000 (about 12 listings a minute when each needs both).
+			expect((minutes * 6000) / N).toBeLessThan(540);
 			expect(worst).toBeLessThanOrEqual(MAX_BRIDGE_CALLS);
 		} finally {
 			CloudflareSandboxRunner.prototype.load = load;

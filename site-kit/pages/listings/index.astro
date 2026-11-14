@@ -38,9 +38,22 @@ const view = get("view") || "grid";
 const types = await loadTypes(Astro.locals);
 // A type without a location: no city search, city chips, map, city or Open and Closed on its cards.
 const typeHasPlace = !type || hasPlace(types, type);
-// A sort slot means a different field per type, so it is offered only once a type is picked.
-const slotSorts = type ? (typeOf(types, type).fields ?? []).filter((field) => field.slot).map((field) => ({ value: `n${field.slot}`, label: field.label })) : [];
+// A sort slot means a different field per type, so it is offered only once a type is picked: highest
+// (or newest) first, and lowest (or oldest) first as `n1-asc`. Listings without a value come last either way.
+const slotSorts = type
+	? (typeOf(types, type).fields ?? [])
+			.filter((field) => field.slot)
+			.flatMap((field) => {
+				const date = field.kind === "date";
+				return [
+					{ value: `n${field.slot}`, label: `${field.label}, ${date ? S.directory.newestFirst : S.directory.highestFirst}` },
+					{ value: `n${field.slot}-asc`, label: `${field.label}, ${date ? S.directory.oldestFirst : S.directory.lowestFirst}` },
+				];
+			})
+	: [];
 const sort = ["rating", "title", ...slotSorts.map((item) => item.value)].includes(get("sort")) ? get("sort") : "featured";
+// What the plugin's route takes for that sort: the slot, and `order=asc` for lowest first.
+const sortQuery: Record<string, string> = sort === "featured" ? {} : sort.endsWith("-asc") ? { sort: sort.slice(0, -4), order: "asc" } : { sort };
 // The picked type's chip field ("What it is" for Software): its choices as filter chips, the index answers them.
 const chipField = type ? (typeOf(types, type).fields ?? []).find((field) => field.chip && field.options?.length) : undefined;
 const chip = chipField?.options?.includes(get("chip")) ? get("chip") : "";
@@ -100,7 +113,7 @@ if (searching) {
 let featured: Card[] = [];
 if (!searching) {
 	if (plain && !after) featured = ((await listingsRoute({ per_page: "3" }))?.items ?? []).filter((item) => item.is_featured);
-	answer = await listingsRoute({ ...filters, ...(q ? { q } : {}), ...(sort !== "featured" ? { sort } : {}), per_page: String(PER_PAGE + featured.length), ...(after ? { cursor: after } : {}) });
+	answer = await listingsRoute({ ...filters, ...(q ? { q } : {}), ...sortQuery, per_page: String(PER_PAGE + featured.length), ...(after ? { cursor: after } : {}) });
 }
 const failed = answer?.ok ? "" : answer?.error?.message || S.directory.searchDownBody;
 const featuredIds = new Set(featured.map((item) => item.id));

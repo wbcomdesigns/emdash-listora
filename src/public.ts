@@ -1,6 +1,6 @@
 import type { PluginContext } from "emdash/plugin";
 
-import { cardOf, catWhere, fits, matches, whereOf, orderOf, readFilters, readPosition, readRows, readSlotRows, scanned, slotOf, slotRefusal, visible, type DirRow } from "./lib/directory";
+import { cardOf, catKey, catWhere, fits, matches, whereOf, orderOf, readFilters, readPosition, readRows, readSlotRows, scanned, slotOf, slotRefusal, visible, type DirRow } from "./lib/directory";
 import { withType } from "./lib/catalog";
 import { clean } from "./lib/edits";
 import { ownerOf, publicListing } from "./lib/listings-query";
@@ -44,7 +44,8 @@ const BAD_POSITION = fail("VALIDATION_ERROR", "That page of results could not be
  * Pages go by cursor: `page` above 1 is refused, never answered with the wrong rows. A slot sort
  * (`sort` n1 to n3, `order` asc or desc) is taken only with a type that fills that slot. A category
  * is read from its category rows, each page with its listings' own rows (two calls a page).
- * Worst case 7 calls: settings and six pages (a scan), or settings, two counts and two pages (a slot sort).
+ * Worst case 8 calls: settings and six pages (a scan), or settings, two counts and two pages (a slot
+ * sort), or in a category its key, three pages of two calls and the settings.
  */
 export async function listings(input: unknown, ctx: Ctx) {
 	const raw = asRecord(input);
@@ -56,6 +57,8 @@ export async function listings(input: unknown, ctx: Ctx) {
 	const f = readFilters(raw);
 	const refused = slotRefusal(f, settings.types);
 	if (refused) return fail("VALIDATION_ERROR", refused);
+	// A category's rows go by its key; a slug the site does not have matches nothing. One call at most.
+	if (f.category) f.category = (await catKey(ctx, settings.terms, f.category)) || "-";
 	const slot = slotOf(f);
 	const perPage = Math.min(Math.max(Math.floor(asNumber(raw.per_page) ?? PER_PAGE), 1), 60);
 	const where = whereOf(f);
@@ -119,11 +122,12 @@ export async function mapPoints(input: unknown, ctx: Ctx) {
 	const from = readPosition(raw.cursor);
 	if (from === null) return BAD_POSITION;
 	const f = readFilters(raw);
+	if (f.category) f.category = (await catKey(ctx, settings.terms, f.category)) || "-";
 	const now = Date.now();
 	const where = whereOf(f);
 	const cat = Boolean(f.category);
 	try {
-		// In a category each page is two calls, so half the pages.
+		// In a category each page is two calls and its key may be one: three pages.
 		const page = await readRows(
 			ctx,
 			cat ? catWhere(f) : where,
@@ -131,7 +135,7 @@ export async function mapPoints(input: unknown, ctx: Ctx) {
 			(row) => visible(row, now) && fits(row, where) && row.lat !== null && row.lng !== null && row.lat !== undefined && (!scanned(f) || matches(cardOf(row), f)),
 			800,
 			from,
-			cat ? 4 : 8,
+			cat ? 3 : 8,
 			100,
 			undefined,
 			cat,

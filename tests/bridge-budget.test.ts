@@ -38,7 +38,8 @@ const MEASURED: Record<string, number> = {
 	"route ratings ids (80)": 3,
 	"route reviews (500 on the listing)": 2,
 	"route reviews next page": 2,
-	"route manager": 1,
+	// 0.8.0 step 9b: and its index row, so it answers only for a listing on the site.
+	"route manager": 2,
 	"route contact (guest, owned listing)": 6,
 	"route submit (moderated, category)": 6,
 	"route submit (moderation off, category)": 9,
@@ -149,7 +150,8 @@ const MEASURED: Record<string, number> = {
 	// Plus one (the upgrade task) on a site whose 0.7.0 upgrade has not finished: 8.
 	"cron notify (first run after an update)": 7,
 	"hook content:afterPublish (listing in the index)": 5,
-	"hook content:afterPublish (listing new to the index)": 8,
+	// 0.8.0 step 9b: a row new to the index has no category rows to read first.
+	"hook content:afterPublish (listing new to the index)": 7,
 	"hook content:afterSave (published, no draft)": 4,
 	"hook content:afterUnpublish": 3,
 	"hook content:afterRestore": 6,
@@ -164,7 +166,8 @@ const MEASURED: Record<string, number> = {
 	"cron tidy": 5,
 	"cron sweep (each run)": 9,
 	"cron sweep-more (each run)": 9,
-	"cron sweep-cats (seven listings)": 9,
+	// 0.8.0 step 9b: fix tasks merge listing fields and read categories, seven changes each (nine when a listing also left a category).
+	"cron sweep-fix (seven changes)": 8,
 	// 0.8.0 step 7b: samples already on the site are found by title in the index and the queue (two reads), not in one page of 100 listings.
 	"route sample (start)": 5,
 	"route sample (listings, each step)": 9,
@@ -680,11 +683,11 @@ describe("bridge calls per entry point, worst case", () => {
 			await measure("cron sweep-more (each run)", () => hook("cron", { ...cronEvent(name), data }));
 			const tail = name.endsWith("-2") ? "-2" : "";
 			for (const lane of ["a", "b", "c", "d"]) {
-				const cats = `sweep-cats-${lane}${tail}`;
-				if (!taskData.has(cats)) continue;
-				const ids = taskData.get(cats);
-				taskData.delete(cats);
-				await measure("cron sweep-cats (seven listings)", () => hook("cron", { ...cronEvent(cats), data: ids }));
+				const fix = `sweep-fix-${lane}${tail}`;
+				if (!taskData.has(fix)) continue;
+				const jobs = taskData.get(fix);
+				taskData.delete(fix);
+				await measure("cron sweep-fix (seven changes)", () => hook("cron", { ...cronEvent(fix), data: jobs }));
 			}
 			name = ["sweep-more", "sweep-more-2"].find((next) => taskData.has(next)) ?? "";
 		}

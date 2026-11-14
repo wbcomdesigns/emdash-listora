@@ -1,7 +1,7 @@
 import type { PluginContext } from "emdash/plugin";
 
 import { budget, MAX_CALLS, spend } from "./lib/budget";
-import { onSite, setPluginFields } from "./lib/directory";
+import { catKey, onSite, setPluginFields } from "./lib/directory";
 import { clean, EDITABLE, editPatch, fieldValue, LINK_RULE, sentDetails, typeValues, webAddress } from "./lib/edits";
 import { parseHours } from "./lib/hours";
 import { fieldsOf, getListing, ownerOf, patchListing, publicListing, publishNow } from "./lib/listings-query";
@@ -186,8 +186,7 @@ export async function submit(routeCtx: { user?: unknown; input: unknown }, ctx: 
 
 	// Only a category the site already has. A member cannot create one.
 	if (termCalls && ctx.taxonomies?.addEntryTerms) {
-		let term = settings.terms[wanted];
-		if (!term && spend(b)) term = (await ctx.taxonomies.getTerms("listing_category").catch(() => [])).find((item) => item.slug === wanted)?.id ?? "";
+		const term = settings.terms[wanted] || (spend(b) ? await catKey(ctx, settings.terms, wanted) : "");
 		if (term && spend(b)) await ctx.taxonomies.addEntryTerms(LISTINGS, created.id, "listing_category", [term]).catch(none);
 	}
 

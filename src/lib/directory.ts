@@ -3,7 +3,7 @@ import type { PluginContext } from "emdash/plugin";
 import { haversineKm, listingFromContent, matchesQuery, type ListingCard } from "./catalog";
 import { EDITABLE } from "./edits";
 import { readRating } from "./ratings";
-import { chipField, LISTINGS, mapsSlot, SLOTS, slotsOf, typeBySlug, type ListingType, type Slot } from "./types";
+import { chipField, choiceOf, LISTINGS, mapsSlot, SLOTS, slotsOf, typeBySlug, type ListingType, type Slot } from "./types";
 import { asNumber, asRecord, asString, asStringArray, readCursor, nil, none, notApplied } from "./util";
 
 /**
@@ -25,9 +25,15 @@ import { asNumber, asRecord, asString, asStringArray, readCursor, nil, none, not
  * change never overwrites the plugin fields and a rating change never overwrites the listing.
  *
  * Categories live in `dircats` (0.8.0), so a listing filed under several is found under each: one
- * row per category per listing (id `category:listingId`) carrying the fields the directory filters
- * and sorts by (CAT_COPY), and one row per listing (id = listing id) naming its categories and a
- * signature of that copy, so a changed copy is seen without reading the category rows.
+ * row per category per listing (id `key:listingId`) carrying the fields the directory filters and
+ * sorts by (CAT_COPY), and one row per listing (id = listing id) naming its categories, a signature
+ * of that copy (a changed copy is seen without reading the category rows) and `at`, when its
+ * categories were read. A category's key is its term's translation group, the id EmDash files
+ * entries under, so renaming a category's slug moves no row.
+ *
+ * EmDash runs no hook when categories change in the admin (they save at once, apart from the entry)
+ * and a plugin cannot list entries by term, so the sweep reads each listing's categories again once
+ * they are an hour old (tasks.ts STALE).
  */
 
 type Ctx = Pick<PluginContext, "storage">;
@@ -58,17 +64,19 @@ export function listingPart(item: Item, types: readonly ListingType[]): Record<s
 		ls: card.listing_status,
 		card: shown,
 		edit,
+		// When the listing last changed: the sweep's guard against writing over a newer save (tasks.ts).
+		up: asString((item as { updatedAt?: unknown }).updatedAt),
 		...slotsOf(type, card.type_fields),
-		...(chipField(type) ? { ch: asString(card.type_fields[chipField(type)!.key]) } : {}),
+		...(chipField(type) ? { ch: choiceOf(chipField(type)!, card.type_fields[chipField(type)!.key]) } : {}),
 	};
 }
 
 /**
  * Bring a listing's row up to date from the listing as published. A merge first (one call), which
  * keeps the row's expiry and rating. A listing new to the index gets a row with its rating and its
- * starting expiry date (`expOf`, from its submission row): four calls. A row that has no expiry date
- * yet takes the starting one too. Then its category rows, when the caller read its categories (two
- * or three calls, see writeCats). Never throws.
+ * starting expiry date (`expOf`, from its submission row): four or five calls. A row that has no
+ * expiry date yet takes the starting one too. Then its category rows, when the caller read its
+ * categories (one to three calls, see writeCats; a new row has none to read). Never throws.
  */
 export async function indexListing(ctx: Ctx, item: Item, types: readonly ListingType[], expOf: () => Promise<number>, cats?: string[]): Promise<void> {
 	if (!item?.id) return;
@@ -87,28 +95,42 @@ export async function indexListing(ctx: Ctx, item: Item, types: readonly Listing
 		// Created by another call meanwhile: merge into that one.
 		if (!made.applied) await ctx.storage.directory.updateIf(item.id, { where: {}, set: part }).catch(none);
 	}
-	if (cats) await writeCats(ctx, item.id, cats, row).catch(none);
+	if (cats) await writeCats(ctx, item.id, cats, row, merged.applied).catch(none);
 }
 
-/** A listing's listing_category slugs, or undefined when they could not be read. One call. */
+/** A category's key in the rows: its term's translation group, the id EmDash files entries under. */
+const keyOf = (term: { id: string; translationGroup?: string | null }) => term.translationGroup || term.id;
+
+/** The slug to key map the settings keep (state_terms), from the site's categories. */
+export const termMap = (terms?: Array<{ id: string; slug: string; translationGroup?: string | null }> | null): Record<string, string> => Object.fromEntries((terms ?? []).map((term) => [term.slug, keyOf(term)]));
+
+/** A category slug's key: from the settings' map, else read now (a category added or renamed since the map): one call then. "" when there is none. */
+export async function catKey(ctx: Pick<PluginContext, "taxonomies">, terms: Record<string, string>, slug: string): Promise<string> {
+	return terms[slug] || termMap(await ctx.taxonomies?.getTerms("listing_category").catch(nil))[slug] || "";
+}
+
+/** A listing's category keys, or undefined when they could not be read. One call. */
 export async function catsOf(ctx: Pick<PluginContext, "taxonomies">, id: string): Promise<string[] | undefined> {
 	const terms = await ctx.taxonomies?.getEntryTerms(LISTINGS, id, { taxonomy: "listing_category" }).catch(nil);
-	return terms ? terms.map((term) => asString(term.slug)).filter(Boolean) : undefined;
+	return terms ? [...new Set(terms.map(keyOf))] : undefined;
 }
 
 /** The fields a category row copies from the directory row: what the directory filters and sorts by within a category. */
 const CAT_COPY = ["vis", "type", "cy", "ch", "feat", "tl", "avg", "n1", "n2", "n3"];
 
-/** A listing's category rows: the row naming its categories first, then one per category. */
-export function catRows(lid: string, cats: string[], row: Record<string, unknown>): Array<{ id: string; data: Record<string, unknown> }> {
-	const copy = Object.fromEntries(CAT_COPY.filter((key) => row[key] !== undefined).map((key) => [key, row[key]]));
-	return [{ id: lid, data: { lid, cats, sig: JSON.stringify([cats, copy]) } }, ...cats.map((cat) => ({ id: `${cat}:${lid}`, data: { ...copy, cat, lid } }))];
+/** The part of a directory row that category rows copy. */
+export const catCopy = (row: Record<string, unknown>) => Object.fromEntries(CAT_COPY.filter((key) => row[key] !== undefined).map((key) => [key, row[key]]));
+
+/** A listing's category rows, its categories read at `at`: the row naming them first, then one per category. */
+export function catRows(lid: string, cats: string[], row: Record<string, unknown>, at: number): Array<{ id: string; data: Record<string, unknown> }> {
+	const copy = catCopy(row);
+	return [{ id: lid, data: { lid, cats, at, sig: JSON.stringify([cats, copy]) } }, ...cats.map((cat) => ({ id: `${cat}:${lid}`, data: { ...copy, cat, lid } }))];
 }
 
-/** Bring a listing's category rows up to date: its old list (one call), then nothing when the copy is the same, else the rows (one) and those of categories it left (one). */
-async function writeCats(ctx: Ctx, lid: string, cats: string[], row: Record<string, unknown>): Promise<void> {
-	const rows = catRows(lid, cats, row);
-	const old = asRecord(await ctx.storage.dircats.get(lid));
+/** Bring a listing's category rows up to date: its old list (one call, none for a row new to the index), then nothing when the copy is the same, else the rows (one) and those of categories it left (one). */
+async function writeCats(ctx: Ctx, lid: string, cats: string[], row: Record<string, unknown>, known: boolean): Promise<void> {
+	const rows = catRows(lid, cats, row, Date.now());
+	const old = known ? asRecord(await ctx.storage.dircats.get(lid)) : {};
 	if (old.sig === rows[0]!.data.sig) return;
 	const gone = asStringArray(old.cats).filter((cat) => !cats.includes(cat));
 	if (gone.length) await ctx.storage.dircats.deleteMany(gone.map((cat) => `${cat}:${lid}`));
@@ -155,7 +177,7 @@ export function cardOf(row: Record<string, unknown> & { id?: string }): ListingC
 export type Filters = {
 	q: string;
 	type: string;
-	/** Exact filters the index answers: a listing_category slug and a city (lower case). */
+	/** Exact filters the index answers: a listing_category slug (its key once the route looked it up) and a city (lower case). */
 	category: string;
 	city: string;
 	/** The value of the type's chip field: taken only with a type that has one. */

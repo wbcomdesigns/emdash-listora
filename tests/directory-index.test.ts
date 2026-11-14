@@ -9,7 +9,7 @@ import { listingsCollection } from "../site-kit/seed/collection.mjs";
 import directoryPage from "../site-kit/pages/listings/index.astro?raw";
 import { catRows, listingPart } from "../src/lib/directory";
 import { BUILTIN_TYPES } from "../src/lib/types";
-import { createPluginRuntimeTestHost, cron, entryCats, minutesUntil, settle, upgraded } from "./site";
+import { createPluginRuntimeTestHost, cron, entryCats, minutesUntil, settle, termIds, upgraded } from "./site";
 
 /**
  * 0.8.0 step 6 (issue #97): the kit directory pages through the plugin's index, the index answers
@@ -26,13 +26,16 @@ afterEach(async () => {
 });
 const route = (input: Record<string, unknown>) => rt!.transport.invokeRoute("listings", input, { method: "GET" } as never) as Promise<Page>;
 
+/** Each category's key (its term's id, the translation group of a term with no translations). */
+let keys: Record<string, string> = {};
+
 async function categorySite(ready = true): Promise<PluginRuntimeTestHost> {
 	rt = await createPluginRuntimeTestHost();
 	await rt.fixtures.collection(listingsCollection as never);
 	await rt.fixtures.taxonomyDefinition({ name: "listing_category", label: "Listing categories", collections: ["listings"] });
-	const terms: Record<string, string> = {};
-	for (const slug of ["cafes", "bakeries"]) terms[slug] = (await rt.fixtures.taxonomy({ name: "listing_category", slug, label: slug } as never)).id;
-	await rt.fixtures.plugin.setting("state_terms", terms);
+	keys = {};
+	for (const slug of ["cafes", "bakeries"]) keys[slug] = (await rt.fixtures.taxonomy({ name: "listing_category", slug, label: slug } as never)).id;
+	await rt.fixtures.plugin.setting("state_terms", keys);
 	await rt.fixtures.plugin.setting("require_moderation", false);
 	if (ready) await upgraded(rt);
 	return rt;
@@ -52,8 +55,8 @@ describe("the directory index answers type, category and city", () => {
 		const cafe = await submitted("Corner Cafe", "cafes", "Bristol");
 		const bakery = await submitted("Bread Hall", "bakeries", "Leeds");
 		expect(await rt!.inspect.storage.get("directory", cafe)).toMatchObject({ cy: "bristol" });
-		expect(await rt!.inspect.storage.get("dircats", cafe)).toMatchObject({ cats: ["cafes"] });
-		expect(await rt!.inspect.storage.get("dircats", `cafes:${cafe}`)).toMatchObject({ cat: "cafes", lid: cafe, vis: true, type: "restaurant" });
+		expect(await rt!.inspect.storage.get("dircats", cafe)).toMatchObject({ cats: [keys.cafes] });
+		expect(await rt!.inspect.storage.get("dircats", `${keys.cafes}:${cafe}`)).toMatchObject({ cat: keys.cafes, lid: cafe, vis: true, type: "restaurant" });
 
 		const cafes = await route({ category: "cafes" });
 		expect(cafes).toMatchObject({ ok: true, total: 1 });
@@ -84,6 +87,7 @@ describe("the directory index answers type, category and city", () => {
 		await categorySite(false);
 		const made = await rt!.fixtures.content("listings", { data: { title: "Corner Cafe", listing_type: "restaurant", city: "Bristol" }, slug: "corner-cafe", status: "published" } as never);
 		entryCats.set(made.id, ["cafes", "bakeries"]);
+		for (const [slug, id] of Object.entries(keys)) termIds.set(slug, id);
 		await upgraded(rt!);
 		// As 0.7.x wrote it: no city copy, no category rows, and the long description in the card.
 		const row = (await rt!.inspect.storage.get<Record<string, unknown>>("directory", made.id))!;
@@ -98,6 +102,7 @@ describe("the directory index answers type, category and city", () => {
 		expect((await route({ category: "bakeries" })).items.map((item) => item.id)).toEqual([made.id]);
 		expect((await route({ category: "cafes" })).items.map((item) => item.id)).toEqual([made.id]);
 		entryCats.delete(made.id);
+		termIds.clear();
 	});
 });
 
@@ -125,12 +130,14 @@ describe("a directory of 6000 listings", () => {
 		rt = await createPluginRuntimeTestHost();
 		await rt.fixtures.collection(listingsCollection as never);
 		await rt.fixtures.plugin.setting("upgrade_0_7", { done: true });
+		// Category rows go by the term's key; the settings map each slug to it.
+		await rt.fixtures.plugin.setting("state_terms", { cafes: "cafes", bakeries: "bakeries" });
 		for (let i = 0; i < N; i += 1) {
 			const id = `L${String(i).padStart(5, "0")}`;
 			const item = { id, slug: id.toLowerCase(), status: "published", data: { title: `Spot ${i}`, listing_type: typeOf(i), city: cityOf(i), is_featured: i % 500 === 0, type_fields: i % 20 === 0 ? { stars: i } : {} } };
 			const row = { ...listingPart(item, BUILTIN_TYPES), exp: 0, warned: 0, avg: i % 5, rc: 1, rseq: 0 };
 			await rt.fixtures.plugin.storage("directory", id, row);
-			for (const cat of catRows(id, catsOf(i), row)) await rt.fixtures.plugin.storage("dircats", cat.id, cat.data);
+			for (const cat of catRows(id, catsOf(i), row, Date.now())) await rt.fixtures.plugin.storage("dircats", cat.id, cat.data);
 		}
 	}
 
@@ -191,7 +198,7 @@ describe("the kit directory page", () => {
 		expect(directoryPage).toContain('await search(q, { collections: ["listings"]');
 		expect(directoryPage).toContain("ids: ids.join(\",\")");
 		// Category, exact city and the cursor go to the index; the sort slots only with a type.
-		for (const part of ["...(category ? { category } : {})", "city_exact: city", "cursor: after", 'const slotSorts = type ?']) expect(directoryPage).toContain(part);
+		for (const part of ["...(category ? { category } : {})", "city_exact: city", "cursor: after", 'const slotSorts = type\n']) expect(directoryPage).toContain(part);
 		// Cards are drawn from the listings on the page only: one read by id.
 		expect(directoryPage).toContain('getEmDashCollection("listings", { where: { id: ids }, limit: ids.length })');
 	});

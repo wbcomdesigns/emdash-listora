@@ -1,4 +1,4 @@
-import { PLACE_FIELDS, type ListingType, type TypeField } from "./types";
+import { choiceOf, PLACE_FIELDS, type ListingType, type TypeField } from "./types";
 import { asRecord, asString, parseJson } from "./util";
 
 /** What an owner may change on their own listing. Type, featured, claimed and dates are not theirs. */
@@ -149,8 +149,8 @@ export function detailInput(field: TypeField, raw: unknown): { value: Detail; er
 	if (!text) return { value: null };
 	if (field.kind === "number") return Number.isFinite(Number(text)) ? { value: Number(text) } : wrong("must be a number.");
 	if (field.kind === "choice") {
-		const option = field.options?.find((item) => item.toLowerCase() === text.toLowerCase());
-		return option ? { value: option } : wrong("must be one of its choices.");
+		const option = choiceOf(field, text);
+		return field.options?.includes(option) ? { value: option } : wrong("must be one of its choices.");
 	}
 	const link = field.kind === "link" && webAddress(text);
 	if (field.kind === "link") return link ? { value: link } : wrong(LINK_RULE);
@@ -178,7 +178,8 @@ export function typeValues(type: Fields, input: Record<string, unknown>, mode: "
 		if (!(field.key in input) && mode !== "submit") continue;
 		const { value, error } = detailInput(field, input[field.key]);
 		if (error && mode !== "apply") return { values, error };
-		if (field.required && (value === null || value === false) && (mode === "submit" || mode === "edit")) return { values, error: `${field.label} is required.` };
+		// A required yes or no is answered by either: only no answer at all is missing.
+		if (field.required && value === null && (mode === "submit" || mode === "edit")) return { values, error: `${field.label} is required.` };
 		// Empty is left out of a new listing or a row, and kept as null (cleared) in a change.
 		if (value !== null || mode === "edit" || mode === "apply") values[field.key] = value;
 	}

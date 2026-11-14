@@ -1,7 +1,7 @@
 import type { PluginContext } from "emdash/plugin";
 
 import { spend, type Budget } from "./budget";
-import { listingPart } from "./directory";
+import { listingPart, termMap } from "./directory";
 import { fromLegacy, readRating } from "./ratings";
 import { KEY, type Settings } from "./settings";
 import { LISTINGS } from "./types";
@@ -71,7 +71,7 @@ export async function upgradeStep(ctx: PluginContext, settings: Settings, b: Bud
 		if (!(await claim(after))) return state;
 		await ctx.settings.set(KEY.fields, collection ? collection.fields.map((field) => field.slug) : null);
 		if (kit === "1" && spend(b)) await ctx.settings.set(KEY.kit, true);
-		if (spend(b)) await ctx.settings.set(KEY.terms, Object.fromEntries((terms ?? []).map((term) => [term.slug, term.id])));
+		if (spend(b)) await ctx.settings.set(KEY.terms, termMap(terms));
 	} else if (state.step === "index") {
 		if (!spend(b, 4)) return state;
 		// No listings type (prep found none): nothing to index. Asking for its rows would fail inside the

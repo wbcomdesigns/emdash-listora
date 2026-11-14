@@ -11,7 +11,7 @@ export type HourRow = { day: number; open: string; close: string };
 export type ListingTypeInfo = { slug: string; name: string; schemaType?: string; color?: string; icon?: string; hidden?: boolean; location?: boolean; fields?: TypeFieldInfo[] };
 
 /** One of a type's own fields, as the owner set it up in the admin (Listing types). */
-export type TypeFieldInfo = { key: string; label: string; kind: "text" | "number" | "choice" | "link" | "date" | "yesno"; options?: string[]; required?: boolean; cards?: boolean; slot?: number; chip?: boolean };
+export type TypeFieldInfo = { key: string; label: string; kind: "text" | "number" | "choice" | "link" | "date" | "yesno"; options?: string[]; required?: boolean; cards?: boolean; slot?: number; chip?: boolean; was?: Record<string, string> };
 
 const KINDS = new Set(["text", "number", "choice", "link", "date", "yesno"]);
 
@@ -28,6 +28,8 @@ function fieldsOf(value: unknown): TypeFieldInfo[] {
 			cards: field.cards === true,
 			...([1, 2, 3].includes(field.slot as number) ? { slot: field.slot as number } : {}),
 			...(field.kind === "choice" && field.chip === true ? { chip: true } : {}),
+			// Renamed choices, old words (lower case) to new: a listing that stored the old words shows the new.
+			...(field.kind === "choice" && field.was && typeof field.was === "object" ? { was: field.was as Record<string, string> } : {}),
 		}));
 }
 
@@ -378,7 +380,7 @@ export type Fact = { label: string; value: string; href?: string; kind: TypeFiel
 
 /**
  * The filled-in details of one listing, in its type's field order, ready to show: a choice as the
- * owner wrote it, yes or no in words, a date in the site's date format, a link only when it is a full
+ * owner wrote it (a renamed choice in its new words), yes or no in words, a date in the site's date format, a link only when it is a full
  * http or https address. `cards` keeps only the fields the owner marked to show on cards.
  */
 export function typeFacts(data: Record<string, unknown>, type: ListingTypeInfo, options: { dateFormat?: string; timeZone?: string; cards?: boolean } = {}): Fact[] {
@@ -392,7 +394,7 @@ export function typeFacts(data: Record<string, unknown>, type: ListingTypeInfo, 
 			const base = { label: field.label, kind: field.kind };
 			if (field.kind === "yesno") return raw === true || raw === "true" ? [{ ...base, value: S.common.yes }] : raw === false || raw === "false" ? [{ ...base, value: S.common.no }] : [];
 			if (field.kind === "date") return [{ ...base, value: formatSiteDate(text, options.dateFormat) }];
-			if (field.kind === "choice") return [{ ...base, value: field.options?.find((option) => option.toLowerCase() === text.toLowerCase()) ?? text }];
+			if (field.kind === "choice") return [{ ...base, value: field.options?.find((option) => option.toLowerCase() === text.toLowerCase()) ?? field.was?.[text.toLowerCase()] ?? text }];
 			if (field.kind === "link") {
 				const href = websiteHref(text);
 				return href ? [{ ...base, value: text.replace(/^https?:\/\//, "").replace(/\/$/, ""), href }] : [];

@@ -74,8 +74,8 @@ describe("kit: a listing's details", () => {
 		expect(directoryPage).toContain("const cityFacets = typeHasPlace ?");
 		expect(directoryPage).toContain("data-lat={located ? listing.data.lat : undefined}");
 		expect(directoryPage).toContain("const hours = located ? parseHours(listing.data.hours) : []");
-		// Submit and edit: no address, city, state or country asked or sent.
-		expect(submitPage.match(/data-place>/g)).toHaveLength(2);
+		// Submit and edit: no address, city, state, country or amenities asked or sent.
+		expect(submitPage.match(/data-place>/g)).toHaveLength(3);
 		expect(submitPage).toContain("...(located ? Object.fromEntries(PLACE_KEYS.map");
 		// The form draws each kind with its own input, from the types route.
 		for (const input of ['type="number"', "<select", 'type="url"', 'type="date"', 'type="checkbox"']) expect(submitPage).toContain(input);

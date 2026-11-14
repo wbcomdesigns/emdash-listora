@@ -50,11 +50,13 @@ PluginBridge.prototype.cronSchedule = function (this: PluginBridge, name: string
 
 /** Categories a test files a listing under, answered as EmDash would (the test host has no fixture to file one). */
 export const entryCats = new Map<string, string[]>();
+/** The term id `entryCats` answers for a slug: `term-<slug>` unless a test names the site's own. */
+export const termIds = new Map<string, string>();
 const entryTerms = PluginBridge.prototype.taxonomyEntryTerms;
 PluginBridge.prototype.taxonomyEntryTerms = async function (this: PluginBridge, ...args: Parameters<typeof entryTerms>) {
 	const found = await entryTerms.apply(this, args);
 	const cats = entryCats.get(args[1]);
-	return (cats ? cats.map((slug) => ({ id: `term-${slug}`, name: "listing_category", slug, label: slug, parentId: null })) : found) as never;
+	return (cats ? cats.map((slug) => ({ id: termIds.get(slug) ?? `term-${slug}`, name: "listing_category", slug, label: slug, parentId: null })) : found) as never;
 };
 
 /**

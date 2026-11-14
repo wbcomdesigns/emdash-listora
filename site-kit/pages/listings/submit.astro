@@ -143,7 +143,7 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 						<label class="listora-label" for="owner_name">{S.submit.listedBy}</label>
 						<input id="owner_name" class="listora-input" name="owner_name" />
 					</div>
-					<div class="listora-field">
+					<div class="listora-field" data-place>
 						<label class="listora-label" for="amenities">{S.submit.amenities}</label>
 						<input id="amenities" class="listora-input" name="amenities" aria-describedby="amenities-help" />
 						<p class="listora-helper" id="amenities-help">{S.submit.amenitiesHelp}</p>
@@ -261,6 +261,10 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 		const marker = field.required ? ` <span class="listora-req">${esc(S.common.required)}</span>` : "";
 		const described = help ? ` aria-describedby="${id}-help"` : "";
 		const helpHtml = help ? `<p class="listora-helper" id="${id}-help">${esc(help)}</p>` : "";
+		// A required yes or no is a Yes or No choice: a ticked box would be the only answer a required box allows.
+		if (field.kind === "yesno" && field.required) {
+			return `<div class="listora-field"><label class="listora-label" for="${id}">${esc(field.label)}${marker}</label><select id="${id}" class="listora-input" name="${id}"${required}${described}><option value="">${esc(S.common.choose)}</option><option value="true">${esc(S.common.yes)}</option><option value="false">${esc(S.common.no)}</option></select>${helpHtml}</div>`;
+		}
 		if (field.kind === "yesno") {
 			return `<div class="listora-field"><div class="listora-check"><input id="${id}" name="${id}" type="checkbox" value="true"${required}${described} /><label class="listora-label" for="${id}">${esc(field.label)}${marker}</label></div>${helpHtml}</div>`;
 		}
@@ -284,7 +288,7 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 		const type = chosenType();
 		const box = document.getElementById("type-fields");
 		if (box) box.innerHTML = type.fields.map(fieldHtml).join("");
-		// A type without a location asks for no address, city, state or country.
+		// A type without a location asks for no address, city, state, country or amenities.
 		form.querySelectorAll<HTMLElement>("[data-place]").forEach((node) => {
 			node.hidden = !type.location;
 		});
@@ -463,7 +467,8 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 				// Left out for a type without a location, so an edit keeps the address the listing has.
 				...(located ? Object.fromEntries(PLACE_KEYS.map((key) => [key, text(key)])) : {}),
 				owner_name: text("owner_name"),
-				amenities: text("amenities"),
+				// A place's features (wifi, parking): not asked or sent for a type without a location.
+				...(located ? { amenities: text("amenities") } : {}),
 				agree_terms: data.get("agree_terms") === "true",
 				company_website: text("company_website"),
 				type_fields: typeFields(),

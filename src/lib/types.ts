@@ -17,6 +17,8 @@ export type TypeField = {
 	slot?: 1 | 2 | 3;
 	/** The type's one choice field visitors filter by with chips (`ch` in the directory index). */
 	chip?: boolean;
+	/** Renamed choices of a `choice` field, old words (lower case) to new: listings keep what they stored, and read it as the new choice (choiceOf). */
+	was?: Record<string, string>;
 };
 
 export type ListingType = {
@@ -114,9 +116,11 @@ function fieldOf(raw: unknown): TypeField | null {
 	const key = text(row.key, 40);
 	const label = text(row.label, 80);
 	const kind = FIELD_KINDS.find((item) => item === row.kind);
-	if (!/^[a-z0-9_]+$/.test(key) || !label || !kind) return null;
+	if (!/^[a-z0-9_]+$/.test(key) || key in {} || !label || !kind) return null;
 	const field: TypeField = { key, label, kind };
 	if (kind === "choice") field.options = (Array.isArray(row.options) ? row.options : []).map((option) => text(option, 80)).filter(Boolean).slice(0, 30);
+	// Written only by the type editor (fieldFromForm), like the choices themselves.
+	if (kind === "choice" && row.was) field.was = asRecord(row.was) as Record<string, string>;
 	if (row.required === true) field.required = true;
 	if (row.cards === true) field.cards = true;
 	if (kind === "choice" && row.chip === true) field.chip = true;
@@ -213,11 +217,18 @@ export function slotsOf(type: ListingType, values: Record<string, unknown>): Par
 /** The type's chip field (at most one): visitors filter its listings by that choice. */
 export const chipField = (type: ListingType) => type.fields.find((field) => field.chip);
 
+/** A stored choice as its field has it now: the field's own words for it, a renamed choice's new words, else as stored. */
+export function choiceOf(field: TypeField, value: unknown): string {
+	const text = asString(value);
+	return field.options?.find((option) => option.toLowerCase() === text.toLowerCase()) ?? field.was?.[text.toLowerCase()] ?? text;
+}
+
 /**
- * A listing's place: what a type without a location neither takes nor shows. A listing keeps what it
- * stored here when its type later loses its location; nothing shows it while the type has none.
+ * A listing's place: what a type without a location neither takes nor shows (amenities are a place's
+ * features: wifi, parking). A listing keeps what it stored here when its type later loses its
+ * location; nothing shows it while the type has none.
  */
-export const PLACE_FIELDS = ["address", "city", "state", "country", "postal_code", "lat", "lng", "hours"] as const;
+export const PLACE_FIELDS = ["address", "city", "state", "country", "postal_code", "lat", "lng", "hours", "amenities"] as const;
 
 /** The types offered for a new listing. */
 export const shownTypes = (types: readonly ListingType[]) => types.filter((type) => !type.hidden);
@@ -318,7 +329,8 @@ export function keyFrom(name: string, taken: Iterable<string>, separator: "-" | 
 			.slice(0, max - 3) || (separator === "-" ? "type" : "field");
 	const used = new Set(taken);
 	let key = base;
-	for (let n = 2; used.has(key); n += 1) key = `${base}${separator}${n}`;
+	// Never a name every object already has ("constructor"): `key in values` would be true for it on any listing.
+	for (let n = 2; used.has(key) || key in {}; n += 1) key = `${base}${separator}${n}`;
 	return key;
 }
 
@@ -337,7 +349,7 @@ export function withType(stored: unknown, type: ListingType): unknown[] {
 export const withoutType = (stored: unknown, slug: string): unknown[] => (Array.isArray(stored) ? stored : []).filter((row) => asString(asRecord(row).slug) !== slug);
 
 /** The slot and chip map of a type, for telling whether a save changed what the index keeps. */
-export const slotMap = (type: ListingType) => JSON.stringify(type.fields.filter((field) => field.slot || field.chip).map((field) => [field.key, field.slot, field.chip]));
+export const slotMap = (type: ListingType) => JSON.stringify(type.fields.filter((field) => field.slot || field.chip).map((field) => [field.key, field.slot, field.chip, field.chip && field.was]));
 
 export const LISTINGS = "listings";
 export const DEMO_MEMBER = "demo-member";

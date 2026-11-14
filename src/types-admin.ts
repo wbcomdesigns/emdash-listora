@@ -145,6 +145,19 @@ export function fieldFromForm(values: Values, type: ListingType, base: TypeField
 		if (options.length < 2) return { error: "Add at least two choices, one per line." };
 		if (options.length > 30) return { error: "A choice field can have up to 30 choices." };
 		field.options = options;
+		// A line that now reads as words new to the field was renamed: listings that stored the old
+		// words read them as the new ones (choiceOf), and the sweep moves the chip filter's copy.
+		const now = options.map((option) => option.toLowerCase());
+		const before = base?.options?.map((option) => option.toLowerCase()) ?? [];
+		const was: Record<string, string> = { ...base?.was };
+		before.forEach((old, i) => {
+			if (options[i] && !now.includes(old) && !before.includes(now[i]!)) was[old] = options[i]!;
+		});
+		for (const old in was) {
+			was[old] = was[was[old]!.toLowerCase()] ?? was[old]!;
+			if (now.includes(old)) delete was[old];
+		}
+		if (Object.keys(was).length) field.was = was;
 	}
 	if (asBoolean(values.required)) field.required = true;
 	if (asBoolean(values.cards)) field.cards = true;
