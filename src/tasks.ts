@@ -1,7 +1,7 @@
 import type { PluginContext } from "emdash/plugin";
 
 import { budget, spend, type Budget } from "./lib/budget";
-import { listingPart, setPluginFields } from "./lib/directory";
+import { categoryOf, listingPart, setPluginFields } from "./lib/directory";
 import { getListing, patchListing } from "./lib/listings-query";
 import { HOUR, windowOf } from "./lib/rates";
 import { drainRatingQueue, readRating } from "./lib/ratings";
@@ -273,7 +273,8 @@ export const SWEEP = "state:sweep";
 /**
  * Hourly check that the directory index matches the listings, 50 at a time, all of them over the
  * hours: a listing whose content hook did not run (an error, a cut-off call) is put right here, and
- * a type whose sort slots changed gets them filled in (the backfill). Nine calls at most. Only rows
+ * a type whose sort slots changed gets them filled in (the backfill), and a row from before 0.8.0
+ * gets its category copy (one more call each on a site with categories). Nine calls at most. Only rows
  * that differ are written, each as a merge, three per run.
  *
  * A run that put something right goes on a minute later (`sweep-more`, alternating names, see
@@ -296,8 +297,18 @@ export async function sweep(ctx: Ctx, running = "sweep"): Promise<void> {
 	let wrote = 0;
 	for (const item of page.items) {
 		const stored = asRecord(have.get(item.id));
-		const part = listingPart(item, settings.types);
+		let part = listingPart(item, settings.types);
 		if (have.has(item.id)) {
+			// A row from before 0.8.0 has no category copy: read it (none to read on a site without categories).
+			if (stored.cat === undefined) {
+				const terms = Object.keys(settings.terms).length > 0;
+				if (terms && !spend(b)) {
+					fixed = false;
+					break;
+				}
+				const cat = terms ? await categoryOf(ctx, item.id) : "";
+				if (cat !== undefined) part = { ...part, cat };
+			}
 			const same = Object.entries(part).every(([field, value]) => JSON.stringify(stored[field]) === JSON.stringify(value));
 			if (same) continue;
 			if (!spend(b)) {

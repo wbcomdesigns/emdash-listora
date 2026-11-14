@@ -1,6 +1,6 @@
 import type { PluginContext } from "emdash/plugin";
 
-import { cardOf, matches, orderOf, readFilters, readPosition, readRows, readSlotRows, scanned, slotOf, slotRefusal, visible, type DirRow } from "./lib/directory";
+import { cardOf, matches, whereOf, orderOf, readFilters, readPosition, readRows, readSlotRows, scanned, slotOf, slotRefusal, visible, type DirRow } from "./lib/directory";
 import { withType } from "./lib/catalog";
 import { clean } from "./lib/edits";
 import { ownerOf, publicListing } from "./lib/listings-query";
@@ -35,8 +35,8 @@ const READ_FAILED = fail("READ_FAILED", "The directory could not be read just no
 const BAD_POSITION = fail("VALIDATION_ERROR", "That page of results could not be read. Start the search again.");
 
 /**
- * One page of the directory, from the stored index. Filters the index has (listing type) are part of
- * the read; the rest (text, place, feature, distance) are checked row by row over at most SCAN_READS
+ * One page of the directory, from the stored index. Filters the index has (listing type, category,
+ * exact city) are part of the read; the rest (text, place, feature, distance) are checked row by row over at most SCAN_READS
  * storage pages. The answer carries `cursor` for the next page, and `total` only when it is exact.
  * Pages go by cursor: `page` above 1 is refused, never answered with the wrong rows. A slot sort
  * (`sort` n1 to n3, `order` asc or desc) is taken only with a type that fills that slot.
@@ -54,12 +54,20 @@ export async function listings(input: unknown, ctx: Ctx) {
 	if (refused) return fail("VALIDATION_ERROR", refused);
 	const slot = slotOf(f);
 	const perPage = Math.min(Math.max(Math.floor(asNumber(raw.per_page) ?? PER_PAGE), 1), 60);
-	const where = { vis: true, ...(f.type ? { type: f.type } : {}) };
+	const where = whereOf(f);
 	const scan = scanned(f);
 	const now = Date.now();
+	const keep = (row: DirRow) => visible(row, now) && (!scan || matches(cardOf(row), f));
+	const card = (row: DirRow) => withType(cardOf(row), settings.types);
+	// `ids` (100 at most, from EmDash's site search): those listings that pass the filters, in the order sent. Two calls.
+	const ids = asString(raw.ids).split(",").filter(Boolean).slice(0, 100);
 	try {
+		if (ids.length) {
+			const rows = await ctx.storage.directory.getMany(ids);
+			const items = ids.map((id) => ({ ...asRecord(rows.get(id)), id }) as DirRow).filter((row) => keep(row) && Object.entries(where).every(([field, value]) => row[field] === value));
+			return { ok: true, items: items.map(card), total: null, per_page: items.length, cursor: null };
+		}
 		// The total leaves out listings past their date that the daily task has not marked yet: two counts.
-		const keep = (row: DirRow) => visible(row, now) && (!scan || matches(cardOf(row), f));
 		const [page, never, later] = await Promise.all([
 			slot
 				? readSlotRows(ctx, where, slot, f.order, keep, perPage, from, scan ? SCAN_READS : 2, scan ? 100 : perPage)
@@ -67,7 +75,7 @@ export async function listings(input: unknown, ctx: Ctx) {
 			scan ? null : ctx.storage.directory.count({ ...where, exp: 0 }),
 			scan ? null : ctx.storage.directory.count({ ...where, exp: { gt: now } }),
 		]);
-		return { ok: true, items: page.rows.map((row) => withType(cardOf(row), settings.types)), total: scan ? null : (never ?? 0) + (later ?? 0), per_page: perPage, cursor: page.next };
+		return { ok: true, items: page.rows.map(card), total: scan ? null : (never ?? 0) + (later ?? 0), per_page: perPage, cursor: page.next };
 	} catch {
 		return READ_FAILED;
 	}
@@ -106,7 +114,7 @@ export async function mapPoints(input: unknown, ctx: Ctx) {
 	try {
 		const page = await readRows(
 			ctx,
-			{ vis: true, ...(f.type ? { type: f.type } : {}) },
+			whereOf(f),
 			undefined,
 			(row) => visible(row, now) && row.lat !== null && row.lng !== null && row.lat !== undefined && (!scanned(f) || matches(cardOf(row), f)),
 			800,

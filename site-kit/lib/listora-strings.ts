@@ -83,6 +83,8 @@ export const S = {
 		noneYetTitle: "No listings yet",
 		noneYetBody: "This directory is empty. Be the first to add a listing.",
 		pages: "Pages of listings",
+		matching: "Matching listings",
+		unavailableTitle: "The directory cannot be shown right now",
 		searchDownTitle: "Search is not available right now",
 		searchDownBody: "Check your connection and try again.",
 		mapCredit: "OpenStreetMap",
@@ -377,6 +379,10 @@ export function eventCount(n: number): string {
 
 export function pageOf(page: number, pages: number): string {
 	return `Page ${page} of ${pages}`;
+}
+
+export function pageNumber(page: number): string {
+	return `Page ${page}`;
 }
 
 export function saveNamed(title: string): string {

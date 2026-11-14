@@ -1,7 +1,7 @@
 import type { PluginContext, SandboxedPlugin } from "emdash/plugin";
 
 import { handleAdmin } from "./admin";
-import { hideListing, indexListing } from "./lib/directory";
+import { categoryOf, hideListing, indexListing } from "./lib/directory";
 import { readRating } from "./lib/ratings";
 import { loadSettings } from "./lib/settings";
 import { LISTINGS, typeBySlug } from "./lib/types";
@@ -26,17 +26,17 @@ type Item = { id: string; slug: string | null; status: string; data: Record<stri
 const itemOf = (content: unknown) => content as Item;
 
 /**
- * A listing changed state: bring its directory row up to date. Two calls when the row exists (the
- * settings, for the type's sort slots, and a merge), five when the listing is new to the index (its
- * rating and its starting expiry date are read). A plugin's own publish runs this too, after the
+ * A listing changed state: bring its directory row up to date. Three calls when the row exists (the
+ * settings, for the type's sort slots, its categories and a merge), six when the listing is new to
+ * the index (its rating and its starting expiry date are read). A plugin's own publish runs this too, after the
  * call that published.
  */
 async function indexFromHook(ctx: PluginContext, content: unknown): Promise<void> {
 	const item = itemOf(content);
 	if (!item?.id) return;
 	if (item.status !== "published") return hideListing(ctx, item.id);
-	const { types } = await loadSettings(ctx);
-	await indexListing(ctx, item, types, async () => asNumber(asRecord(await ctx.storage.submissions.get(item.id).catch(() => null)).expires_at) ?? 0);
+	const [{ types }, cat] = await Promise.all([loadSettings(ctx), categoryOf(ctx, item.id)]);
+	await indexListing(ctx, item, types, async () => asNumber(asRecord(await ctx.storage.submissions.get(item.id).catch(() => null)).expires_at) ?? 0, cat);
 }
 
 /**

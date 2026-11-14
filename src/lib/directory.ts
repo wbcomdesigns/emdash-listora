@@ -3,7 +3,7 @@ import type { PluginContext } from "emdash/plugin";
 import { haversineKm, listingFromContent, matchesQuery, type ListingCard } from "./catalog";
 import { EDITABLE } from "./edits";
 import { readRating } from "./ratings";
-import { mapsSlot, SLOTS, slotsOf, typeBySlug, type ListingType, type Slot } from "./types";
+import { LISTINGS, mapsSlot, SLOTS, slotsOf, typeBySlug, type ListingType, type Slot } from "./types";
 import { asNumber, asRecord, asString, readCursor } from "./util";
 
 /**
@@ -12,10 +12,12 @@ import { asNumber, asRecord, asString, readCursor } from "./util";
  *
  * Listing fields (written from the published listing by the content hooks, the upgrade and the
  * hourly sweep): `vis` (published and not expired), `title`, `tl` (title in lower case), `slug`,
- * `type`, `city`, `feat` (1 when featured), `lat`, `lng`, `ls` (the listing_status field), `card`
- * (what the public routes show), `edit` (the fields an owner may change, as stored, for the change
- * approval screen) and the sort slots `n1` to `n3` (types.ts slotsOf; only on listings whose type
- * maps a field to a slot).
+ * `type`, `city`, `cy` (city in lower case, "" for a type without a location), `cat` (the first
+ * listing_category slug, "" for none; written by the content hooks, filled in by the sweep), `feat`
+ * (1 when featured), `lat`, `lng`, `ls` (the listing_status field), `card` (what the public routes
+ * show, without the long description: keywords go through EmDash's site search), `edit` (the fields
+ * an owner may change, as stored, for the change approval screen) and the sort slots `n1` to `n3`
+ * (types.ts slotsOf; only on listings whose type maps a field to a slot).
  * Plugin fields, never written from the listing: `exp` (expiry time in ms, 0 for none), `warned`
  * (the `exp` the owner was warned about), and the rating copy `avg`, `rc`, `rseq` (see ratings.ts).
  *
@@ -28,13 +30,18 @@ type Item = { id: string; slug: string | null; status: string; data: Record<stri
 
 export type DirRow = Record<string, unknown> & { id: string };
 
-/** The listing part of a row, with the sort slots its type maps. Nothing here is ever written by a rating or expiry change. */
-export function listingPart(item: Item, types: readonly ListingType[]): Record<string, unknown> {
+/**
+ * The listing part of a row, with the sort slots its type maps. Nothing here is ever written by a
+ * rating or expiry change. `cat` only when the caller read the listing's categories: a merge
+ * without it keeps the stored one.
+ */
+export function listingPart(item: Item, types: readonly ListingType[], cat?: string): Record<string, unknown> {
 	const card = listingFromContent(item);
+	const type = typeBySlug(types, card.listing_type);
 	const data = asRecord(item.data);
 	const edit: Record<string, unknown> = {};
 	for (const key of EDITABLE) if (data[key] !== undefined && data[key] !== null) edit[key] = data[key];
-	const { rating_avg: _avg, rating_count: _count, ...shown } = card;
+	const { rating_avg: _avg, rating_count: _count, description: _long, ...shown } = card;
 	return {
 		vis: item.status === "published" && card.listing_status !== "expired",
 		pub: item.status === "published",
@@ -43,13 +50,15 @@ export function listingPart(item: Item, types: readonly ListingType[]): Record<s
 		slug: card.slug,
 		type: card.listing_type,
 		city: card.city,
+		cy: type.location ? card.city.trim().toLowerCase() : "",
+		...(cat === undefined ? {} : { cat }),
 		feat: card.is_featured ? 1 : 0,
 		lat: card.lat,
 		lng: card.lng,
 		ls: card.listing_status,
 		card: shown,
 		edit,
-		...slotsOf(typeBySlug(types, card.listing_type), card.type_fields),
+		...slotsOf(type, card.type_fields),
 	};
 }
 
@@ -59,9 +68,9 @@ export function listingPart(item: Item, types: readonly ListingType[]): Record<s
  * starting expiry date (`expOf`, from its submission row): four calls. A row that has no expiry date
  * yet takes the starting one too. Never throws.
  */
-export async function indexListing(ctx: Ctx, item: Item, types: readonly ListingType[], expOf: () => Promise<number>): Promise<void> {
+export async function indexListing(ctx: Ctx, item: Item, types: readonly ListingType[], expOf: () => Promise<number>, cat?: string): Promise<void> {
 	if (!item?.id) return;
-	const part = listingPart(item, types);
+	const part = listingPart(item, types, cat);
 	const merged = await ctx.storage.directory.updateIf(item.id, { where: {}, set: part }).catch(() => ({ applied: false as const }));
 	if (merged.applied) {
 		if ((asNumber(asRecord(merged.data).exp) ?? 0) > 0) return;
@@ -74,6 +83,12 @@ export async function indexListing(ctx: Ctx, item: Item, types: readonly Listing
 	const made = await ctx.storage.directory.compareAndSet(item.id, null, fresh).catch(() => ({ applied: false as const }));
 	// Created by another call meanwhile: merge into that one.
 	if (!made.applied) await ctx.storage.directory.updateIf(item.id, { where: {}, set: part }).catch(() => undefined);
+}
+
+/** A listing's first listing_category slug ("" for none), or undefined when it could not be read. One call. */
+export async function categoryOf(ctx: Pick<PluginContext, "taxonomies">, id: string): Promise<string | undefined> {
+	const terms = await ctx.taxonomies?.getEntryTerms(LISTINGS, id, { taxonomy: "listing_category" }).catch(() => null);
+	return terms ? asString(terms[0]?.slug) : undefined;
 }
 
 /** Take a listing out of the directory (unpublished, trashed, deleted): no longer listed, no longer a public page. One call. Never throws. */
@@ -113,6 +128,9 @@ export function cardOf(row: Record<string, unknown> & { id?: string }): ListingC
 export type Filters = {
 	q: string;
 	type: string;
+	/** Exact filters the index answers: a listing_category slug and a city (lower case). */
+	category: string;
+	city: string;
 	location: string;
 	amenity: string;
 	lat: number | null;
@@ -129,6 +147,8 @@ export function readFilters(input: unknown): Filters {
 	return {
 		q: asString(raw.q || raw.query).toLowerCase(),
 		type: asString(raw.listing_type || raw.type),
+		category: asString(raw.category).toLowerCase(),
+		city: asString(raw.city_exact).trim().toLowerCase(),
 		location: asString(raw.city || raw.location).toLowerCase(),
 		amenity: (asString(raw.amenity) || asString(raw.feature)).toLowerCase(),
 		lat: asNumber(raw.lat),
@@ -138,6 +158,9 @@ export function readFilters(input: unknown): Filters {
 		order: asString(raw.order) === "asc" ? "asc" : "desc",
 	};
 }
+
+/** The part of a directory read the index answers: listed, and the type, category and city asked for. */
+export const whereOf = (f: Filters): Record<string, string | boolean> => ({ vis: true, ...(f.type ? { type: f.type } : {}), ...(f.category ? { cat: f.category } : {}), ...(f.city ? { cy: f.city } : {}) });
 
 /** True when a filter needs the rows read and checked one by one (no index answers it). */
 export const scanned = (f: Filters) => Boolean(f.q || f.location || f.amenity || (f.lat !== null && f.lng !== null));

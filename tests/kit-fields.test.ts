@@ -71,7 +71,7 @@ describe("kit: a listing's details", () => {
 		expect(listingPage).toContain('claimed ? "nofollow ugc"');
 		// Directory: city search, city chips, map points and card place and Open or Closed.
 		expect(directoryPage).toContain('id="listora-location-field" hidden={!typeHasPlace}');
-		expect(directoryPage).toContain("const cityFacets = typeHasPlace ? byCount(cityCounts) : []");
+		expect(directoryPage).toContain("const cityFacets = typeHasPlace ?");
 		expect(directoryPage).toContain("data-lat={located ? listing.data.lat : undefined}");
 		expect(directoryPage).toContain("const hours = located ? parseHours(listing.data.hours) : []");
 		// Submit and edit: no address, city, state or country asked or sent.

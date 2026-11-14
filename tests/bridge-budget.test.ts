@@ -147,11 +147,11 @@ const MEASURED: Record<string, number> = {
 	"hook plugin:activate": 6,
 	// Plus one (the upgrade task) on a site whose 0.7.0 upgrade has not finished: 8.
 	"cron notify (first run after an update)": 7,
-	"hook content:afterPublish (listing in the index)": 2,
-	"hook content:afterPublish (listing new to the index)": 5,
-	"hook content:afterSave (published, no draft)": 2,
+	"hook content:afterPublish (listing in the index)": 3,
+	"hook content:afterPublish (listing new to the index)": 6,
+	"hook content:afterSave (published, no draft)": 3,
 	"hook content:afterUnpublish": 1,
-	"hook content:afterRestore": 3,
+	"hook content:afterRestore": 4,
 	"hook content:afterDelete": 2,
 	"hook page:metadata": 3,
 	"cron notify (each run, 100 waiting, 50 owners)": 8,
@@ -160,7 +160,7 @@ const MEASURED: Record<string, number> = {
 	"cron expire (each run, 50 due)": 7,
 	"cron expire (each run, warning 50 owners)": 8,
 	"cron tidy": 5,
-	"cron sweep (each run)": 9,
+	"cron sweep (each run)": 8,
 	"cron sweep-more (slot backfill, each run)": 8,
 	"route sample (start)": 4,
 	"route sample (listings, each step)": 9,
@@ -659,6 +659,8 @@ describe("bridge calls per entry point, worst case", () => {
 		for (let n = 0; n < 15; n += 1) await measure("cron sweep-more (slot backfill, each run)", () => hook("cron", cronEvent(n % 2 ? "sweep-more-2" : "sweep-more")));
 		expect((await rt.inspect.storage.list<Record<string, unknown>>("directory")).filter((row) => "n1" in row.data).length).toBeGreaterThan(30);
 		expect(await rt.inspect.storage.get("directory", missed.id)).toMatchObject({ vis: true, title: "Missed Cafe" });
+		// Rows the upgrade built have no category copy: the sweep reads each listing's categories (0.8.0).
+		expect((await rt.inspect.storage.list<Record<string, unknown>>("directory")).filter((row) => "cat" in row.data).length).toBeGreaterThan(10);
 	});
 
 	it("admin type editor", async () => {
