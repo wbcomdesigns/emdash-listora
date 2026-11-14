@@ -16,6 +16,7 @@ Every task is a GitHub issue under the `0.8.0` milestone, worked on branch `0.8.
 | 5b | sample data to the kit | SCOPE 14: sample listings and reviews as a kit data file, an admin-only kit page that loads them in steps, the backend loader reduced to an admin write route; type editor refuses labels that match a standard CSV column | 5 |
 | 6 | kit on the index and search | SCOPE 7 and 8: directory pages through the `listings` route, keywords through core search, card without description | 3 |
 | 7 | Software look | SCOPE 9: card, listing-page sections, SoftwareApplication data, nofollow ugc, browser-side GitHub data, sample listings | 5, 6 |
+| 7b | walk A fixes | Issue #102: sample duplicates past 100 listings, CSV city on location-less types, custom slot sort check, field help text, Details layout, types table at 390 | 7 |
 | 8 | sync, scale and lows | SCOPE 12 and 13: sync guide, sweep follow-on, 6,000-listing budget and filter/sort tests, #91, #87, starter #9 | 3, 6 |
 | 9 | release | version, changelog, registry texts, what's new, docs for every new screen, QA checklist rows, `bin/gate.sh`, independent walk (Node + Cloudflare), review, owner says publish | all |
 
