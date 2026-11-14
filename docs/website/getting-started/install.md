@@ -7,7 +7,7 @@ This takes a developer about ten minutes. The plugin gives you the directory eng
 **1. Your site needs a sandbox runner.** Registry plugins run in a sandbox. Until the site has one, Admin, Plugins shows "No plugins configured" and there is no Registry in the menu.
 
 - **Node:** in your site, run `npm install @emdash-cms/sandbox-workerd workerd`, then add `sandboxRunner: "@emdash-cms/sandbox-workerd/sandbox",` inside `emdash({ ... })` in `astro.config.mjs`.
-- **Cloudflare: not supported yet.** On Cloudflare Workers EmDash gives each plugin call 10 requests to the site. From 0.7.0 every page, action and task of this plugin fits in that limit by its tests, but it has not yet passed a walk on a Cloudflare site, so treat Cloudflare as not supported until it does. Node sites are not affected.
+- **Cloudflare: supported on EmDash 1.4 or later.** On Cloudflare Workers EmDash gives each plugin call a fixed number of requests to the site (10 up to EmDash 1.4, 30 from 1.5). Every page, action and task of this plugin stays within 10, and it is walked on a Cloudflare site for each release. Node sites are not affected.
 - **Messages from guests need the visitor's address.** Cloudflare passes it on. On Node behind a proxy, set `trustedProxyHeaders` in your EmDash config to a header the proxy overwrites (`["x-real-ip"]` behind nginx). Without one, the contact form tells guests to call or email the listing instead (0.7.0).
 
 Stop the dev server and start it again. **Registry** now shows in the admin menu.
