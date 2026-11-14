@@ -14,7 +14,7 @@ fi
 FORCE="${2:-}"
 blocked=()
 for target in src/styles/listora-ui.css src/lib/listora.ts src/lib/listora-strings.ts src/pages/listings/index.astro "src/pages/listings/[slug].astro" \
-	src/pages/listings/submit.astro src/pages/listings/calendar.astro src/pages/listings/import.astro src/pages/account/index.astro; do
+	src/pages/listings/submit.astro src/pages/listings/calendar.astro src/pages/listings/import.astro src/pages/listings/sample.astro src/pages/account/index.astro; do
 	if [[ -f "$LAB/$target" ]] && ! grep -qi "listora" "$LAB/$target"; then blocked+=("$target"); fi
 done
 if (( ${#blocked[@]} )) && [[ "$FORCE" != "--force" ]]; then

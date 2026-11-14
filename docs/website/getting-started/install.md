@@ -71,7 +71,7 @@ Start the site and open each one:
 | `/listings/calendar/` | The events calendar |
 | `/account/` | A sign-in prompt, or the owner dashboard when signed in |
 
-To see it full first, open the admin, Listora, Get started, and choose **Load sample directory** (12 listings with reviews, plus two waiting in the Listings queue so you can try an approval). Then set your options under Listora, Settings. Import and export is at `/listings/import/` for site admins.
+To see it full first, open the admin, Listora, Get started, and choose **Load sample directory**. That opens the kit page `/listings/sample/` (site admins only), which adds 12 listings with reviews, plus two waiting in the Listings queue so you can try an approval. Keep the page open while it loads. Then set your options under Listora, Settings. Import and export is at `/listings/import/` for site admins.
 
 ## Optional: a Listings block inside post and page text
 

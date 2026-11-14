@@ -212,7 +212,7 @@ On the Cloudflare test site (`~/code/emdash-plugin-testbed`), registry install, 
 | CF-8 | Import a 100-row file while other admin pages are in use, then export | 100 drafts in the queue, none twice; if the site is slow the page waits and retries, or says how many rows were added and offers Continue from the row it stopped at; never the server's own text (0.7.1). The export holds every published listing | route import, an import cut off part way |
 | CF-9 | A guest message, then wait for the hourly notice | One notice to the owner's account address; the message shows in their account | cron notify |
 | CF-10 | Expiry on with a listing past its date and one inside its last seven days | The next daily run expires one and warns the other's owner | cron expire |
-| CF-11 | Load sample directory on a fresh site | Loading, then 14 listings with reviews a few minutes later | cron sample |
+| CF-11 | Get started, Load sample directory, on a fresh site: the kit page `/listings/sample/` loads it; close it part way and open it again | Progress, then "The sample directory is loaded." with 14 listings and their reviews. Reopened part way it offers Continue loading and adds nothing twice. A subscriber sees "Only a site admin can load the sample directory." | loads from the kit's rows through the admin sample route |
 | CF-12 | Delete my data for a member with reviews and saved listings | Done after a few automatic parts; the ratings of their reviewed listings moved | route privacy (erase, each step) |
 | CF-13 | Owner photos on R2 | The uploaded photo shows in the admin and, approved, on the listing | |
 

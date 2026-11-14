@@ -4,7 +4,7 @@ import type { PluginRuntimeTestHost } from "@emdash-cms/plugin-test";
 
 // @ts-expect-error plain module shared with the lab seed
 import { listingsCollection } from "../site-kit/seed/collection.mjs";
-import { createPluginRuntimeTestHost, cron, eraseAll, settle, upgraded } from "./site";
+import { createPluginRuntimeTestHost, cron, eraseAll, sampleStep, settle, upgraded } from "./site";
 
 /**
  * Every stored counter and every claim, raced. Calls sent together interleave at each bridge call;
@@ -243,10 +243,14 @@ describe("limits and stepped work", () => {
 	});
 
 	it("loads the sample directory once when two steps run at the same moment", async () => {
-		const { rt, route } = await site(0);
-		await route("admin", { type: "block_action", action_id: "load_sample", page: "/setup" });
-		const step = () => rt.transport.invokeHook("cron", { name: "sample", scheduledAt: new Date().toISOString() });
-		for (let n = 0; n < 40 && (await rt.inspect.kv.get<{ step: string }>("state:sample"))?.step !== "done"; n += 1) await Promise.all([step(), step()]);
+		const { rt } = await site(0);
+		// Two tabs of the kit's sample page send each step at the same moment.
+		let step = "start";
+		for (let n = 0; n < 40 && step !== "done"; n += 1) {
+			const answers = await Promise.all([sampleStep(rt, step), sampleStep(rt, step)]);
+			step = answers.map((answer) => answer.step || "start").find((next) => next !== step) ?? step;
+		}
+		expect(step).toBe("done");
 		const titles = (await rt.inspect.content.list("listings")).map((item) => String((item.data as { title: string }).title));
 		expect(titles.length).toBe(new Set(titles).size);
 		expect(titles.length).toBe(14);

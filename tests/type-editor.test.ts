@@ -102,6 +102,18 @@ describe("Types admin page", () => {
 		expect(route.items.map((item) => item.slug)).toEqual(BUILTIN_TYPES.map((type) => type.slug));
 	});
 
+	it("refuses a field label that reads as a standard spreadsheet column, so every field gets its own column", async () => {
+		const host = await site();
+		const page = await addBoat(host);
+		for (const label of ["City", "postal code", " Listing  Type "]) {
+			const refused = await types(host, { type: "form_submit", action_id: "field_add", block_id: formId(page, "field_add|"), values: { label, kind: "text" } });
+			expect(refused.toast, label).toMatchObject({ type: "error", message: `${label.replace(/\s+/g, " ").trim()} is already a standard spreadsheet column. Choose another label.` });
+		}
+		expect((await storedType(host, "boat-hire"))?.fields ?? []).toEqual([]);
+		const taken = await types(host, { type: "form_submit", action_id: "field_add", block_id: formId(page, "field_add|"), values: { label: "Home city", kind: "text" } });
+		expect(taken.toast?.type).toBe("success");
+	});
+
 	it("adds, edits and removes a field one per submit, and a removed field's values stay on the listing", async () => {
 		const host = await site();
 		let page = await addBoat(host);

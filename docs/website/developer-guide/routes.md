@@ -25,6 +25,7 @@ Every route makes 9 calls to the site or fewer (Cloudflare allows 10 per plugin 
 | `renew` | member | Owner or admin only |
 | `export` | admin | CSV of published listings, 700 per request: `part=1` and the `X-Listora-Cursor` header for the next part |
 | `import` | admin | `mode=check` reads up to 100 rows; `mode=import` takes 2 rows per request (the kit sends a file in batches, with `firstLine`). Sending a batch again is safe: rows already waiting are duplicates, and a draft a cut-off request created gets its queue row instead of a second copy. When time runs short the answer carries `next`, the file line to send again from |
+| `sample` | admin | The kit page `/listings/sample/` posts `step` with the rows of `lib/listora-sample.json`. `state` says where loading is; `start` finds sample listings already on the site by title (or goes on from a load left part way); `listings` creates and publishes a few per request; `related` adds the reviews, the claim, the saved listings and the ratings worked out from the published sample reviews. Each answer carries the next `step`. Every step claims its state before it writes, so two tabs never add a listing twice. Each row is checked again: a type the site has, its own fields, no place for a type without a location |
 | `admin` | admin | Block Kit pages |
 
 "Member" is a private route with `permission: "content:read"`, the lowest signed-in role. The host verifies the session and passes `routeCtx.user`. Never read a member id from the request. "Admin" is a private route with no permission set, which the host treats as `plugins:manage`. A public route gets no user at all.
@@ -35,7 +36,7 @@ Guest writes (`contact`) are limited per visitor address, keyed by the shared `g
 
 Public reads (`types`, `listings`, `search`, `duplicate`, `ratings`, `reviews`) are cached at the edge for 30 seconds. Allow that long before a change shows.
 
-Hooks: `content:afterPublish`, `afterUnpublish`, `afterRestore`, `afterDelete` and `afterSave` keep the directory index (`storage.directory`) in step with the listings; an hourly `sweep` puts right any listing whose hook did not run. Scheduled tasks: `notify` (hourly owner notices), `expire` (daily expiry and warnings), `tidy` (hourly upkeep), `sweep`, and while there is work the one-shot `notify-more`, `expire-more`, `upgrade` and the per-minute `sample`.
+Hooks: `content:afterPublish`, `afterUnpublish`, `afterRestore`, `afterDelete` and `afterSave` keep the directory index (`storage.directory`) in step with the listings; an hourly `sweep` puts right any listing whose hook did not run. Scheduled tasks: `notify` (hourly owner notices), `expire` (daily expiry and warnings), `tidy` (hourly upkeep), `sweep`, and while there is work the one-shot `notify-more`, `expire-more`, and `upgrade`. A 0.7.x site's per-minute `sample` task cancels itself on its next run.
 
 Tests live in `tests/plugin.test.ts`: guests refused on member routes, a request member id ignored, pending reviews hidden, erase limited to the caller, the hourly limit, renew ownership, stale approvals refused, and the moderation pages rendering with rows. Add a test when you add a route.
 

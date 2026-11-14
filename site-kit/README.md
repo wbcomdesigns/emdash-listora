@@ -31,7 +31,7 @@ Checked on EmDash 1.3.1 with the `blog` template on Node. The Cloudflare lines f
 
 Collection: `npx emdash seed .emdash/listora-seed.json --no-content` in your site (Node 22.16 or later), after the setup command.
 
-Sample rows: Admin, Listora, Get started, **Load sample directory** (12 NYC listings with reviews and a claim, plus two waiting for approval).
+Sample rows: Admin, Listora, Get started, **Load sample directory**, which opens `/listings/sample/` (site admins only): 12 NYC listings with reviews and a claim, plus two waiting for approval. The rows are in `lib/listora-sample.json`.
 
 In Admin, Menus, add four links: `/listings/`, `/listings/submit/`, `/listings/calendar/`, `/account/`.
 

@@ -6,14 +6,15 @@ import { createPluginTestHost, type PluginTestHost } from "@emdash-cms/plugin-te
 import manifestText from "../emdash-plugin.jsonc?raw";
 import kitLib from "../site-kit/lib/listora.ts?raw";
 import blockPlugin from "../site-kit/blocks/plugin.ts?raw";
+import samplePage from "../site-kit/pages/listings/sample.astro?raw";
+import kitFiles from "../scripts/kit-files.sh?raw";
 import { BUILTIN_TYPES, typesFrom } from "../src/lib/types";
-import { SAMPLE_LISTINGS } from "../src/lib/sample-listings";
 import { imageType } from "../src/plugin";
 import { parseCsv, toCsv, unguard } from "../src/lib/csv";
 // @ts-expect-error plain module shared with the lab seed
 import { listingsCollection } from "../site-kit/seed/collection.mjs";
 import { imageUrl, jsonForScript, placeholderHtml, safeImageUrl } from "../site-kit/lib/listora";
-import { createPluginRuntimeTestHost, cron, eraseAll, publishListing, settle, untilDone, upgraded } from "./site";
+import { createPluginRuntimeTestHost, cron, eraseAll, loadSample, publishListing, SAMPLE, sampleStep, settle, upgraded } from "./site";
 
 let host: PluginTestHost | undefined;
 
@@ -226,21 +227,13 @@ describe("admin route", () => {
 	});
 
 	it("tells the owner to create the listings collection first", async () => {
-		host = await createPluginTestHost();
-		const result = await host.invokeRoute("admin", {
-			type: "block_action",
-			action_id: "load_sample",
-			page: "/setup",
-		});
-		expect(result).toMatchObject({
-			toast: {
-				type: "error",
-				message: "Create a listings collection first, then load sample data.",
-			},
-			blocks: expect.arrayContaining([
-				expect.objectContaining({ type: "header", text: "Get started" }),
-			]),
-		});
+		const rt = await createPluginRuntimeTestHost();
+		host = { dispose: () => rt.dispose() } as unknown as PluginTestHost;
+		// The sample page's first step finds no collection; Get started offers no sample link then.
+		expect(await sampleStep(rt, "start")).toMatchObject({ ok: false, error: { code: "NO_COLLECTION", message: "Create a listings collection first, then load sample data." } });
+		const setup = JSON.stringify(await rt.transport.invokeRoute("admin", { type: "page_load", page: "/setup" }));
+		expect(setup).toContain("Get started");
+		expect(setup).not.toContain('"label":"Load sample directory"');
 	});
 });
 
@@ -251,11 +244,8 @@ describe("sample directory queue", () => {
 		host = { dispose: () => rt.dispose() } as unknown as PluginTestHost;
 		const route = rt.transport.invokeRoute.bind(rt.transport);
 		await upgraded(rt);
-		const started = JSON.stringify(await route("admin", { type: "block_action", action_id: "load_sample", page: "/setup" }));
-		expect(started).toContain("Loading the sample directory");
-		// It loads a step a minute, by a scheduled task.
-		expect((await rt.inspect.scheduledTasks()).map((task) => task.name)).toContain("sample");
-		await untilDone(rt, "sample", "state:sample");
+		// The kit's sample page sends the rows a step at a time; nothing waits on a scheduled task.
+		await loadSample(rt);
 		expect((await rt.inspect.scheduledTasks()).map((task) => task.name)).not.toContain("sample");
 		const pending = (await rt.inspect.storage.list<{ status: string; title: string; listingId: string }>("submissions")).filter((row) => row.data.status === "pending");
 		expect(pending.map((row) => row.data.title).sort()).toEqual(["Little Dock Dumplings", "Night Owl Locksmith"]);
@@ -293,6 +283,74 @@ describe("sample directory queue", () => {
 		expect(await rt.inspect.storage.get("submissions", "listing-gone")).toBeNull();
 		// A second remove from a stale page says it is already done.
 		expect(JSON.stringify(await route("admin", { type: "block_action", action_id: "review", value: "forget:listing-gone", page: "/queue" }))).toContain("already removed");
+	});
+
+	it("loads from the kit's rows through the admin sample route: checks each row, resumes, never doubles, and works ratings out from the reviews", async () => {
+		const rt = await createPluginRuntimeTestHost({ site: { name: "Sample Site", url: "https://sample.test" } });
+		await rt.fixtures.collection(listingsCollection as never);
+		host = { dispose: () => rt.dispose() } as unknown as PluginTestHost;
+		const route = rt.transport.invokeRoute.bind(rt.transport);
+		await upgraded(rt);
+		// Get started links to the kit's sample page; the old in-admin loader is gone.
+		const setup = JSON.stringify(await route("admin", { type: "page_load", page: "/setup" }));
+		expect(setup).toContain('"url":"https://sample.test/listings/sample/"');
+		expect(setup).not.toContain("load_sample");
+		expect(await route("sample", { step: "nope" }, { method: "POST" } as never)).toMatchObject({ ok: false, error: { code: "VALIDATION_ERROR" } });
+		expect(await route("sample", { step: "state" }, { method: "POST" } as never)).toMatchObject({ ok: true, running: false, done: false });
+		// Rows the plugin refuses: a type the site does not have, a choice off the field's list, a review out of range.
+		const golden = SAMPLE.listings[0]!;
+		const rows = {
+			...SAMPLE,
+			listings: [...SAMPLE.listings, { ...golden, key: "listing-bad-type", title: "Bad Type", listing_type: "spaceship" }, { ...golden, key: "listing-bad-choice", title: "Bad Choice", type_fields: { price_range: "cheap" } }],
+			reviews: [...SAMPLE.reviews, { ...SAMPLE.reviews[0]!, id: "rev-nine", stars: 9 }],
+		};
+		const send = async (step: string) => {
+			const answer = (await route("sample", { step, ...rows }, { method: "POST" } as never)) as { ok: boolean; step: string; created: number; total: number };
+			await settle();
+			return answer;
+		};
+		expect(await send("start")).toMatchObject({ ok: true, step: "listings", created: 0, total: 16 });
+		const first = await send("listings");
+		expect(first.created).toBeGreaterThan(0);
+		// The page was closed part way: opening it again goes on from there, not from the start.
+		expect(await route("sample", { step: "state" }, { method: "POST" } as never)).toMatchObject({ ok: true, running: true, created: first.created, total: 16 });
+		expect(await send("start")).toMatchObject({ step: "listings", created: first.created });
+		let step = "listings";
+		for (let n = 0; n < 20 && step !== "done"; n += 1) step = (await send(step)).step;
+		expect(step).toBe("done");
+		const titles = (await rt.inspect.content.list("listings")).map((item) => String((item.data as { title: string }).title));
+		expect(titles).not.toContain("Bad Type");
+		expect(titles).not.toContain("Bad Choice");
+		expect(titles.length).toBe(14);
+		// A restaurant's details are the type's own fields.
+		const fork = (await rt.inspect.content.list("listings")).find((item) => (item.data as { title: string }).title === "The Golden Fork")!;
+		const details = (fork.data as { type_fields: unknown }).type_fields;
+		expect(typeof details === "string" ? JSON.parse(details) : details).toEqual({ cuisine: "italian", price_range: "$$$" });
+		// Ratings come from the published sample reviews, not from anything the page sends.
+		const published = SAMPLE.reviews.filter((review) => review.listingId === golden.key && review.status === "published");
+		const average = Math.round((published.reduce((sum, review) => sum + review.stars, 0) / published.length) * 10) / 10;
+		expect(await rt.inspect.storage.get("directory", fork.id)).toMatchObject({ rc: published.length, avg: average });
+		expect(await rt.inspect.storage.get("reviews", "rev-nine")).toBeNull();
+		expect(await rt.inspect.storage.get("claims", "claim-casa-miguel")).toMatchObject({ status: "pending", listing_title: "Casa Miguel Cantina" });
+		expect(JSON.stringify(await route("admin", { type: "page_load", page: "/setup" }))).not.toContain("listings/sample/");
+		// Loading again adds nothing twice.
+		for (step = "start"; step !== "done"; ) step = (await send(step)).step;
+		expect((await rt.inspect.content.list("listings")).length).toBe(14);
+	});
+
+	it("leaves the per-minute sample task a 0.7.x site may still have scheduled to cancel itself, writing nothing", async () => {
+		const rt = await createPluginRuntimeTestHost();
+		await rt.fixtures.collection(listingsCollection as never);
+		host = { dispose: () => rt.dispose() } as unknown as PluginTestHost;
+		// A 0.7.x load left part way: the next run of its task no longer loads from the plugin.
+		await rt.fixtures.plugin.kv("state:sample", { step: "listings", at: 0, ids: {}, created: 0 });
+		await rt.transport.invokeHook("cron", { name: "sample", scheduledAt: new Date().toISOString() });
+		await settle();
+		expect(await rt.inspect.content.list("listings")).toHaveLength(0);
+		expect(await rt.inspect.kv.get("state:sample")).toMatchObject({ step: "listings", created: 0 });
+		expect((await rt.inspect.scheduledTasks()).map((task) => task.name)).not.toContain("sample");
+		// The kit's sample page goes on from that state.
+		expect(await sampleStep(rt, "start")).toMatchObject({ ok: true, step: "listings" });
 	});
 
 	it("offers only a confirmed Remove for a listing in Trash", async () => {
@@ -965,9 +1023,20 @@ describe("types store", () => {
 		expect(offered).toEqual(BUILTIN_TYPES.map((type) => [type.slug, type.name]));
 	});
 
+	it("loads the sample directory from an admin-only kit page that sends the kit's rows in steps", () => {
+		expect(samplePage).toContain("const isAdmin = Number(user?.role) >= 50;");
+		expect(samplePage).toContain('import SAMPLE from "../../lib/listora-sample.json";');
+		expect(samplePage).toContain('api("sample", { step, ...SAMPLE })');
+		expect(samplePage).toContain('api("sample", { step: "state" })');
+		// Errors in the plugin's own words, never raw exception text.
+		expect(samplePage).not.toMatch(/\.stack|String\(error|error\.message\b/);
+		expect(kitFiles).toContain("site-kit/pages/listings/sample.astro src/pages/listings/sample.astro");
+		expect(kitFiles).toContain("site-kit/lib/listora-sample.json src/lib/listora-sample.json");
+	});
+
 	it("loads the sample directory with built-in types only", () => {
 		const builtins = new Set(BUILTIN_TYPES.map((type) => type.slug));
-		for (const sample of SAMPLE_LISTINGS) expect(builtins.has(sample.listing_type), sample.key).toBe(true);
+		for (const sample of SAMPLE.listings) expect(builtins.has(sample.listing_type), sample.key).toBe(true);
 	});
 
 	it("draws every type's own fields from the types route, with no field list of the kit's own", () => {

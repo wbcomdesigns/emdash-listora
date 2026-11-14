@@ -1,5 +1,7 @@
 import { createPluginRuntimeTestHost as createHost, type PluginRuntimeTestHost } from "@emdash-cms/plugin-test";
 
+import SAMPLE from "../site-kit/lib/listora-sample.json";
+
 /** Every test host still open, so settle() can ask one of them. */
 const live = new Set<PluginRuntimeTestHost>();
 
@@ -43,7 +45,32 @@ export async function cron(rt: PluginRuntimeTestHost, name: string): Promise<voi
 	await settle();
 }
 
-/** Run a stepped task (the sample directory) until its state says done. */
+/** The sample directory's rows, as the kit's sample page sends them. */
+export { SAMPLE };
+
+/**
+ * Send one step of the sample directory to the `sample` route, as the kit's sample page does, and
+ * return the plugin's answer (its `step` is the next one to send).
+ */
+export async function sampleStep(rt: PluginRuntimeTestHost, step: string): Promise<{ ok: boolean; step?: string; created?: number; total?: number; busy?: boolean; error?: { code: string; message: string } }> {
+	const answer = await rt.transport.invokeRoute("sample", { step, ...SAMPLE }, { method: "POST" } as never);
+	await settle();
+	return answer as never;
+}
+
+/** Load the sample directory to the end the way the kit's sample page does. Returns the requests sent. */
+export async function loadSample(rt: PluginRuntimeTestHost, max = 40): Promise<number> {
+	let step = "start";
+	for (let n = 1; n <= max; n += 1) {
+		const answer = await sampleStep(rt, step);
+		if (!answer.ok) throw new Error(`sample ${step}: ${JSON.stringify(answer.error)}`);
+		step = answer.step || "start";
+		if (step === "done") return n;
+	}
+	throw new Error("sample did not finish");
+}
+
+/** Run a stepped task until its state says done. */
 export async function untilDone(rt: PluginRuntimeTestHost, name: string, key: string, steps = 40): Promise<void> {
 	for (let step = 0; step < steps; step += 1) {
 		if ((await rt.inspect.kv.get<{ step?: string }>(key))?.step === "done") return;

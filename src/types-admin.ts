@@ -1,6 +1,7 @@
 import type { PluginContext } from "emdash/plugin";
 
 import { spend, type Budget } from "./lib/budget";
+import { CSV_COLUMNS, csvName } from "./lib/csv";
 import type { Settings } from "./lib/settings";
 import {
 	FIELD_KINDS,
@@ -130,6 +131,8 @@ export function fieldFromForm(values: Values, type: ListingType, base: TypeField
 	if (!base && type.fields.length >= MAX_FIELDS) return { error: `A type can have up to ${MAX_FIELDS} fields. Remove one first.` };
 	const label = text(values.label, 80);
 	if (!label) return { error: "Give the field a label." };
+	// Every field gets its own spreadsheet column, so a label cannot read as a standard one.
+	if ((CSV_COLUMNS as readonly string[]).includes(csvName(label))) return { error: `${label} is already a standard spreadsheet column. Choose another label.` };
 	if (type.fields.some((item) => item.key !== base?.key && item.label.toLowerCase() === label.toLowerCase())) return { error: `${type.name} already has a field called ${label}.` };
 	const kind = FIELD_KINDS.find((item) => item === values.kind);
 	if (!kind) return { error: "Choose the kind of field from the list." };

@@ -6,7 +6,7 @@ import { readRating } from "./lib/ratings";
 import { loadSettings } from "./lib/settings";
 import { LISTINGS, typeBySlug } from "./lib/types";
 import { asNumber, asRecord, asString } from "./lib/util";
-import { sampleStep } from "./lib/onboard";
+import { sampleRoute } from "./lib/onboard";
 import { claim, dashboard, edit, favorites, message, photo, photoRemove, privacy, renew, reply, review, submit } from "./member";
 import { contact, duplicate, listings, mapPoints, ratings, reviews, suggest } from "./public";
 import { expireAndWarn, notifyOwners, runUpgrade, scheduleAll, sweep, tidy } from "./tasks";
@@ -67,7 +67,8 @@ const plugin: SandboxedPlugin = {
 				else if (task === "tidy") await tidy(ctx);
 				else if (task === "sweep" || task === "sweep-more") await sweep(ctx, event.name);
 				else if (task === "upgrade") await runUpgrade(ctx, event.name);
-				else if (event.name === "sample") await sampleStep(ctx);
+				// The per-minute sample task of 0.7.x: the kit's sample page loads it now.
+				else if (event.name === "sample") await ctx.cron?.cancel("sample").catch(() => undefined);
 			},
 		},
 		// The directory index follows every listing's state. EmDash tells the plugin when one changes.
@@ -180,6 +181,8 @@ const plugin: SandboxedPlugin = {
 		export: { permission: ADMIN, methods: ["GET"], response: "raw", handler: async (routeCtx, ctx) => exportCsv(routeCtx.input, ctx) },
 		// Admin only: check a spreadsheet, then import it a few rows at a time. Nothing is ever published by an import.
 		import: { permission: ADMIN, methods: ["POST"], handler: async (routeCtx, ctx) => importCsv(routeCtx.input, ctx) },
+		// Admin only: the kit's sample page sends the sample directory here a step at a time.
+		sample: { permission: ADMIN, methods: ["POST"], handler: async (routeCtx, ctx) => sampleRoute(routeCtx.input, ctx) },
 		admin: { permission: ADMIN, handler: async (routeCtx, ctx) => handleAdmin(routeCtx.input, ctx) },
 	},
 };

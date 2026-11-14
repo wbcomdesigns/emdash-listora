@@ -8,7 +8,7 @@ import type { PluginRuntimeTestHost } from "@emdash-cms/plugin-test";
 // @ts-expect-error plain module shared with the lab seed
 import { listingsCollection } from "../site-kit/seed/collection.mjs";
 import { HOUR, visitorKey, windowOf } from "../src/lib/rates";
-import { createPluginRuntimeTestHost, settle } from "./site";
+import { createPluginRuntimeTestHost, SAMPLE, settle } from "./site";
 
 /**
  * Bridge calls per entry point, each at the worst case a busy site sets up (see the seeds below).
@@ -162,8 +162,9 @@ const MEASURED: Record<string, number> = {
 	"cron tidy": 5,
 	"cron sweep (each run)": 9,
 	"cron sweep-more (slot backfill, each run)": 8,
-	"admin load_sample (start)": 6,
-	"cron sample (each step)": 9,
+	"route sample (start)": 4,
+	"route sample (listings, each step)": 9,
+	"route sample (related)": 8,
 	"admin save_lifetime (off)": 3,
 	"route privacy (erase, each step)": 9,
 	"2000: cron upgrade (each step)": 9,
@@ -692,10 +693,12 @@ describe("bridge calls per entry point, worst case", () => {
 
 	/* ---- Last: the ones that change most ---- */
 
-	it("admin load_sample", async () => {
-		await measure("admin load_sample (start)", () => act("load_sample", undefined, "/setup"));
-		const done = async () => (await rt.inspect.kv.get<{ step?: string }>("state:sample"))?.step === "done";
-		await steps("cron sample (each step)", () => hook("cron", cronEvent("sample")), done);
+	it("route sample", async () => {
+		// As the kit's sample page sends it: start, the listings a few at a time, then the rest.
+		const send = (step: string) => route("sample", { step, ...SAMPLE }, { method: "POST" });
+		expect(await measure("route sample (start)", () => send("start"))).toMatchObject({ ok: true, step: "listings" });
+		await steps("route sample (listings, each step)", () => send("listings"), async () => (await rt.inspect.kv.get<{ step?: string }>("state:sample"))?.step !== "listings");
+		expect(await measure("route sample (related)", () => send("related"))).toMatchObject({ ok: true, step: "done" });
 	});
 	it("admin save_lifetime off", async () => {
 		expect((await measure("admin save_lifetime (off)", () => admin({ type: "form_submit", action_id: "save_lifetime", values: { expiry_days: 0 }, page: "/settings" }))).toast?.type).toBe("success");

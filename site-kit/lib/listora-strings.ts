@@ -127,6 +127,23 @@ export const S = {
 		queue: "Review them in the queue",
 		nothingLive: "Nothing is live until you approve it.",
 	},
+	sample: {
+		title: "Load the sample directory",
+		description: "Fill a new directory with sample listings, reviews and a claim.",
+		heading: "Sample directory",
+		intro: "Adds 12 NYC listings with reviews, saved listings and a claim waiting for you, plus two listings waiting for your approval. Keep this page open while it loads. Loading again adds only what is missing.",
+		load: "Load sample directory",
+		again: "Load again",
+		resume: "Continue loading",
+		checking: "Checking...",
+		related: "Adding reviews and ratings...",
+		partly: "Loading stopped part way. Press Continue loading to finish: listings already added are skipped.",
+		done: "The sample directory is loaded.",
+		view: "Open the directory",
+		queue: "Open the Listings queue",
+		stopped: "The site took too long to answer, so loading stopped. Press Continue loading to carry on: nothing is added twice.",
+		adminsBody: "Only a site admin can load the sample directory.",
+	},
 	submit: {
 		title: "Add a listing",
 		description: "Submit a directory listing in five steps. New listings stay in review until they are published.",
@@ -491,6 +508,10 @@ export function importProgress(done: number, total: number): string {
 /** The import stopped because the site did not answer in time. Nothing is lost and nothing doubles. */
 export function importStopped(imported: number, line: number): string {
 	return `The site took too long to answer, so the import stopped at row ${line} of your file. ${imported} ${imported === 1 ? "listing was" : "listings were"} added as drafts so far. Press Continue to carry on from row ${line}: rows already added are skipped, never added twice.`;
+}
+
+export function sampleProgress(done: number, total: number): string {
+	return `Loading listings: ${done} of ${total}...`;
 }
 
 export function exportProgress(rows: number): string {

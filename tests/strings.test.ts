@@ -4,6 +4,7 @@ import account from "../site-kit/pages/account/index.astro?raw";
 import calendar from "../site-kit/pages/listings/calendar.astro?raw";
 import directory from "../site-kit/pages/listings/index.astro?raw";
 import importer from "../site-kit/pages/listings/import.astro?raw";
+import sampler from "../site-kit/pages/listings/sample.astro?raw";
 import listing from "../site-kit/pages/listings/[slug].astro?raw";
 import submit from "../site-kit/pages/listings/submit.astro?raw";
 import block from "../site-kit/blocks/ListingsBlock.astro?raw";
@@ -18,7 +19,7 @@ import {
 	S,
 } from "../site-kit/lib/listora-strings";
 
-const sources = [account, calendar, directory, importer, listing, submit, block, kitLib];
+const sources = [account, calendar, directory, importer, sampler, listing, submit, block, kitLib];
 
 function read(path: string): unknown {
 	return path.split(".").reduce<unknown>((current, key) => {
@@ -54,7 +55,7 @@ describe("visitor wording", () => {
 		// The frontmatter and each <script> block of an .astro page import separately: a helper
 		// imported only in the frontmatter is undefined in the browser and stops the page script.
 		const helpers = [...stringsFile.matchAll(/export function (\w+)/g)].map((match) => match[1]);
-		for (const page of [account, calendar, directory, importer, listing, submit, block]) {
+		for (const page of [account, calendar, directory, importer, sampler, listing, submit, block]) {
 			for (const script of page.match(/<script\b(?:(?!\/>)[^>])*>[\s\S]*?<\/script>/g) ?? []) {
 				const imported = new Set([...script.matchAll(/import \{([^}]*)\} from "[^"]*listora-strings"/g)].flatMap((match) => match[1].split(",").map((name) => name.trim())));
 				for (const helper of helpers) {

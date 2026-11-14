@@ -72,8 +72,8 @@ Do not add Pro controls while you walk. If you see Compare, Needs, Credits, veri
 ## Admin
 
 - [ ] Get started lists collection, listing count, and sample state
-- [ ] Load sample asks for confirm
-- [ ] Load sample without a collection shows an error toast
+- [ ] Load sample directory links to the kit page /listings/sample/ (only once the collection exists)
+- [ ] /listings/sample/: admins only, progress while loading, Continue loading after a stop, plain error text
 - [ ] Queue empty primitive when nothing is pending
 - [ ] Approve a submission. It appears on `/listings/`
 - [ ] Reject stays out of the public grid

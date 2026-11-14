@@ -5,7 +5,7 @@ import { anyType, editPatch } from "./lib/edits";
 import { getListing, ownerOf, patchListing, publishNow } from "./lib/listings-query";
 import { mirrorRating, moveRating, partOf } from "./lib/ratings";
 import { KEY, loadSettings, PAGE, photosOn, type Settings, type View } from "./lib/settings";
-import { startSample, sampleState, type SampleState } from "./lib/onboard";
+import { sampleState, type SampleState } from "./lib/onboard";
 import { LISTINGS, shownTypes, typeBySlug } from "./lib/types";
 import { nudgeUpgrade, upgradeDone, upgradeNote, type State } from "./lib/upgrade";
 import { asBoolean, asRecord, asString, nowIso, readCursor } from "./lib/util";
@@ -831,8 +831,11 @@ async function decideMessage(ctx: Ctx, settings: Settings, b: Budget, value: str
 
 /* ---- Settings ---- */
 
+/** A kit page's full address. EmDash learns the site address only at server start, so a fresh site has none until a restart. */
+const siteUrl = (ctx: Ctx, path: string) => (/^https?:\/\//.test(asString(ctx.site?.url)) ? new URL(path, asString(ctx.site.url)).href : "");
+
 export async function renderSettings(ctx: Ctx, settings: Settings, _b: Budget, extra: Extra = {}): Promise<BlockResponse> {
-	const importUrl = /^https?:\/\//.test(asString(ctx.site?.url)) ? new URL("/listings/import/", asString(ctx.site.url)).href : "";
+	const importUrl = siteUrl(ctx, "/listings/import/");
 	const noStatus = settings.fields ? !settings.fields.includes("listing_status") : false;
 	return page("Listora settings", extra, [
 		{
@@ -1084,11 +1087,11 @@ export function kitBlocks(ctx: Ctx, settings: Settings): BlockMap[] {
 	];
 }
 
-function onboardBlocks(hasCollection: boolean, listings: boolean, sample: SampleState): BlockMap[] {
+function onboardBlocks(ctx: Ctx, hasCollection: boolean, listings: boolean, sample: SampleState): BlockMap[] {
+	const url = siteUrl(ctx, "/listings/sample/");
 	const missing = hasCollection
-		? "The listings collection is ready. Load sample data so the first visit shows real NYC cards, reviews, and a claim."
+		? `The listings collection is ready. Load sample data so the first visit shows real NYC cards, reviews, and a claim: 12 listings, plus two waiting for your approval. It runs on the site kit page /listings/sample/ while you keep it open.${url ? "" : " Open it on your site while signed in."}`
 		: "This site has no listings collection yet. The command above prints the step that creates it. Then load sample data here.";
-	const running = sample.running;
 	return [
 		{ type: "banner", title: "Get a finished first look", description: missing, variant: hasCollection ? "default" : "alert" },
 		{
@@ -1096,30 +1099,10 @@ function onboardBlocks(hasCollection: boolean, listings: boolean, sample: Sample
 			fields: [
 				{ label: "Listings collection", value: hasCollection ? "Ready" : "Missing" },
 				{ label: "Published listings", value: listings ? "Yes" : "None yet" },
-				{ label: "Sample data", value: sample.done ? "Loaded" : running ? `Loading: ${sample.created} of ${sample.total} listings. More every minute.` : "Not loaded" },
+				{ label: "Sample data", value: sample.done ? "Loaded" : sample.running ? `Part loaded: ${sample.created} of ${sample.total} listings. Open the sample page to finish.` : "Not loaded" },
 			],
 		},
-		...(running || sample.done
-			? []
-			: [
-					{
-						type: "actions",
-						elements: [
-							{
-								type: "button",
-								action_id: "load_sample",
-								label: "Load sample directory",
-								style: "primary",
-								confirm: {
-									title: "Load sample listings?",
-									text: "Adds 12 NYC listings with reviews, favorites and a pending claim, plus two listings waiting for your approval. It takes a few minutes and runs by itself. Safe to run more than once.",
-									confirm: "Load sample data",
-									deny: "Cancel",
-								},
-							},
-						],
-					},
-				]),
+		...(hasCollection && url && !sample.done ? [{ type: "actions", elements: [{ type: "link", label: sample.running ? "Finish loading the sample directory" : "Load sample directory", target: { kind: "external", url } }] }] : []),
 	];
 }
 
@@ -1144,7 +1127,7 @@ async function renderSetup(ctx: Ctx, settings: Settings, b: Budget, extra: Extra
 		settings.ready = true;
 		return page("Get started", extra, [...kit, { type: "divider" }, { type: "section", text: "Your directory has listings. Approve new ones in the Listings queue." }, { type: "actions", elements: [{ type: "link", label: "Open the Listings queue", target: { kind: "plugin-page", path: "/queue" } }] }]);
 	}
-	return page("Get started", extra, [...kit, { type: "divider" }, { type: "section", text: "Sample data fills the directory so the first visit looks finished." }, ...onboardBlocks(hasCollection, listings, sample)]);
+	return page("Get started", extra, [...kit, { type: "divider" }, { type: "section", text: "Sample data fills the directory so the first visit looks finished." }, ...onboardBlocks(ctx, hasCollection, listings, sample)]);
 }
 
 /* ---- Pages and dispatch ---- */
@@ -1253,13 +1236,6 @@ export async function handleAdmin(input: unknown, ctx: Ctx): Promise<BlockRespon
 		await ctx.settings.set(KEY.kit, action === "kit_done");
 		settings.kitDone = action === "kit_done";
 		return renderSetup(ctx, settings, b, action === "kit_done" ? { toast: { message: "Noted. The install guide link stays on this page.", type: "success" } } : {});
-	}
-
-	if (type === "block_action" && action === "load_sample") {
-		const hasCollection = settings.fields ? true : await refreshCaches(ctx, settings, b);
-		if (!hasCollection) return renderSetup(ctx, settings, b, { toast: { message: "Create a listings collection first, then load sample data.", type: "error" } });
-		const started = await startSample(ctx, b);
-		return renderSetup(ctx, settings, b, { toast: { message: started.message, type: started.ok ? "success" : "error" } });
 	}
 
 	if (type === "form_submit" && action.startsWith("save_")) return saveSettings(ctx, settings, b, action, asRecord(raw.values));

@@ -48,9 +48,16 @@ for _ in $(seq 1 40); do
 		# loaded the way an owner does it: Get started, Load sample directory, as the lab admin.
 		jar="$(mktemp)"
 		curl -sf -c "$jar" "http://127.0.0.1:$PORT/_emdash/api/setup/dev-bypass?redirect=/_emdash/admin" >/dev/null
-		curl -sf -b "$jar" -H "X-EmDash-Request: 1" -H "Origin: http://127.0.0.1:$PORT" -H "Content-Type: application/json" \
-			-d '{"type":"block_action","action_id":"load_sample","page":"/setup"}' \
-			"http://127.0.0.1:$PORT/_emdash/api/plugins/listora/admin" >/dev/null || { echo "Could not load the sample directory" >&2; rm -f "$jar"; exit 1; }
+		# As the kit's sample page does it: the rows of listora-sample.json, a step at a time.
+		step=start
+		for _ in $(seq 1 40); do
+			body="$(node -e 'const s=require(process.argv[1]); process.stdout.write(JSON.stringify({ step: process.argv[2], ...s }))' "$PLUGIN/site-kit/lib/listora-sample.json" "$step")"
+			answer="$(curl -sf -b "$jar" -H "X-EmDash-Request: 1" -H "Origin: http://127.0.0.1:$PORT" -H "Content-Type: application/json" \
+				-d "$body" "http://127.0.0.1:$PORT/_emdash/api/plugins/listora/sample")" || { echo "Could not load the sample directory" >&2; rm -f "$jar"; exit 1; }
+			step="$(node -e 'const j=JSON.parse(process.argv[1]); process.stdout.write(String((j.data ?? j).step || "start"))' "$answer")"
+			[[ "$step" == "done" ]] && break
+		done
+		[[ "$step" == "done" ]] || { echo "The sample directory did not finish loading" >&2; rm -f "$jar"; exit 1; }
 		rm -f "$jar"
 		echo "Lab is up and seeded"
 		exit 0
