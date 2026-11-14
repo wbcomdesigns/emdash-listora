@@ -35,6 +35,8 @@ Free only. Generic: every item is for any EmDash directory owner, not shaped aro
 12. **Outside-source sync guide** (developer docs): create, update and publish through the content API with `_rev`, throttle, handle 409 and STORAGE_INDEXES_NOT_READY, check the index afterwards. The nightly sweep gets a follow-on run so a full repair of 6,000 listings takes hours, not days.
 13. **Low fixes carried in:** #91 (stale waiting count in decision buttons; guard the visitor upgrade nudge with a short KV mark), #87 (walk lows), and the starter's #9 fallback when `crypto.subtle` is missing (change the starter first, copy byte for byte).
 
+14. **Sample directory data in the kit** (owner, 2026-11-14). EmDash's publish tool refuses any file over 128 KB, and the backend reached it at step 5. The sample listings and reviews move into the site kit as a data file, and "Load sample directory" runs from an admin-only kit page the way CSV import does, sending rows to the plugin in small steps through an admin route. The Get started card links to that page. Nothing an owner uses is removed. The type editor also refuses a field label that matches a standard CSV column (Title, City and the rest), so every field gets its own column.
+
 ## Out of scope
 
 Per-type moderation; maps or location for software; paid features (plans, credits, coupons, featured payments); a native (trusted) block beyond the existing one; multi-choice fields; a `network:request` capability; Google Maps; anything in `.claude/CLAUDE.md`'s do-not-add list.
