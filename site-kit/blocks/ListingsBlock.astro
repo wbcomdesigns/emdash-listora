@@ -1,7 +1,7 @@
 ---
 import { getEmDashCollection, getTermsForEntries } from "emdash";
 import { Image } from "emdash/ui";
-import { matchesPlace, placeOf, placeholderHtml, sortListings, typeName } from "../lib/listora";
+import { loadTypes, matchesPlace, placeFor, placeholderHtml, sortListings, typeName, typeOf } from "../lib/listora";
 import { S } from "../lib/listora-strings";
 import "../styles/listora-ui.css";
 
@@ -26,6 +26,8 @@ if (category && matching.length) {
 	matching = matching.filter((entry) => (terms.get(entry.data.id) ?? []).some((term) => term.label.toLowerCase() === category || term.slug === category));
 }
 const shown = sortListings(matching, "featured").slice(0, count);
+// Type names as the owner has them, from the plugin. Asked only when there is something to show.
+const types = shown.length ? await loadTypes(Astro.locals) : [];
 ---
 
 {
@@ -40,16 +42,16 @@ const shown = sortListings(matching, "featured").slice(0, count);
 							{listing.data.featured_image ? (
 								<Image image={listing.data.featured_image} alt="" />
 							) : (
-								<Fragment set:html={placeholderHtml(String(listing.data.listing_type || ""))} />
+								<Fragment set:html={placeholderHtml(typeOf(types, listing.data.listing_type))} />
 							)}
-							<span class="listora-badge">{typeName(listing.data.listing_type)}</span>
+							<span class="listora-badge">{typeName(types, listing.data.listing_type)}</span>
 						</div>
 						<div class="listora-card-body">
 							{/* Not a heading: an article's own contents list should not fill up with listing names. */}
 							<p class="listora-inline__title">
 								<a href={`/listings/${listing.id}/`}>{listing.data.title}</a>
 							</p>
-							<p class="listora-meta">{placeOf(listing.data)}</p>
+							<p class="listora-meta">{placeFor(types, listing.data)}</p>
 						</div>
 					</article>
 				))}

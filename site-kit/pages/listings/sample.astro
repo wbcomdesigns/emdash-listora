@@ -1,0 +1,112 @@
+---
+import Layout from "../../layouts/ListoraLayout.astro";
+import { S } from "../../lib/listora-strings";
+import "../../styles/listora-ui.css";
+
+// This page differs per visitor. Sites cache pages without regard to cookies, so say so.
+Astro.response.headers.set("Cache-Control", "private, no-store");
+const user = Astro.locals.user as { role?: number } | undefined;
+// The plugin refuses everyone but site admins on the sample route; the page only mirrors that.
+const isAdmin = Number(user?.role) >= 50;
+const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.pathname)}`;
+---
+
+<Layout title={S.sample.title} description={S.sample.description}>
+	<div class="listora-block">
+		<header class="listora-page-head">
+			<div>
+				<h1>{S.sample.heading}</h1>
+				<p>{S.sample.intro}</p>
+			</div>
+		</header>
+		{
+			isAdmin ? (
+				<section class="listora-panel" aria-labelledby="sample-title">
+					<h2 id="sample-title">{S.sample.title}</h2>
+					<button class="listora-btn" type="button" id="sample-btn" disabled>{S.sample.checking}</button>
+					<div id="sample-result" aria-live="polite"></div>
+				</section>
+			) : (
+				<div class="listora-empty">
+					<h2>{S.transfer.adminsTitle}</h2>
+					<p>{S.sample.adminsBody}</p>
+					{user ? null : <a class="listora-btn" href={loginUrl}>{S.common.signIn}</a>}
+				</div>
+			)
+		}
+	</div>
+</Layout>
+
+<script>
+	import { api, esc } from "../../lib/listora";
+	import { sampleProgress, S } from "../../lib/listora-strings";
+	// The sample rows. The plugin checks each one again before it writes it.
+	import SAMPLE from "../../lib/listora-sample.json";
+	// The sample event is dated two weeks after the day it is loaded, so the calendar shows it ahead (#87).
+	const eventDay = new Date(Date.now() + 14 * 86_400_000).toISOString().slice(0, 10);
+	const ROWS = { ...SAMPLE, listings: SAMPLE.listings.map((row) => (row.listing_type === "event" ? { ...row, type_fields: { ...row.type_fields, event_start: eventDay } } : row)) };
+
+	const button = document.getElementById("sample-btn") as HTMLButtonElement | null;
+	const out = document.getElementById("sample-result");
+	const show = (tone: string, html: string) => {
+		if (out) out.innerHTML = `<div class="listora-status" data-tone="${tone}">${html}</div>`;
+	};
+	const ready = (label: string) => {
+		if (!button) return;
+		button.disabled = false;
+		button.textContent = label;
+	};
+	const finished = () => {
+		show(
+			"success",
+			`<p><strong>${esc(S.sample.done)}</strong></p><p><a class="listora-btn" href="/listings/">${esc(S.sample.view)}</a> <a class="listora-btn" href="/_emdash/admin/plugins/listora/queue">${esc(S.sample.queue)}</a></p>`,
+		);
+		ready(S.sample.again);
+	};
+	const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+	/**
+	 * Sends the sample rows a step at a time; the plugin answers with the next step. A step sent again is
+	 * safe: the plugin claims each step before it writes, and skips listings it already added.
+	 */
+	async function run() {
+		if (!button) return;
+		button.disabled = true;
+		let step = "start";
+		let tries = 0;
+		for (let n = 0; n < 100; n += 1) {
+			const result = await api("sample", { step, ...ROWS });
+			if (!result.ok) {
+				// A refusal is shown in the plugin's words. Only no answer or a 5xx is the site being slow:
+				// wait and send the same step again, twice at most.
+				const slow = result.error?.code === "OFFLINE" || (result.error?.code === "FAILED" && (result.error.status ?? 500) >= 500);
+				if (!slow || tries >= 2) {
+					show("error", esc(slow ? S.sample.stopped : result.error?.message || S.common.fallback));
+					return ready(S.sample.resume);
+				}
+				tries += 1;
+				await wait(8000);
+				continue;
+			}
+			tries = 0;
+			step = String(result.step || "start");
+			if (step === "done") return finished();
+			button.textContent = step === "related" ? S.sample.related : sampleProgress(Number(result.created) || 0, Number(result.total) || 0);
+			// Another tab is loading too: give it a moment.
+			if (result.busy) await wait(2000);
+		}
+		show("error", esc(S.sample.stopped));
+		ready(S.sample.resume);
+	}
+
+	button?.addEventListener("click", run);
+	// Where loading is, so a page opened again can finish what an earlier visit started.
+	api("sample", { step: "state" }).then((state) => {
+		if (state.ok && state.done) return finished();
+		if (state.ok && state.running) {
+			show("info", esc(S.sample.partly));
+			return ready(S.sample.resume);
+		}
+		ready(S.sample.load);
+	});
+</script>

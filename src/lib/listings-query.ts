@@ -2,7 +2,7 @@ import type { PluginContext } from "emdash/plugin";
 
 import { onlyKnown } from "./settings";
 import { LISTINGS } from "./types";
-import { asRecord, asString } from "./util";
+import { asRecord, asString, nil } from "./util";
 
 type Ctx = Pick<PluginContext, "content" | "storage" | "schema">;
 export type Item = { id: string; slug: string | null; status: string; data: Record<string, unknown>; draftRevisionId?: string | null };
@@ -10,7 +10,7 @@ export type Item = { id: string; slug: string | null; status: string; data: Reco
 /** A listing read fresh from the site. Null when it is gone or the listings type is missing. One call. */
 export async function getListing(ctx: Ctx, id: string): Promise<Item | null> {
 	if (!id || !ctx.content?.get) return null;
-	return ((await ctx.content.get(LISTINGS, id).catch(() => null)) as Item | null) ?? null;
+	return ((await ctx.content.get(LISTINGS, id).catch(nil)) as Item | null) ?? null;
 }
 
 /** The listing when it is public right now. Every visitor and member write re-checks this. One call. */
@@ -30,7 +30,7 @@ export async function publicListing(ctx: Ctx, id: string): Promise<Item | null> 
  */
 export async function publishNow(ctx: Ctx, id: string, draft?: string | null): Promise<boolean> {
 	if (!ctx.content?.publish || !ctx.content.getVersioned) return false;
-	const versioned = await ctx.content.getVersioned(LISTINGS, id).catch(() => null);
+	const versioned = await ctx.content.getVersioned(LISTINGS, id).catch(nil);
 	if (!versioned?._rev) return false;
 	if (draft && (versioned.item as { draftRevisionId?: string | null }).draftRevisionId !== draft) return false;
 	try {
@@ -81,6 +81,6 @@ export async function ownerOf(ctx: Ctx, listingId: string): Promise<{ owner: str
 /** Field slugs of the listings type, from settings or, when not read yet, from the schema (one call). */
 export async function fieldsOf(ctx: Ctx, cached: string[] | null): Promise<string[] | null> {
 	if (cached) return cached;
-	const collection = await ctx.schema?.getCollection(LISTINGS).catch(() => null);
+	const collection = await ctx.schema?.getCollection(LISTINGS).catch(nil);
 	return collection ? collection.fields.map((field) => field.slug) : null;
 }

@@ -10,7 +10,7 @@ The plugin does not add `/listings/` by itself. Run the setup command in [Set up
 
 Open Admin, Listora, Listings queue. If rows are waiting, open **Review** and choose **Approve and publish**. With **Approve listings before they show** on, a new listing stays hidden until you do.
 
-Get started offers **Load sample directory** only while the directory is not set up yet. That button adds the sample listings. It is safe to run more than once.
+Get started offers **Load sample directory** only while the directory is not set up yet. That link opens the kit page `/listings/sample/`, which adds the sample listings while you keep it open. It is safe to run more than once. If the link is missing, the site address is not known yet (restart the site) or the listings collection does not exist: open `/listings/sample/` on your site while signed in as an admin.
 
 ## Owner photos stay off
 

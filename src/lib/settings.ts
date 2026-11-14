@@ -1,5 +1,6 @@
 import type { PluginContext } from "emdash/plugin";
 
+import { TYPES_KEY, typesFrom, type ListingType } from "./types";
 import { asNumber, asRecord, asString } from "./util";
 
 /**
@@ -12,6 +13,8 @@ export type Settings = {
 	requireModeration: boolean;
 	emailMessages: boolean;
 	defaultListingType: string;
+	/** Every listing type: the built-ins with the owner's changes over them, then the owner's own (types.ts). */
+	types: ListingType[];
 	expiryDays: number;
 	emailExpiry: boolean;
 	photoLimit: number;
@@ -30,6 +33,8 @@ export type Settings = {
 	tasksFor: string;
 	/** The last owner notice failed because the site has no email provider. */
 	noMail: boolean;
+	/** Refresh categories now: when it was pressed, and when it finished (0 while it runs). tasks.ts sweep. */
+	recat: { at: number; done: number };
 	views: Record<string, View>;
 	raw: Map<string, unknown>;
 };
@@ -43,6 +48,7 @@ export const KEY = {
 	upgrade: "upgrade_0_7",
 	tasks: "state_tasks",
 	mail: "state_mail",
+	recat: "state_recat",
 	view: (list: string) => `view_${list}`,
 } as const;
 
@@ -76,6 +82,7 @@ export async function loadSettings(ctx: PluginContext): Promise<Settings> {
 		requireModeration: all.get("require_moderation") !== false,
 		emailMessages: all.get("email_messages") !== false,
 		defaultListingType: asString(all.get("default_listing_type")) || "business",
+		types: typesFrom(all.get(TYPES_KEY)),
 		expiryDays: days > 0 ? Math.min(days, 3650) : 0,
 		emailExpiry: all.get("email_expiry") !== false,
 		photoLimit: Math.min(Math.max(limit, 0), 20),
@@ -87,6 +94,7 @@ export async function loadSettings(ctx: PluginContext): Promise<Settings> {
 		upgrade: asRecord(all.get(KEY.upgrade)),
 		tasksFor: asString(all.get(KEY.tasks)),
 		noMail: all.get(KEY.mail) === "none",
+		recat: { at: asNumber(asRecord(all.get(KEY.recat)).at) ?? 0, done: asNumber(asRecord(all.get(KEY.recat)).done) ?? 0 },
 		views,
 		raw: all,
 	};

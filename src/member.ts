@@ -1,8 +1,8 @@
 import type { PluginContext } from "emdash/plugin";
 
 import { budget, MAX_CALLS, spend } from "./lib/budget";
-import { onSite, setPluginFields } from "./lib/directory";
-import { clean, EDITABLE, editPatch, fieldValue, filled, webAddress } from "./lib/edits";
+import { catKey, onSite, setPluginFields } from "./lib/directory";
+import { clean, EDITABLE, editPatch, fieldValue, LINK_RULE, sentDetails, typeValues, webAddress } from "./lib/edits";
 import { parseHours } from "./lib/hours";
 import { fieldsOf, getListing, ownerOf, patchListing, publicListing, publishNow } from "./lib/listings-query";
 import { imageType, PHOTO_MAX_BYTES } from "./lib/photos";
@@ -10,15 +10,14 @@ import { rateLimited } from "./lib/rates";
 import { mirrorRating, moveRating, partOf, starsOf } from "./lib/ratings";
 import { openRef, refKey, sealRef } from "./lib/refs";
 import { loadSettings, photosOn, type Settings } from "./lib/settings";
-import { LISTING_TYPES, LISTINGS, SUBMITTER_IS_OWNER, listingTypeBySlug } from "./lib/types";
-import { asBoolean, asNumber, asRecord, asString, asStringArray, nowIso, parseJson, readCursor } from "./lib/util";
+import { LISTINGS, PLACE_FIELDS, SUBMITTER_IS_OWNER, shownTypes, typeBySlug } from "./lib/types";
+import { asBoolean, asNumber, asRecord, asString, asStringArray, fail, invalid, nowIso, parseJson, readCursor, none, notApplied } from "./lib/util";
 
 type Ctx = PluginContext;
 export type Member = { id: string; name: string | null; email?: string | null; role: number };
 
 export const SIGN_IN = { ok: false, error: { code: "SIGN_IN_REQUIRED", message: "Sign in to continue." } };
 export const NO_LISTING = { ok: false, error: { code: "NOT_FOUND", message: "That listing is not available." } };
-const fail = (code: string, message: string) => ({ ok: false, error: { code, message } });
 
 // Short enough that the moderation table can show every character an admin approves.
 export const REVIEW_TITLE_MAX = 120;
@@ -47,11 +46,10 @@ export function parseSubmit(input: unknown): { ok: true; data: SubmitInput } | {
 	if (!title) return { ok: false, error: "Title is required." };
 	if (title.length > 200) return { ok: false, error: "Title must be 200 characters or fewer." };
 	if (asString(raw.company_website) || asString(raw.honeypot)) return { ok: false, error: "Submission rejected." };
-	// The form checks these too. The route is the real gate, because a request need not come from the form.
+	// The listing type is checked against the site's types by submit, once the settings are read.
 	const wantedType = asString(raw.listing_type);
-	if (wantedType && !LISTING_TYPES.some((item) => item.slug === wantedType)) return { ok: false, error: "Choose a listing type from the list." };
 	const site = asString(raw.website);
-	if (site && !/^https?:\/\/\S+\.\S+/i.test(site)) return { ok: false, error: "Website must be a full address starting with http:// or https://." };
+	if (site && !/^https?:\/\/\S+\.\S+/i.test(site)) return { ok: false, error: `Website ${LINK_RULE}` };
 	// Every stored field is cleaned and capped exactly as an owner's edit is (fieldValue), so a
 	// request that skips the form cannot store a field of any size.
 	const text = (key: string) => fieldValue(key, raw[key]);
@@ -87,11 +85,6 @@ export function parseSubmit(input: unknown): { ok: true; data: SubmitInput } | {
 					.map((item) => ({ name: clean(item.name, 120), price: asNumber(item.price), duration: asNumber(item.duration) })),
 			),
 			amenities: fieldValue("amenities", asStringArray(raw.amenities).join(", ")),
-			price_range: text("price_range"),
-			cuisine: text("cuisine"),
-			event_start: text("event_start"),
-			event_end: text("event_end"),
-			type_fields: filled(raw.type_fields),
 		},
 	};
 }
@@ -117,12 +110,25 @@ export async function submit(routeCtx: { user?: unknown; input: unknown }, ctx: 
 	const user = userOf(routeCtx);
 	if (!user) return SIGN_IN;
 	const parsed = parseSubmit(routeCtx.input);
-	if (!parsed.ok) return fail("VALIDATION_ERROR", parsed.error);
+	if (!parsed.ok) return invalid(parsed.error);
 	// Only a new listing needs the tick. An owner's later edit goes through the same parser without it.
-	if (!parsed.data.agree_terms) return fail("VALIDATION_ERROR", "Confirm that you may publish this listing.");
+	if (!parsed.data.agree_terms) return invalid("Confirm that you may publish this listing.");
 	const b = budget(1);
 	const settings = await loadSettings(ctx);
 	if (spamBlocked(settings, parsed.data.title, String(parsed.data.description))) return fail("SPAM", "Submission rejected.");
+	// The form offers these too. The route is the real gate, because a request need not come from the form.
+	const offered = shownTypes(settings.types);
+	const type = parsed.data.listing_type || settings.defaultListingType;
+	if (!offered.some((item) => item.slug === type)) {
+		if (parsed.data.listing_type) return invalid("Choose a listing type from the list.");
+		// The default type was hidden or removed since it was chosen: the first type still offered.
+		if (!offered.length) return invalid("This directory takes no new listings just now.");
+	}
+	const listingType = offered.some((item) => item.slug === type) ? type : offered[0].slug;
+	const chosen = typeBySlug(settings.types, listingType);
+	// The type's own fields, checked on the server whatever the form did; every other key is dropped.
+	const details = typeValues(chosen, sentDetails(asRecord(routeCtx.input)), "submit");
+	if (details.error) return invalid(details.error);
 	spend(b, 2);
 	const limited = await rateLimited(ctx, "submit", user.id);
 	if (limited) return limited;
@@ -131,16 +137,17 @@ export async function submit(routeCtx: { user?: unknown; input: unknown }, ctx: 
 	if (!fields || !ctx.content?.create) {
 		return fail("LISTINGS_COLLECTION_MISSING", "Create the listings collection from the site seed before accepting submissions.");
 	}
-	const type = listingTypeBySlug(parsed.data.listing_type || settings.defaultListingType).slug;
-	const { agree_terms: _agree, type_fields, ...data } = parsed.data;
+	const { agree_terms: _agree, ...data } = parsed.data;
+	// A type without a location takes no address, map position or hours.
+	if (!chosen.location) for (const key of PLACE_FIELDS) delete data[key];
 	const write: Record<string, unknown> = {
 		...data,
-		listing_type: type,
+		listing_type: listingType,
 		website: parsed.data.website || undefined,
 		is_claimed: SUBMITTER_IS_OWNER,
 		is_featured: false,
 		owner_name: asString(data.owner_name) || user.name || "",
-		type_fields: JSON.stringify(type_fields),
+		type_fields: JSON.stringify(details.values),
 		listing_status: "live",
 	};
 	spend(b);
@@ -165,7 +172,7 @@ export async function submit(routeCtx: { user?: unknown; input: unknown }, ctx: 
 		owner_email: EMAIL_RE.test(asString(user.email)) ? asString(user.email) : "",
 		title: parsed.data.title,
 		tl: parsed.data.title.toLowerCase(),
-		listing_type: type,
+		listing_type: listingType,
 		city: asString(data.city),
 		status: live ? "approving" : "pending",
 		...(live ? { claimedAt: new Date(now).toISOString() } : {}),
@@ -178,9 +185,8 @@ export async function submit(routeCtx: { user?: unknown; input: unknown }, ctx: 
 
 	// Only a category the site already has. A member cannot create one.
 	if (termCalls && ctx.taxonomies?.addEntryTerms) {
-		let term = settings.terms[wanted];
-		if (!term && spend(b)) term = (await ctx.taxonomies.getTerms("listing_category").catch(() => [])).find((item) => item.slug === wanted)?.id ?? "";
-		if (term && spend(b)) await ctx.taxonomies.addEntryTerms(LISTINGS, created.id, "listing_category", [term]).catch(() => undefined);
+		const term = settings.terms[wanted] || (spend(b) ? await catKey(ctx, settings.terms, wanted) : "");
+		if (term && spend(b)) await ctx.taxonomies.addEntryTerms(LISTINGS, created.id, "listing_category", [term]).catch(none);
 	}
 
 	// Moderation off means the listing goes live now, not into a queue nobody reads.
@@ -189,24 +195,23 @@ export async function submit(routeCtx: { user?: unknown; input: unknown }, ctx: 
 		spend(b, 2);
 		published = await publishNow(ctx, created.id);
 		const status = published ? "approved" : "pending";
-		await ctx.storage.submissions.updateIf(created.id, { where: { status: "approving" }, set: { status, ...(published ? {} : { expires_at: 0 }) } }).catch(() => undefined);
+		await ctx.storage.submissions.updateIf(created.id, { where: { status: "approving" }, set: { status, ...(published ? {} : { expires_at: 0 }) } }).catch(none);
 	}
 	return { ok: true, listing: { id: created.id, slug: created.slug, title: parsed.data.title }, pendingReview: !published };
 }
 
 /* ---- Reviews ---- */
 
-/** Worst case 9: the listing, the block list, its owner, rate limit (2), the old review and the new one, the rating (2). */
+/** Worst case 8: the listing, its owner, rate limit (2), the old review and the new one, the rating (2). */
 export async function review(routeCtx: { user?: unknown; input: unknown }, ctx: Ctx) {
 	const user = userOf(routeCtx);
 	if (!user) return SIGN_IN;
 	const raw = asRecord(routeCtx.input);
 	const listingId = asString(raw.listingId || raw.listing_id);
 	const body = asString(raw.body);
-	if (!listingId || !body) return fail("VALIDATION_ERROR", "Listing and review text are required.");
+	if (!listingId || !body) return invalid("Listing and review text are required.");
 	const listing = await publicListing(ctx, listingId);
 	if (!listing) return NO_LISTING;
-	if (await ctx.storage.blocked.exists(user.id)) return fail("BLOCKED", "This member cannot review.");
 	// A rating an owner gives their own listing would not be a review.
 	if ((await ownerOf(ctx, listingId)).owner === user.id) return fail("OWN_LISTING", "You cannot review your own listing.");
 	const limited = await rateLimited(ctx, "review", user.id);
@@ -247,7 +252,7 @@ export async function claim(routeCtx: { user?: unknown; input: unknown }, ctx: C
 	if (!user) return SIGN_IN;
 	const raw = asRecord(routeCtx.input);
 	const listingId = asString(raw.listingId || raw.listing_id);
-	if (!listingId) return fail("VALIDATION_ERROR", "Listing is required.");
+	if (!listingId) return invalid("Listing is required.");
 	const listing = await publicListing(ctx, listingId);
 	if (!listing) return NO_LISTING;
 	const { owner } = await ownerOf(ctx, listingId);
@@ -305,7 +310,7 @@ export async function favorites(routeCtx: { user?: unknown; input: unknown; requ
 		return { ok: true, items: [...found.keys()].map((id) => ({ id, listingId: id.slice(user.id.length + 1) })) };
 	}
 	const cursor = readCursor(raw.cursor);
-	if (cursor === null) return fail("VALIDATION_ERROR", "Reload the page to see your saved listings.");
+	if (cursor === null) return invalid("Reload the page to see your saved listings.");
 	const page = await ctx.storage.favorites.query({ where: { member_id: user.id }, orderBy: { createdAt: "desc" }, limit: 100, ...(cursor ? { cursor } : {}) });
 	return { ok: true, items: page.items.map((item) => ({ ...asRecord(item.data), id: item.id })), cursor: page.hasMore && page.cursor ? page.cursor : null };
 }
@@ -335,20 +340,27 @@ export async function edit(routeCtx: { user?: unknown; input: unknown; request: 
 		const mine = waiting.status === "pending" && waiting.member_id === user.id;
 		const source = mine ? { ...current, ...asRecord(waiting.fields) } : current;
 		const values: Record<string, unknown> = {};
-		for (const key of EDITABLE) values[key] = key === "type_fields" ? filled(source[key]) : asString(source[key]);
+		for (const key of EDITABLE) values[key] = asString(source[key]);
+		// Every stored detail; a listing saved before 0.8.0 has some in fields of their own.
+		values.type_fields = sentDetails(source);
 		return { ok: true, listingId, listing_type: asString(current.listing_type), pending: mine, values };
 	}
 
 	const parsed = parseSubmit(raw);
-	if (!parsed.ok) return fail("VALIDATION_ERROR", parsed.error);
+	if (!parsed.ok) return invalid(parsed.error);
 	const settings = await loadSettings(ctx);
 	if (spamBlocked(settings, parsed.data.title, String(parsed.data.description))) return fail("SPAM", "Those changes were rejected.");
-	const limited = await rateLimited(ctx, "edit", user.id);
-	if (limited) return limited;
+	const type = typeBySlug(settings.types, current.listing_type);
 	// Only the fields the form sent, cleaned, and only where they differ from the live listing.
 	const sent: Record<string, unknown> = {};
-	for (const key of EDITABLE) if (key in raw) sent[key] = (parsed.data as Record<string, unknown>)[key];
-	const { patch, changes } = editPatch(current, sent);
+	for (const key of EDITABLE) if (key in raw && key !== "type_fields") sent[key] = (parsed.data as Record<string, unknown>)[key];
+	// Only the type's fields that were sent; none sent changes none.
+	const details = typeValues(type, sentDetails(raw), "edit");
+	if (details.error) return invalid(details.error);
+	sent.type_fields = details.values;
+	const limited = await rateLimited(ctx, "edit", user.id);
+	if (limited) return limited;
+	const { patch, changes } = editPatch(current, sent, type);
 	if (Object.keys(patch).length === 0) {
 		await ctx.storage.edits.delete(listingId);
 		return { ok: true, listingId, pending: false, unchanged: true };
@@ -358,6 +370,8 @@ export async function edit(routeCtx: { user?: unknown; input: unknown; request: 
 	await ctx.storage.edits.put(listingId, {
 		listingId,
 		listing_title: titleOf(listing),
+		// The type its details are read by on the approval screen.
+		listing_type: asString(current.listing_type),
 		member_id: user.id,
 		fields: patch,
 		was,
@@ -401,7 +415,7 @@ export async function renew(routeCtx: { user?: unknown; input: unknown }, ctx: C
 	const user = userOf(routeCtx);
 	if (!user) return SIGN_IN;
 	const listingId = asString(asRecord(routeCtx.input).listingId);
-	if (!listingId) return fail("VALIDATION_ERROR", "Listing is required.");
+	if (!listingId) return invalid("Listing is required.");
 	const settings = await loadSettings(ctx);
 	// The current owner (a claim can move a listing), not whoever first submitted it.
 	if ((await ownerOf(ctx, listingId)).owner !== user.id) return fail("FORBIDDEN", "Only the listing owner can renew it.");
@@ -442,9 +456,9 @@ export async function photo(routeCtx: { user?: unknown; input: unknown; request:
 	const listingId = query.get("listingId") || "";
 	// The owner's own name for the file, so they can tell their waiting photos apart.
 	const label = clean(query.get("name"), 60).replace(/[^\p{L}\p{N} ._-]/gu, "");
-	if (!listingId) return fail("NOT_FOUND", "That listing is not available.");
+	if (!listingId) return NO_LISTING;
 	const bytes = isUpload(routeCtx.input) ? routeCtx.input : new Uint8Array();
-	if (bytes.byteLength === 0) return fail("VALIDATION_ERROR", "Choose a photo first.");
+	if (bytes.byteLength === 0) return invalid("Choose a photo first.");
 	if (bytes.byteLength > PHOTO_MAX_BYTES) return fail("TOO_BIG", "That photo is larger than 5 MB.");
 	const type = imageType(bytes);
 	if (!type) return fail("WRONG_TYPE", "Use a JPEG, PNG or WebP photo.");
@@ -454,21 +468,21 @@ export async function photo(routeCtx: { user?: unknown; input: unknown; request:
 	if (!limit || !ctx.media?.upload) return fail("PHOTOS_OFF", "Photos are not turned on for this site.");
 	const mine = { member_id: user.id, status: { in: ["pending", "approved"] } };
 	spend(b);
-	let taken = (await ctx.storage.submissions.updateIf(listingId, { where: { ...mine, photo_n: { lt: limit } }, delta: { photo_n: { inc: 1 } } }).catch(() => ({ applied: false as const }))).applied;
+	let taken = (await ctx.storage.submissions.updateIf(listingId, { where: { ...mine, photo_n: { lt: limit } }, delta: { photo_n: { inc: 1 } } }).catch(notApplied)).applied;
 	let counted = false;
 	if (!taken) {
 		spend(b);
 		const row = asRecord(await ctx.storage.submissions.get(listingId));
-		if (row.member_id !== user.id || row.status === "rejected" || !row.status) return fail("NOT_FOUND", "That listing is not available.");
+		if (row.member_id !== user.id || row.status === "rejected" || !row.status) return NO_LISTING;
 		if (typeof row.photo_n === "number") return fail("LIMIT", `This listing already has ${limit} photos. Remove one that is waiting, or ask the site to remove one.`);
 		spend(b, 2);
 		const have = await ctx.storage.photos.count({ listingId, status: { in: ["pending", "approving", "approved"] } });
 		if (have >= limit) return fail("LIMIT", `This listing already has ${limit} photos. Remove one that is waiting, or ask the site to remove one.`);
-		taken = (await ctx.storage.submissions.updateIf(listingId, { where: { ...mine, photo_n: null }, set: { photo_n: have + 1 } }).catch(() => ({ applied: false as const }))).applied;
+		taken = (await ctx.storage.submissions.updateIf(listingId, { where: { ...mine, photo_n: null }, set: { photo_n: have + 1 } }).catch(notApplied)).applied;
 		if (!taken) return fail("BUSY", "Another photo is being added to this listing. Try again in a moment.");
 		counted = true;
 	}
-	const release = () => ctx.storage.submissions.updateIf(listingId, { where: { photo_n: { gte: 1 } }, delta: { photo_n: { dec: 1 } } }).catch(() => undefined);
+	const release = () => ctx.storage.submissions.updateIf(listingId, { where: { photo_n: { gte: 1 } }, delta: { photo_n: { dec: 1 } } }).catch(none);
 	if (!counted) {
 		spend(b, 2);
 		const limited = await rateLimited(ctx, "photo", user.id);
@@ -521,12 +535,12 @@ export async function photoRemove(routeCtx: { user?: unknown; input: unknown }, 
 	const GONE = fail("NOT_FOUND", "That photo is not available to remove.");
 	// Take the row out of "pending" first, in the database, for this member only. If an admin is
 	// approving it at this moment, only one of the two can win, and the file is deleted only by the winner.
-	const claimed = id ? await ctx.storage.photos.updateIf(id, { where: { status: "pending", member_id: user.id }, set: { status: "removing" } }).catch(() => ({ applied: false as const })) : { applied: false as const };
+	const claimed = id ? await ctx.storage.photos.updateIf(id, { where: { status: "pending", member_id: user.id }, set: { status: "removing" } }).catch(notApplied) : { applied: false as const };
 	if (!claimed.applied) return GONE;
 	const row = asRecord(claimed.data);
 	await ctx.media?.delete?.(asString(row.mediaId)).catch(() => false);
 	await ctx.storage.photos.delete(id);
-	await ctx.storage.submissions.updateIf(asString(row.listingId), { where: { photo_n: { gte: 1 } }, delta: { photo_n: { dec: 1 } } }).catch(() => undefined);
+	await ctx.storage.submissions.updateIf(asString(row.listingId), { where: { photo_n: { gte: 1 } }, delta: { photo_n: { dec: 1 } } }).catch(none);
 	return { ok: true, id };
 }
 
@@ -553,7 +567,7 @@ export async function reply(routeCtx: { user?: unknown; input: unknown }, ctx: C
 	if (found.listingId !== listingId || found.status !== "published") return NOT_YOURS;
 	// Ownership second, with the same answer, so nothing about a listing's reviews is learned by someone else.
 	if ((await ownerOf(ctx, listingId)).owner !== user.id) return NOT_YOURS;
-	if (!text) return fail("VALIDATION_ERROR", "Write your reply first.");
+	if (!text) return invalid("Write your reply first.");
 	const limited = await rateLimited(ctx, "reply", user.id);
 	if (limited) return limited;
 	// Guarded: only the reply fields, and only while the review is still public.
@@ -621,7 +635,7 @@ export async function dashboard(routeCtx: { user?: unknown; input: unknown }, ct
 	const subs = want("listings") || want("reviews") || want("messages") ? await query("submissions") : EMPTY;
 	const ids = owned(subs);
 	const cursor = readCursor(raw.cursor);
-	if (cursor === null) return fail("VALIDATION_ERROR", "Reload the page to see the newest items.");
+	if (cursor === null) return invalid("Reload the page to see the newest items.");
 	const [reviews, claims, favorites, inbox, received, edits, photos] = await Promise.all([
 		want("reviews") ? query("reviews") : EMPTY,
 		want("claims") ? query("claims") : EMPTY,
@@ -823,7 +837,7 @@ async function eraseStep(ctx: Ctx, memberId: string) {
 			}
 			for (const row of waiting) {
 				await ctx.media?.delete?.(asString(row.mediaId)).catch(() => false);
-				await ctx.storage.submissions.updateIf(asString(row.listingId), { where: { photo_n: { gte: 1 } }, delta: { photo_n: { dec: 1 } } }).catch(() => undefined);
+				await ctx.storage.submissions.updateIf(asString(row.listingId), { where: { photo_n: { gte: 1 } }, delta: { photo_n: { dec: 1 } } }).catch(none);
 			}
 			const gone = [...kept, ...waiting].map((row) => row.id);
 			if (gone.length) await ctx.storage.photos.deleteMany(gone);

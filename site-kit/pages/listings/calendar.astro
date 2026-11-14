@@ -1,7 +1,7 @@
 ---
 import { getEmDashCollection, getSiteSettings } from "emdash";
 import Layout from "../../layouts/ListoraLayout.astro";
-import { formatEventWhen, siteZone } from "../../lib/listora";
+import { eventDates, formatEventWhen, siteZone } from "../../lib/listora";
 import { eventCount, S } from "../../lib/listora-strings";
 import "../../styles/listora-ui.css";
 
@@ -13,9 +13,11 @@ if (Astro.cache?.enabled) Astro.cache.set(cacheHint);
 const zone = siteZone((await getSiteSettings())?.timezone);
 // "Today" in the site's zone, so an event tonight is not dropped early.
 const today = new Intl.DateTimeFormat("en-CA", { timeZone: zone }).format(new Date());
+// Dates sit in type_fields from 0.8.0, in fields of their own before.
 const events = entries
-	.filter((entry) => String(entry.data.event_end || entry.data.event_start || "").slice(0, 10) >= today)
-	.sort((a, b) => String(a.data.event_start).localeCompare(String(b.data.event_start)));
+	.map((entry) => ({ ...entry, when: eventDates(entry.data) }))
+	.filter((entry) => (entry.when.end || entry.when.start).slice(0, 10) >= today)
+	.sort((a, b) => a.when.start.localeCompare(b.when.start));
 ---
 
 <Layout title={S.calendar.title} description={S.calendar.description}>
@@ -39,7 +41,7 @@ const events = entries
 					{events.map((event) => (
 						<article class="listora-card">
 							<div class="listora-card-body">
-								<p class="listora-meta">{formatEventWhen(event.data.event_start, zone)}</p>
+								<p class="listora-meta">{formatEventWhen(event.when.start, zone)}</p>
 								<h2>
 									<a href={`/listings/${event.id}/`}>{event.data.title}</a>
 								</h2>

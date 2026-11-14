@@ -94,7 +94,7 @@ Three entry points for each public job:
 | Check | Pass |
 | --- | --- |
 | Routes match `docs/website/developer-guide/routes.md` | Every public write validates input |
-| Storage collections match the manifest | submissions, events, reviews, claims, favorites, contacts, email_log, blocked |
+| Storage collections match the manifest | submissions, directory, dircats, events, reviews, claims, favorites, photos, edits, contacts, notice_queue, ratings, rating_queue, rates |
 | Hook `content:afterSave` | Writes `storage.events` |
 | Missing collection | `listPublished` returns `[]`, does not crash |
 | Honeypot | `company_website` rejects submit and contact |

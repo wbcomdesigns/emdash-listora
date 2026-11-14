@@ -4,6 +4,7 @@ import account from "../site-kit/pages/account/index.astro?raw";
 import calendar from "../site-kit/pages/listings/calendar.astro?raw";
 import directory from "../site-kit/pages/listings/index.astro?raw";
 import importer from "../site-kit/pages/listings/import.astro?raw";
+import sampler from "../site-kit/pages/listings/sample.astro?raw";
 import listing from "../site-kit/pages/listings/[slug].astro?raw";
 import submit from "../site-kit/pages/listings/submit.astro?raw";
 import block from "../site-kit/blocks/ListingsBlock.astro?raw";
@@ -18,7 +19,7 @@ import {
 	S,
 } from "../site-kit/lib/listora-strings";
 
-const sources = [account, calendar, directory, importer, listing, submit, block, kitLib];
+const sources = [account, calendar, directory, importer, sampler, listing, submit, block, kitLib];
 
 function read(path: string): unknown {
 	return path.split(".").reduce<unknown>((current, key) => {
@@ -43,7 +44,9 @@ describe("visitor wording", () => {
 		expect(paths.size).toBeGreaterThan(40);
 		for (const path of paths) {
 			const value = read(path);
-			const text = typeof value === "string" ? value : Array.isArray(value) ? value.join(" ") : "";
+			// A word list (days) or a table of phrases by key (type hints) counts when every entry is filled.
+			const list = Array.isArray(value) ? value : value && typeof value === "object" ? Object.values(value) : null;
+			const text = typeof value === "string" ? value : list && list.every((item) => typeof item === "string" && item) ? list.join(" ") : "";
 			expect(text, path).not.toBe("");
 		}
 	});
@@ -52,7 +55,7 @@ describe("visitor wording", () => {
 		// The frontmatter and each <script> block of an .astro page import separately: a helper
 		// imported only in the frontmatter is undefined in the browser and stops the page script.
 		const helpers = [...stringsFile.matchAll(/export function (\w+)/g)].map((match) => match[1]);
-		for (const page of [account, calendar, directory, importer, listing, submit, block]) {
+		for (const page of [account, calendar, directory, importer, sampler, listing, submit, block]) {
 			for (const script of page.match(/<script\b(?:(?!\/>)[^>])*>[\s\S]*?<\/script>/g) ?? []) {
 				const imported = new Set([...script.matchAll(/import \{([^}]*)\} from "[^"]*listora-strings"/g)].flatMap((match) => match[1].split(",").map((name) => name.trim())));
 				for (const helper of helpers) {
@@ -64,7 +67,7 @@ describe("visitor wording", () => {
 
 	it("turns error codes into plain sentences", () => {
 		expect(phrase("SIGN_IN_REQUIRED")).toBe("Sign in to continue.");
-		expect(phrase("RATE_LIMITED")).toBe("Too many requests. Try again in an hour.");
+		expect(phrase("RATE_LIMITED")).toBe("Too many requests. Try again when the next hour starts.");
 		expect(phrase("OFFLINE")).toBe("Could not reach the site. Check your connection and try again.");
 		expect(phrase("NOT_A_CODE")).toBe("Something went wrong. Try again.");
 		expect(phrase()).toBe("Something went wrong. Try again.");

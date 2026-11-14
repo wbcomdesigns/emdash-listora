@@ -1,38 +1,38 @@
-## 0.7.1
+## 0.8.0
 
-Copy the kit again after you update, from your site's root folder:
+Listing types you can edit, custom fields and a Software type. No new permissions. Copy the kit again after you update, from your site's root folder:
 
 ```bash
 kit="$(mktemp -d)" &&
   git clone --depth 1 \
-    --branch v0.7.1 \
+    --branch v0.8.0 \
     https://github.com/wbcomdesigns/emdash-listora \
     "$kit/emdash-listora" &&
   "$kit/emdash-listora/scripts/add-to-site.sh" .
 ```
 
-- Fix: the first visitor after an update starts the data upgrade; no admin visit needed.
-- Fix: import on a slow site goes on where it stopped and never adds a row twice.
-- Fix: plain messages instead of server text; expiry turned on in the Plugins settings form runs daily.
-- Fix: Messages says when the site cannot send email.
+After the update the site shows "finishing an update" for a short time while new indexes build. The data then catches up by itself in the background within hours; no admin visit needed.
+
+- New: a Listing types admin page; add types, rename, recolour or hide built-ins.
+- New: custom fields per type on the forms, listing page, cards and CSV.
+- New: types without a place hide the map, city, address and hours.
+- New: a Software type with an Install box, live GitHub stars and filter chips.
+- New: sort a type by its number or date fields, either way; Managed by its author badge.
+- Improve: the directory pages through the index; keywords use EmDash search; listings show under every category, and admin category changes follow within a few hours, or at once with Refresh categories now on the Settings page.
+- Fix: Calendar only for events; sample load no longer duplicates; required yes or no takes No.
 - Compat: needs EmDash 1.2.0 or later.
+
+## 0.7.1
+
+- Fix: the first visitor after an update starts the data upgrade.
+- Fix: import on a slow site goes on where it stopped.
+- Fix: Messages says when the site cannot send email.
 
 ## 0.7.0
 
-Fits Cloudflare's 10 requests per plugin call. Your 0.6.x data comes over by itself after the update.
+Fits Cloudflare's 10 requests per plugin call.
 
-- New: Listing changes and Listing photos admin pages; Next and Previous on every admin list.
-- Improve: a stored directory index, exact ratings, the account one tab at a time, export of every listing, import a few rows at a time.
-- Fix: the owner sees their own view of a listing; guests get Sign in in place of the forms; approvals publish on Node sites.
-- Security: guest messages limited per visitor address, refused when the host gives none.
-- Compat: tested on EmDash 1.3.1 and 1.5.0.
+- New: Listing changes and Listing photos admin pages.
+- Improve: a stored directory index and exact ratings.
 
-## 0.6.3
-
-- Fix: cut-off approvals return to the queue.
-- Improve: account tabs wrap on a phone.
-
-## 0.6.2
-
-- New: Get started gives the kit command for the installed version.
-- Fix: lists no longer stop at 100 rows.
+Older versions: https://github.com/wbcomdesigns/emdash-listora/blob/main/CHANGELOG.md

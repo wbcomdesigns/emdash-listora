@@ -1,0 +1,587 @@
+{
+	"listings": [
+		{
+			"key": "listing-golden-fork",
+			"title": "The Golden Fork",
+			"excerpt": "Handmade pasta and a wood-fired oven on West Broadway.",
+			"listing_type": "restaurant",
+			"city": "Manhattan",
+			"lat": 40.721,
+			"lng": -74.005,
+			"is_featured": true,
+			"is_claimed": true,
+			"owner_name": "Giulia Romano",
+			"amenities": "wifi, outdoor, credit-cards",
+			"hours": [
+				{
+					"day": 1,
+					"open": "11:00",
+					"close": "22:00"
+				},
+				{
+					"day": 2,
+					"open": "11:00",
+					"close": "22:00"
+				},
+				{
+					"day": 3,
+					"open": "11:00",
+					"close": "22:00"
+				},
+				{
+					"day": 4,
+					"open": "11:00",
+					"close": "22:00"
+				},
+				{
+					"day": 5,
+					"open": "11:00",
+					"close": "22:00"
+				},
+				{
+					"day": 6,
+					"open": "11:00",
+					"close": "22:00"
+				}
+			],
+			"type_fields": {
+				"cuisine": "italian",
+				"price_range": "$$$"
+			}
+		},
+		{
+			"key": "listing-sakura-house",
+			"title": "Sakura House",
+			"excerpt": "Sakura House in Midtown.",
+			"listing_type": "restaurant",
+			"city": "Midtown",
+			"lat": 40.754,
+			"lng": -73.984,
+			"is_claimed": true,
+			"owner_name": "Kenji Sato",
+			"hours": [
+				{
+					"day": 1,
+					"open": "11:00",
+					"close": "22:00"
+				},
+				{
+					"day": 2,
+					"open": "11:00",
+					"close": "22:00"
+				},
+				{
+					"day": 3,
+					"open": "11:00",
+					"close": "22:00"
+				},
+				{
+					"day": 4,
+					"open": "11:00",
+					"close": "22:00"
+				},
+				{
+					"day": 5,
+					"open": "11:00",
+					"close": "22:00"
+				},
+				{
+					"day": 6,
+					"open": "11:00",
+					"close": "22:00"
+				}
+			],
+			"type_fields": {
+				"cuisine": "japanese",
+				"price_range": "$$$$"
+			}
+		},
+		{
+			"key": "listing-casa-miguel",
+			"title": "Casa Miguel Cantina",
+			"excerpt": "Casa Miguel Cantina in Upper West Side.",
+			"listing_type": "restaurant",
+			"city": "Upper West Side",
+			"lat": 40.787,
+			"lng": -73.975,
+			"hours": [
+				{
+					"day": 1,
+					"open": "11:00",
+					"close": "22:00"
+				},
+				{
+					"day": 2,
+					"open": "11:00",
+					"close": "22:00"
+				},
+				{
+					"day": 3,
+					"open": "11:00",
+					"close": "22:00"
+				},
+				{
+					"day": 4,
+					"open": "11:00",
+					"close": "22:00"
+				},
+				{
+					"day": 5,
+					"open": "11:00",
+					"close": "22:00"
+				},
+				{
+					"day": 6,
+					"open": "11:00",
+					"close": "22:00"
+				}
+			],
+			"type_fields": {
+				"cuisine": "mexican",
+				"price_range": "$$"
+			}
+		},
+		{
+			"key": "listing-greenwich-hotel",
+			"title": "The Greenwich Hotel",
+			"excerpt": "Quiet courtyard hotel in Tribeca.",
+			"listing_type": "hotel",
+			"city": "Tribeca",
+			"lat": 40.719,
+			"lng": -74.01,
+			"is_featured": true,
+			"is_claimed": true,
+			"owner_name": "The Greenwich desk",
+			"hours": [
+				{
+					"day": 1,
+					"open": "07:00",
+					"close": "23:00"
+				},
+				{
+					"day": 2,
+					"open": "07:00",
+					"close": "23:00"
+				},
+				{
+					"day": 3,
+					"open": "07:00",
+					"close": "23:00"
+				},
+				{
+					"day": 4,
+					"open": "07:00",
+					"close": "23:00"
+				},
+				{
+					"day": 5,
+					"open": "07:00",
+					"close": "23:00"
+				},
+				{
+					"day": 6,
+					"open": "07:00",
+					"close": "23:00"
+				}
+			]
+		},
+		{
+			"key": "listing-soho-loft",
+			"title": "Sunny 2BR Loft in SoHo",
+			"excerpt": "Light-filled loft with a chef kitchen and iron columns.",
+			"listing_type": "real-estate",
+			"city": "SoHo",
+			"lat": 40.723,
+			"lng": -74.003,
+			"is_featured": true,
+			"type_fields": {
+				"beds": 2,
+				"baths": 2,
+				"price": "$8,400/mo"
+			}
+		},
+		{
+			"key": "listing-fitlab",
+			"title": "FitLab Performance Gym",
+			"excerpt": "Strength coaching in Chelsea.",
+			"listing_type": "business",
+			"city": "Chelsea",
+			"lat": 40.746,
+			"lng": -74.001,
+			"is_claimed": true,
+			"owner_name": "Marcus Hill",
+			"amenities": "wifi, parking",
+			"hours": [
+				{
+					"day": 1,
+					"open": "06:00",
+					"close": "21:00"
+				},
+				{
+					"day": 2,
+					"open": "06:00",
+					"close": "21:00"
+				},
+				{
+					"day": 3,
+					"open": "06:00",
+					"close": "21:00"
+				},
+				{
+					"day": 4,
+					"open": "06:00",
+					"close": "21:00"
+				},
+				{
+					"day": 5,
+					"open": "06:00",
+					"close": "21:00"
+				},
+				{
+					"day": 6,
+					"open": "06:00",
+					"close": "21:00"
+				}
+			]
+		},
+		{
+			"key": "listing-jazz-night",
+			"title": "Harbor Jazz Night",
+			"excerpt": "A waterfront set with a late last train.",
+			"listing_type": "event",
+			"city": "Manhattan",
+			"lat": 40.706,
+			"lng": -74.018,
+			"is_featured": true,
+			"type_fields": {
+				"event_start": "2026-10-18"
+			}
+		},
+		{
+			"key": "listing-frontend",
+			"title": "Frontend Engineer",
+			"excerpt": "TypeScript seat at a small studio.",
+			"listing_type": "job",
+			"city": "Brooklyn",
+			"lat": 40.718,
+			"lng": -73.958
+		},
+		{
+			"key": "listing-riverside-clinic",
+			"title": "Riverside Family Clinic",
+			"excerpt": "Primary care that still answers the phone.",
+			"listing_type": "healthcare",
+			"city": "Manhattan",
+			"lat": 40.791,
+			"lng": -73.973,
+			"is_claimed": true,
+			"owner_name": "Dr. Helen Park"
+		},
+		{
+			"key": "listing-hudson-language",
+			"title": "Hudson Language School",
+			"excerpt": "Evening Japanese and Spanish groups.",
+			"listing_type": "education",
+			"city": "Midtown",
+			"lat": 40.75,
+			"lng": -73.98
+		},
+		{
+			"key": "listing-central-park",
+			"title": "Central Park Conservancy Hub",
+			"excerpt": "Maps, tours, and a volunteer desk.",
+			"listing_type": "place",
+			"city": "Manhattan",
+			"lat": 40.782,
+			"lng": -73.965
+		},
+		{
+			"key": "listing-oak-desk",
+			"title": "Vintage Oak Desk",
+			"excerpt": "Solid oak, pickup in Brooklyn.",
+			"listing_type": "classified",
+			"city": "Brooklyn",
+			"lat": 40.678,
+			"lng": -73.944
+		},
+		{
+			"key": "listing-night-owl",
+			"title": "Night Owl Locksmith",
+			"excerpt": "Lockouts, rekeys and new locks, any hour of the night.",
+			"listing_type": "business",
+			"city": "Manhattan",
+			"lat": 40.73,
+			"lng": -73.99,
+			"pending": true
+		},
+		{
+			"key": "listing-little-dock",
+			"title": "Little Dock Dumplings",
+			"excerpt": "Pork and chive dumplings by the pier, cash or card.",
+			"listing_type": "restaurant",
+			"city": "Brooklyn",
+			"lat": 40.703,
+			"lng": -73.996,
+			"pending": true,
+			"type_fields": {
+				"cuisine": "chinese",
+				"price_range": "$"
+			}
+		},
+		{
+			"key": "listing-trailmark-mcp",
+			"title": "Trailmark MCP Server",
+			"excerpt": "Lets Claude Code search and read your trail maps and GPX files.",
+			"listing_type": "software",
+			"is_claimed": true,
+			"owner_name": "Dana Okafor",
+			"type_fields": {
+				"what_it_is": "MCP server",
+				"works_with": "Claude Code",
+				"repository": "https://github.com/fieldnote-sample/trailmark-mcp",
+				"homepage": "https://trailmark.example.com/docs/",
+				"install_command": "npx -y @fieldnote-sample/trailmark-mcp",
+				"version": "1.4.2",
+				"license": "MIT",
+				"price": "Free",
+				"open_source": true,
+				"stars": 1840,
+				"last_release": "2026-10-28",
+				"released": "2025-03-11"
+			}
+		},
+		{
+			"key": "listing-quillpad-theme",
+			"title": "Quillpad",
+			"excerpt": "A quiet reading theme for EmDash blogs, with a dark mode that follows the visitor.",
+			"listing_type": "software",
+			"type_fields": {
+				"what_it_is": "Theme",
+				"works_with": "EmDash",
+				"repository": "https://codeberg.org/fieldnote-sample/quillpad",
+				"homepage": "https://quillpad.example.com/",
+				"install_command": "npm install @fieldnote-sample/quillpad",
+				"version": "0.9.0",
+				"license": "GPL",
+				"price": "Freemium",
+				"open_source": true,
+				"stars": 312,
+				"last_release": "2026-09-14",
+				"released": "2025-11-02"
+			}
+		},
+		{
+			"key": "listing-ledgerline",
+			"title": "Ledgerline",
+			"excerpt": "Bookkeeping exports for small shops, as a Python library.",
+			"listing_type": "software",
+			"type_fields": {
+				"what_it_is": "Library",
+				"works_with": "Python",
+				"homepage": "https://ledgerline.example.com/",
+				"install_command": "pip install ledgerline",
+				"version": "3.1.0",
+				"license": "Proprietary",
+				"price": "Paid",
+				"open_source": false,
+				"stars": 5200,
+				"last_release": "2026-08-03",
+				"released": "2023-06-20"
+			}
+		}
+	],
+	"reviews": [
+		{
+			"id": "rev-gf-1",
+			"listingId": "listing-golden-fork",
+			"slug": "the-golden-fork",
+			"member_id": "priya",
+			"author": "Priya Mehta",
+			"stars": 5,
+			"title": "Handmade pasta that tastes like Naples",
+			"body": "The wood-fired oven and the linguine alle vongole were the highlight. Service remembered we were celebrating.",
+			"status": "published",
+			"helpful": 12
+		},
+		{
+			"id": "rev-gf-2",
+			"listingId": "listing-golden-fork",
+			"slug": "the-golden-fork",
+			"member_id": "james",
+			"author": "James Cole",
+			"stars": 4,
+			"title": "Worth the wait",
+			"body": "Book ahead. Tiramisu is a dream. A little loud on Friday nights.",
+			"status": "published",
+			"helpful": 7
+		},
+		{
+			"id": "rev-gf-3",
+			"listingId": "listing-golden-fork",
+			"slug": "the-golden-fork",
+			"member_id": "amelia",
+			"author": "Amelia Chen",
+			"stars": 5,
+			"title": "Best Italian in SoHo-adjacent",
+			"body": "Every dish felt considered. We will be back with family.",
+			"status": "published",
+			"helpful": 4
+		},
+		{
+			"id": "rev-sakura-1",
+			"listingId": "listing-sakura-house",
+			"slug": "sakura-house",
+			"member_id": "kenji",
+			"author": "Kenji Sato",
+			"stars": 5,
+			"title": "Omakase that does not rush you",
+			"body": "Fish was pristine. The counter seats are the way to do this.",
+			"status": "published",
+			"helpful": 9
+		},
+		{
+			"id": "rev-sakura-2",
+			"listingId": "listing-sakura-house",
+			"slug": "sakura-house",
+			"member_id": "nina",
+			"author": "Nina Alvarez",
+			"stars": 4,
+			"title": "Quiet and precise",
+			"body": "A little pricey, but the tamago alone is worth a visit.",
+			"status": "published",
+			"helpful": 3
+		},
+		{
+			"id": "rev-casa-1",
+			"listingId": "listing-casa-miguel",
+			"slug": "casa-miguel-cantina",
+			"member_id": "leo",
+			"author": "Leo Ramirez",
+			"stars": 5,
+			"title": "Margaritas and a patio",
+			"body": "The al pastor tacos are the move. Great for groups.",
+			"status": "published",
+			"helpful": 6
+		},
+		{
+			"id": "rev-spice-1",
+			"listingId": "listing-spice-route",
+			"slug": "spice-route-kitchen",
+			"member_id": "aarav",
+			"author": "Aarav Shah",
+			"stars": 5,
+			"title": "Heat that actually tastes like something",
+			"body": "Lamb biryani was layered and fragrant. Ask for extra raita.",
+			"status": "published",
+			"helpful": 8
+		},
+		{
+			"id": "rev-greenwich-1",
+			"listingId": "listing-greenwich-hotel",
+			"slug": "the-greenwich-hotel",
+			"member_id": "sofia",
+			"author": "Sofia Laurent",
+			"stars": 5,
+			"title": "Calm luxury in Tribeca",
+			"body": "Rooms are quiet, staff anticipates everything, courtyard is a gift.",
+			"status": "published",
+			"helpful": 5
+		},
+		{
+			"id": "rev-fitlab-1",
+			"listingId": "listing-fitlab",
+			"slug": "fitlab-performance-gym",
+			"member_id": "marcus",
+			"author": "Marcus Hill",
+			"stars": 4,
+			"title": "Serious training, no nonsense",
+			"body": "Coaches know the equipment. Early classes fill up fast.",
+			"status": "published",
+			"helpful": 2
+		},
+		{
+			"id": "rev-clinic-1",
+			"listingId": "listing-riverside-clinic",
+			"slug": "riverside-family-clinic",
+			"member_id": "helen",
+			"author": "Helen Park",
+			"stars": 5,
+			"title": "Same-week appointment",
+			"body": "Front desk was kind and the visit did not feel rushed.",
+			"status": "published",
+			"helpful": 4
+		},
+		{
+			"id": "rev-school-1",
+			"listingId": "listing-hudson-language",
+			"slug": "hudson-language-school",
+			"member_id": "yuki",
+			"author": "Yuki Tanaka",
+			"stars": 4,
+			"title": "Evening classes that stick",
+			"body": "Small groups. Homework is real. I can finally order in Japanese.",
+			"status": "published",
+			"helpful": 1
+		},
+		{
+			"id": "rev-bbq-1",
+			"listingId": "listing-flames-smoke",
+			"slug": "flames-and-smoke-bbq",
+			"member_id": "drew",
+			"author": "Drew Patel",
+			"stars": 5,
+			"title": "Brisket with a proper bark",
+			"body": "Lines move. Get the burnt ends if they have them.",
+			"status": "published",
+			"helpful": 11
+		},
+		{
+			"id": "rev-pending-1",
+			"listingId": "listing-golden-fork",
+			"slug": "the-golden-fork",
+			"member_id": "guest",
+			"author": "Riley Guest",
+			"stars": 2,
+			"title": "Waiting to be checked",
+			"body": "This review should stay off the public listing until someone approves it.",
+			"status": "pending",
+			"helpful": 0
+		},
+		{
+			"id": "rev-tm-1",
+			"listingId": "listing-trailmark-mcp",
+			"slug": "trailmark-mcp-server",
+			"member_id": "priya",
+			"author": "Priya Mehta",
+			"stars": 5,
+			"title": "Set up in two minutes",
+			"body": "Pasted the install line, restarted Claude Code and it found every GPX file in my notes folder.",
+			"status": "published",
+			"helpful": 4
+		},
+		{
+			"id": "rev-tm-2",
+			"listingId": "listing-trailmark-mcp",
+			"slug": "trailmark-mcp-server",
+			"member_id": "marcus",
+			"author": "Marcus Webb",
+			"stars": 4,
+			"title": "Useful, a little slow on big maps",
+			"body": "Search is quick. Reading a large map file takes a few seconds, but the answers are right.",
+			"status": "published",
+			"helpful": 1
+		}
+	],
+	"claim": {
+		"listing": "listing-casa-miguel",
+		"name": "Miguel Santos",
+		"email": "miguel@example.com",
+		"message": "I own Casa Miguel Cantina. Happy to show the lease."
+	},
+	"saves": [
+		"listing-golden-fork",
+		"listing-sakura-house",
+		"listing-greenwich-hotel",
+		"listing-fitlab"
+	]
+}

@@ -14,37 +14,50 @@ export const S = {
 		closed: "Closed",
 		featured: "Featured",
 		companyWebsite: "Company website",
+		yes: "Yes",
+		no: "No",
+		choose: "Choose one",
 	},
-	types: {
-		business: { name: "Business", hint: "Shops and local services" },
-		restaurant: { name: "Restaurant", hint: "Food and drink" },
-		realEstate: { name: "Real estate", hint: "Homes and rentals" },
-		hotel: { name: "Hotel", hint: "Rooms and stays" },
-		event: { name: "Event", hint: "Dates and venues" },
-		job: { name: "Job", hint: "Open roles" },
-		healthcare: { name: "Healthcare", hint: "Clinics and care" },
-		education: { name: "Education", hint: "Schools and classes" },
-		place: { name: "Place", hint: "Parks and landmarks" },
-		classified: { name: "Classified", hint: "Goods for sale" },
+	// The short line under each built-in type on the add-a-listing form, by type. Type names come from
+	// the plugin (the owner can rename them in the admin), so they are not here.
+	typeHints: {
+		business: "Shops and local services",
+		restaurant: "Food and drink",
+		"real-estate": "Homes and rentals",
+		hotel: "Rooms and stays",
+		event: "Dates and venues",
+		job: "Open roles",
+		healthcare: "Clinics and care",
+		education: "Schools and classes",
+		place: "Parks and landmarks",
+		classified: "Goods for sale",
+		software: "Plugins, apps and tools",
 	},
 	days: ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"],
-	fields: {
-		cuisine: { label: "Cuisine", help: "Italian, Korean, and so on." },
-		priceRange: { label: "Price range", help: "Use $ to $$$." },
-		stars: { label: "Stars", help: "1 to 5." },
-		beds: { label: "Bedrooms", help: "Whole number." },
-		baths: { label: "Bathrooms", help: "Whole number." },
-		price: { label: "Price", help: "Asking or nightly rate." },
-		starts: { label: "Starts", help: "Date and time, in this site's time zone." },
-		ends: { label: "Ends", help: "Date and time, in this site's time zone." },
-		salary: { label: "Salary", help: "Range is fine." },
-		jobType: { label: "Job type", help: "Full-time, contract, or intern." },
-		specialty: { label: "Specialty", help: "What the practice treats." },
-		program: { label: "Program", help: "Course or school name." },
-		askingPrice: { label: "Asking price", help: "What you want for the item." },
-		placeKind: { label: "Kind of place", help: "Park, museum, or trail." },
-		yearFounded: { label: "Year founded", help: "Four digits if you know it." },
-	},
+	// The short help under a built-in type's field on the add-a-listing form, by field. Labels come from
+	// the plugin (the owner can rename them in the admin), so they are not here.
+	// Help under a built-in type's own fields on the listing form, by type and field key. A field an
+	// owner added has no help here, even when its key matches a built-in one (fieldHelp below).
+	fieldHelp: {
+		"restaurant/cuisine": "Italian, Korean, and so on.",
+		"restaurant/price_range": "From $ to $$$$.",
+		"hotel/star_rating": "1 to 5.",
+		"real-estate/beds": "Whole number.",
+		"real-estate/baths": "Whole number.",
+		"real-estate/price": "Asking or nightly rate.",
+		"event/event_start": "Date and time, in this site's time zone.",
+		"event/event_end": "Date and time, in this site's time zone.",
+		"job/salary": "Range is fine.",
+		"job/job_type": "Full-time, contract, or intern.",
+		"healthcare/specialty": "What the practice treats.",
+		"education/program": "Course or school name.",
+		"classified/asking_price": "What you want for the item.",
+		"place/place_kind": "Park, museum, or trail.",
+		"business/year_founded": "Four digits if you know it.",
+		"software/install_command": "Shown as text to copy. It is never run.",
+		"software/repository": "Full address, starting with https.",
+		"software/homepage": "Full address, starting with https.",
+	} as Record<string, string>,
 	directory: {
 		title: "Listings",
 		description: "Browse the directory. Search by type, place, or name.",
@@ -64,6 +77,10 @@ export const S = {
 		sort: "Sort",
 		rating: "Rating",
 		titleSort: "Title",
+		highestFirst: "highest first",
+		lowestFirst: "lowest first",
+		newestFirst: "newest first",
+		oldestFirst: "oldest first",
 		grid: "Grid",
 		list: "List",
 		calendar: "Calendar",
@@ -72,6 +89,8 @@ export const S = {
 		noneYetTitle: "No listings yet",
 		noneYetBody: "This directory is empty. Be the first to add a listing.",
 		pages: "Pages of listings",
+		matching: "Matching listings",
+		unavailableTitle: "The directory cannot be shown right now",
 		searchDownTitle: "Search is not available right now",
 		searchDownBody: "Check your connection and try again.",
 		mapCredit: "OpenStreetMap",
@@ -115,6 +134,23 @@ export const S = {
 		adminsBody: "Only a site admin can import or export listings.",
 		queue: "Review them in the queue",
 		nothingLive: "Nothing is live until you approve it.",
+	},
+	sample: {
+		title: "Load the sample directory",
+		description: "Fill a new directory with sample listings, reviews and a claim.",
+		heading: "Sample directory",
+		intro: "Adds 17 listings (14 New York places and 3 Software listings) with reviews, saved listings and a claim waiting for you. Two of the listings wait for your approval. Keep this page open while it loads. Loading again adds only what is missing.",
+		load: "Load sample directory",
+		again: "Load again",
+		resume: "Continue loading",
+		checking: "Checking...",
+		related: "Adding reviews and ratings...",
+		partly: "Loading stopped part way. Press Continue loading to finish: listings already added are skipped.",
+		done: "The sample directory is loaded.",
+		view: "Open the directory",
+		queue: "Open the Listings queue",
+		stopped: "The site took too long to answer, so loading stopped. Press Continue loading to carry on: nothing is added twice.",
+		adminsBody: "Only a site admin can load the sample directory.",
 	},
 	submit: {
 		title: "Add a listing",
@@ -224,6 +260,8 @@ export const S = {
 		today: "today",
 		location: "Location",
 		claimed: "Claimed listing",
+		managedByAuthor: "Managed by its author",
+		poll: "Poll",
 		claimTitle: "Is this your business?",
 		claimHelp: "A claim goes to review. The decision shows in your account, under Claims.",
 		nameError: "Enter your name.",
@@ -250,6 +288,28 @@ export const S = {
 		signInReviewBody: "Reviews come from members of this site, so each one has a name behind it.",
 		signInClaim: "Sign in to claim this listing",
 		claimedByOwner: "This listing is managed by its owner.",
+	},
+	// The Software look: its card in the directory and the sections of its listing page.
+	software: {
+		viewOnGithub: "View on GitHub",
+		repository: "Repository",
+		docs: "Docs",
+		report: "Report",
+		reportMessage: "Something is wrong with this listing: ",
+		install: "Install",
+		installHelp: "Copy this line and run it yourself. Check what it does first.",
+		copy: "Copy",
+		copied: "Copied",
+		copyFailed: "Select the line and copy it.",
+		about: "About",
+		screenshots: "Screenshots",
+		maintainedBy: "Maintained by",
+		claimTitle: "Do you maintain this?",
+		stars: "stars or installs",
+		version: "Version",
+		lastRelease: "Last release",
+		openSource: "Open source",
+		badges: "About this software",
 	},
 	account: {
 		title: "Your listings",
@@ -335,6 +395,11 @@ export const S = {
 	},
 };
 
+/** The help under one of a type's fields on the listing form: only for a built-in type's own field. */
+export function fieldHelp(type: string, key: string): string {
+	return S.fieldHelp[`${type}/${key}`] ?? "";
+}
+
 export function listingCount(n: number): string {
 	return n === 1 ? "1 listing" : `${n} listings`;
 }
@@ -349,6 +414,18 @@ export function eventCount(n: number): string {
 
 export function pageOf(page: number, pages: number): string {
 	return `Page ${page} of ${pages}`;
+}
+
+export function pageNumber(page: number): string {
+	return `Page ${page}`;
+}
+
+export function starsOf(count: string): string {
+	return `${count} stars or installs`;
+}
+
+export function copyNamed(title: string): string {
+	return `Copy the install command for ${title}`;
 }
 
 export function saveNamed(title: string): string {
@@ -450,7 +527,7 @@ export function minutes(n: number): string {
 
 const CODES: Record<string, string> = {
 	SIGN_IN_REQUIRED: S.common.signInContinue,
-	RATE_LIMITED: "Too many requests. Try again in an hour.",
+	RATE_LIMITED: "Too many requests. Try again when the next hour starts.",
 	NOT_FOUND: "That listing is not available.",
 	BLOCKED: "This member cannot review.",
 	OWN_LISTING: "You cannot review your own listing.",
@@ -480,6 +557,10 @@ export function importProgress(done: number, total: number): string {
 /** The import stopped because the site did not answer in time. Nothing is lost and nothing doubles. */
 export function importStopped(imported: number, line: number): string {
 	return `The site took too long to answer, so the import stopped at row ${line} of your file. ${imported} ${imported === 1 ? "listing was" : "listings were"} added as drafts so far. Press Continue to carry on from row ${line}: rows already added are skipped, never added twice.`;
+}
+
+export function sampleProgress(done: number, total: number): string {
+	return `Loading listings: ${done} of ${total}...`;
 }
 
 export function exportProgress(rows: number): string {

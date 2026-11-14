@@ -1,16 +1,18 @@
 import type { PluginContext } from "emdash/plugin";
 
 import { budget, spend, type Budget } from "./lib/budget";
-import { editPatch } from "./lib/edits";
+import { termMap } from "./lib/directory";
+import { anyType, editPatch } from "./lib/edits";
 import { getListing, ownerOf, patchListing, publishNow } from "./lib/listings-query";
 import { mirrorRating, moveRating, partOf } from "./lib/ratings";
 import { KEY, loadSettings, PAGE, photosOn, type Settings, type View } from "./lib/settings";
-import { startSample, sampleState, type SampleState } from "./lib/onboard";
-import { LISTING_TYPES, LISTINGS } from "./lib/types";
+import { sampleState, type SampleState } from "./lib/onboard";
+import { LISTINGS, shownTypes, typeBySlug } from "./lib/types";
 import { nudgeUpgrade, upgradeDone, upgradeNote, type State } from "./lib/upgrade";
-import { asBoolean, asRecord, asString, nowIso, readCursor } from "./lib/util";
+import { asBoolean, asNumber, asRecord, asString, nowIso, readCursor, nil, none, kContext, kDivider, kHeader, kSection, kActions } from "./lib/util";
 import { CLAIM_TIMEOUT_MS } from "./lib/util";
-import { scheduleAll } from "./tasks";
+import { scheduleAll, soon } from "./tasks";
+import { handleTypes } from "./types-admin";
 
 export type BlockMap = Record<string, unknown> & { type: string };
 type Toast = { message: string; type: "success" | "error" | "info" };
@@ -30,7 +32,6 @@ type Where = NonNullable<Parameters<PluginContext["storage"][string]["count"]>[0
 /* ---- Small helpers ---- */
 
 const lowerText = (...parts: unknown[]) => parts.map((part) => asString(part)).join(" ").toLowerCase();
-const typeName = (slug: unknown) => LISTING_TYPES.find((type) => type.slug === asString(slug))?.name ?? "Business";
 const asNumberText = (value: unknown) => String(Number(value) || 0);
 const rowsOf = (items: Array<{ id: string; data: unknown }>): Row[] => items.map((item) => ({ ...asRecord(item.data), id: item.id }));
 
@@ -76,6 +77,9 @@ const after = (shown: number | undefined, decided: boolean) => (shown === undefi
 /** The guard for a stamped decision: the row is still waiting and is the version the admin saw. */
 const stampWhere = (stamp: string, status = "pending"): Where => (/^\d{4}-\d\d-\d\dT/.test(stamp) ? { status, createdAt: stamp } : { status, rev: stamp });
 
+/** A row put back in its list, with a new version so a click on the old one does not land. */
+const reopened = () => ({ status: "pending", rev: crypto.randomUUID() });
+
 /** A row left mid-decision by a cut-off request, older than any request may run. */
 const stale = (row: Record<string, unknown>) => Date.now() - Date.parse(asString(row.claimedAt) || "0") >= CLAIM_TIMEOUT_MS;
 
@@ -92,7 +96,7 @@ async function whyNot(ctx: Ctx, store: "submissions" | "edits" | "photos" | "rev
 	if ((status === "approving" || status === "rejecting") && stale(row) && spend(b)) {
 		// Only while it still holds that same claim: a new claim always writes a new time. A row from
 		// before claim times were kept (0.6.2) has none.
-		const back = await ctx.storage[store].updateIf(id, { where: { status, claimedAt: asString(row.claimedAt) || null }, set: { status: "pending", rev: crypto.randomUUID() } });
+		const back = await ctx.storage[store].updateIf(id, { where: { status, claimedAt: asString(row.claimedAt) || null }, set: { ...reopened() } });
 		if (back.applied) return { message: "A decision on this item was cut off part way. It is back in the list: check it and decide again.", type: "info" };
 	}
 	if (status === "approving" || status === "rejecting") return { message: "Someone else is deciding this right now. If they do not finish, it returns to the list within a few minutes.", type: "error" };
@@ -112,7 +116,7 @@ type ListDef = {
 };
 
 const LISTS: Record<ListDef["key"], ListDef> = {
-	queue: { key: "queue", store: "submissions", where: { status: { in: ["pending", "approving"] } }, order: { createdAt: "desc" }, text: (r) => lowerText(r.title, r.city, typeName(r.listing_type)) },
+	queue: { key: "queue", store: "submissions", where: { status: { in: ["pending", "approving"] } }, order: { createdAt: "desc" }, text: (r) => lowerText(r.title, r.city, r.listing_type) },
 	changes: { key: "changes", store: "edits", where: { status: { in: ["pending", "approving"] } }, order: { createdAt: "asc" }, text: (r) => lowerText(r.listing_title) },
 	photos: { key: "photos", store: "photos", where: { status: { in: ["pending", "approving", "rejecting"] } }, order: { createdAt: "asc" }, text: (r) => lowerText(r.listing_title, r.label) },
 	reviews: { key: "reviews", store: "reviews", where: { status: "pending" }, order: { createdAt: "desc" }, text: (r) => lowerText(r.listing_title, r.title, r.body, r.author) },
@@ -125,10 +129,12 @@ type Listed = { rows: Row[]; total: number; next?: string; back: boolean; find: 
 /**
  * The page of a list the admin is on: the waiting count and 25 rows from the saved place (two calls).
  * With find, the newest 100 waiting rows are searched (still two calls) and the page says so. After a
- * decision the count the page showed is passed in (`known`) and only the rows are read (one call).
+ * decision the count the page showed is passed in (`known`), used only when the call has no room to count.
  */
 async function listRows(ctx: Ctx, def: ListDef, view: View & { at?: string; back?: string[] }, b: Budget, known?: number): Promise<Listed> {
-	spend(b, known === undefined ? 2 : 1);
+	// Counted again whenever the call has room, so decisions other admins made meanwhile show (#91).
+	if (spend(b, 2)) known = undefined;
+	else spend(b);
 	const find = view.find.trim().toLowerCase();
 	const at = readCursor(view.at);
 	const [counted, page] = await Promise.all([
@@ -173,9 +179,9 @@ function listChrome(def: ListDef, listed: Listed, what: string): BlockMap[] {
 			text: `${listed.rows.length} ${what} contain "${listed.find}"${listed.scanned ? ` among the newest 100 of ${listed.total}` : ""}. Clear the box and press Find to see everything.`,
 		});
 	} else if (listed.total > PAGE) {
-		blocks.push({ type: "context", text: `${listed.total} ${what} in all, ${PAGE} per page.` });
+		blocks.push(kContext(`${listed.total} ${what} in all, ${PAGE} per page.`));
 	}
-	if (listed.back) blocks.push({ type: "actions", elements: [{ type: "button", label: "Previous page", action_id: `${def.key}_prev` }] });
+	if (listed.back) blocks.push(kActions([{ type: "button", label: "Previous page", action_id: `${def.key}_prev` }]));
 	return blocks;
 }
 
@@ -184,7 +190,9 @@ const stats = (label: string, value: number): BlockMap => ({ type: "stats", item
 /* ---- Listings queue (new listings) ---- */
 
 async function renderQueue(ctx: Ctx, settings: Settings, b: Budget, extra: Extra = {}): Promise<BlockResponse> {
-	const listed = await listRows(ctx, LISTS.queue, viewFor(settings, "queue"), b);
+	const typeName = (slug: unknown) => typeBySlug(settings.types, slug).name;
+	// Find matches the type's name as the owner has it, not only its slug.
+	const listed = await listRows(ctx, { ...LISTS.queue, text: (r) => lowerText(r.title, r.city, typeName(r.listing_type)) }, viewFor(settings, "queue"), b);
 	const rows = listed.rows.map((row) => {
 		const listingId = asString(row.listingId) || row.id;
 		const title = wrappable(asString(row.title) || "Untitled listing");
@@ -311,36 +319,33 @@ async function renderChanges(ctx: Ctx, settings: Settings, b: Budget, extra: Ext
 	for (const row of await withTitles(ctx, listed.rows, b)) {
 		if (!row.was) {
 			// Sent before 0.7.0 and not named yet: say so rather than show the old values as empty.
-			blocks.push({ type: "context", text: `${asString(row.listing_title) || "A listing"}: open this page again to see what the change replaces.` });
+			blocks.push(kContext(`${asString(row.listing_title) || "A listing"}: open this page again to see what the change replaces.`));
 			continue;
 		}
 		// The values the change replaces were kept with it, so this page reads nothing else. The same
 		// function the approval uses, so this screen cannot show one thing and apply another.
-		const { changes } = editPatch(asRecord(row.was), asRecord(row.fields));
+		const { changes } = editPatch(asRecord(row.was), asRecord(row.fields), row.listing_type ? typeBySlug(settings.types, row.listing_type) : anyType(settings.types));
 		blocks.push(
-			{ type: "section", text: `${asString(row.listing_title) || "A listing"}  ·  sent ${day(ctx, row.createdAt)}${row.status === "approving" ? "  ·  being approved" : ""}` },
+			kSection(`${asString(row.listing_title) || "A listing"}  ·  sent ${day(ctx, row.createdAt)}${row.status === "approving" ? "  ·  being approved" : ""}`),
 			...(changes.length === 0
-				? [{ type: "context", text: "Nothing differs from the live listing any more." }]
+				? [kContext("Nothing differs from the live listing any more.")]
 				: changes.flatMap((change) => [
-						{ type: "context", text: change.label },
+						kContext(change.label),
 						// Literal text, every character, never shortened and never read as formatting.
 						{ type: "code", language: "bash", code: `Now:\n${change.was || "(empty)"}\n\nAfter approval:\n${change.next || "(empty)"}` },
 					])),
-			{
-				type: "actions",
-				elements: [
+			kActions([
 					{ type: "button", label: "Approve and publish", action_id: "edit_mod", style: "primary", value: stamped("approve", row.id, row, listed.total) },
 					{ type: "button", label: "Reject", action_id: "edit_mod", value: stamped("reject", row.id, row, listed.total) },
-				],
-			},
+				]),
 		);
 	}
 	return page("Listing changes", extra, [
-		{ type: "context", text: "An owner changed a listing that is already public. The public page stays as it is until you approve." },
+		kContext("An owner changed a listing that is already public. The public page stays as it is until you approve."),
 		stats("Waiting", listed.total),
 		...listChrome(LISTS.changes, listed, "changes"),
 		...(blocks.length
-			? [...blocks, ...(listed.next ? [{ type: "actions", elements: [{ type: "button", label: "Next page", action_id: "changes_page", value: { cursor: listed.next } }] }] : [])]
+			? [...blocks, ...(listed.next ? [kActions([{ type: "button", label: "Next page", action_id: "changes_page", value: { cursor: listed.next } }])] : [])]
 			: [listed.find ? { type: "empty", title: "Nothing matches", description: "No waiting change is for a listing with that name." } : { type: "empty", title: "No changes waiting", description: "When an owner edits their live listing, the change waits here." }]),
 	]);
 }
@@ -358,7 +363,7 @@ async function decideChange(ctx: Ctx, settings: Settings, b: Budget, action: str
 	if (!claim.applied) return back(await whyNot(ctx, "edits", id, b, "Someone already handled that change."));
 	const edit = asRecord(claim.data);
 	const release = async (toast: Toast) => {
-		await ctx.storage.edits.updateIf(id, { where: { status: "approving" }, set: { status: "pending", rev: crypto.randomUUID() } });
+		await ctx.storage.edits.updateIf(id, { where: { status: "approving" }, set: { ...reopened() } });
 		return back(toast);
 	};
 	if (action !== "approve") {
@@ -379,12 +384,12 @@ async function decideChange(ctx: Ctx, settings: Settings, b: Budget, action: str
 	const was = asRecord(edit.was);
 	// Someone changed the listing since the owner did: the screen showed values that are no longer there.
 	if (Object.keys(was).some((key) => JSON.stringify(live[key] ?? "") !== JSON.stringify(was[key] ?? ""))) {
-		await ctx.storage.edits.updateIf(id, { where: { status: "approving" }, set: { status: "pending", rev: crypto.randomUUID(), was: Object.fromEntries(Object.keys(was).map((key) => [key, live[key] ?? ""])) } });
+		await ctx.storage.edits.updateIf(id, { where: { status: "approving" }, set: { ...reopened(), was: Object.fromEntries(Object.keys(was).map((key) => [key, live[key] ?? ""])) } });
 		return back({ message: "The live listing changed since the owner sent this. The page now shows its current values: check them and decide again.", type: "info" });
 	}
 	b.used -= 1;
 	// Built by the same function that drew the screen, from the same stored row.
-	const { patch } = editPatch(live, asRecord(edit.fields));
+	const { patch } = editPatch(live, asRecord(edit.fields), typeBySlug(settings.types, live.listing_type));
 	if (Object.keys(patch).length > 0) {
 		spend(b, 3);
 		const patched = await patchListing(ctx, listingId, patch, settings.fields, listing);
@@ -409,7 +414,7 @@ async function renderPhotos(ctx: Ctx, settings: Settings, b: Budget, extra: Extr
 			columns: [
 				[{ type: "image", url: asString(row.url), alt: `Photo added to ${title}` }],
 				[
-					{ type: "section", text: deciding ? `${title} (being decided)` : title },
+					kSection(deciding ? `${title} (being decided)` : title),
 					{
 						type: "fields",
 						fields: [
@@ -419,9 +424,7 @@ async function renderPhotos(ctx: Ctx, settings: Settings, b: Budget, extra: Extr
 							...(row.width && row.height ? [{ label: "Size", value: `${row.width} by ${row.height}` }] : []),
 						],
 					},
-					{
-						type: "actions",
-						elements: [
+					kActions([
 							{ type: "button", label: "Approve the photo", action_id: "photo_mod", style: "primary", value: stamped("approve", row.id, row, listed.total) },
 							{
 								type: "button",
@@ -430,8 +433,7 @@ async function renderPhotos(ctx: Ctx, settings: Settings, b: Budget, extra: Extr
 								value: stamped("reject", row.id, row, listed.total),
 								confirm: { title: "Delete this photo?", text: "The file is removed. This cannot be undone.", confirm: "Delete", deny: "Cancel" },
 							},
-						],
-					},
+						]),
 				],
 				[],
 			],
@@ -441,11 +443,11 @@ async function renderPhotos(ctx: Ctx, settings: Settings, b: Budget, extra: Extr
 		...(photosOn(settings) || !settings.fields || settings.fields.includes("gallery")
 			? []
 			: [{ type: "banner", title: "Owner photos need a Photos field", description: "Run the setup command from the install guide. It adds the field.", variant: "alert" }]),
-		{ type: "context", text: "An owner added a photo to their listing. It shows on the listing once you approve it. Rejecting deletes the file." },
+		kContext("An owner added a photo to their listing. It shows on the listing once you approve it. Rejecting deletes the file."),
 		stats("Waiting", listed.total),
 		...listChrome(LISTS.photos, listed, "photos"),
 		...(blocks.length
-			? [...blocks, ...(listed.next ? [{ type: "actions", elements: [{ type: "button", label: "Next page", action_id: "photos_page", value: { cursor: listed.next } }] }] : [])]
+			? [...blocks, ...(listed.next ? [kActions([{ type: "button", label: "Next page", action_id: "photos_page", value: { cursor: listed.next } }])] : [])]
 			: [listed.find ? { type: "empty", title: "Nothing matches", description: "No waiting photo is for a listing with that name." } : { type: "empty", title: "No photos waiting", description: "Photos owners add to their listings wait here." }]),
 	]);
 }
@@ -468,12 +470,12 @@ async function decidePhoto(ctx: Ctx, settings: Settings, b: Budget, action: stri
 		spend(b, 3);
 		await ctx.media?.delete?.(asString(photo.mediaId)).catch(() => false);
 		await ctx.storage.photos.delete(id);
-		await ctx.storage.submissions.updateIf(listingId, { where: { photo_n: { gte: 1 } }, delta: { photo_n: { dec: 1 } } }).catch(() => undefined);
+		await ctx.storage.submissions.updateIf(listingId, { where: { photo_n: { gte: 1 } }, delta: { photo_n: { dec: 1 } } }).catch(none);
 		return back({ message: "Photo rejected and deleted.", type: "success" });
 	}
 	// If the approval cannot finish, the photo goes back to waiting with a new version.
 	const release = async (message: string) => {
-		await ctx.storage.photos.updateIf(id, { where: { status: "approving" }, set: { status: "pending", rev: crypto.randomUUID() } });
+		await ctx.storage.photos.updateIf(id, { where: { status: "approving" }, set: { ...reopened() } });
 		return back({ message, type: "error" });
 	};
 	spend(b, 3);
@@ -530,22 +532,19 @@ async function renderReviews(ctx: Ctx, settings: Settings, b: Budget, extra: Ext
 	}));
 	const replyBlocks: BlockMap[] = replies.length
 		? [
-				{ type: "divider" },
-				{ type: "header", text: "Owner replies waiting" },
-				{ type: "context", text: "A listing owner answered a review. The reply shows under the review once you approve it." },
+				kDivider,
+				kHeader("Owner replies waiting"),
+				kContext("A listing owner answered a review. The reply shows under the review once you approve it."),
 				...replies.flatMap((review): BlockMap[] => [
-					{ type: "section", text: `${asString(review.listing_title) || "A listing"}  ·  reply sent ${day(ctx, review.reply_sent)}` },
-					{ type: "context", text: `Review by ${asString(review.author) || "a member"}, ${asNumberText(review.stars)} of 5:` },
-					{ type: "section", text: [asString(review.title), asString(review.body)].filter(Boolean).join(": ") || "(stars only)" },
-					{ type: "context", text: asString(review.owner_reply) ? "Owner's new reply (replaces the one showing now):" : "Owner's reply:" },
+					kSection(`${asString(review.listing_title) || "A listing"}  ·  reply sent ${day(ctx, review.reply_sent)}`),
+					kContext(`Review by ${asString(review.author) || "a member"}, ${asNumberText(review.stars)} of 5:`),
+					kSection([asString(review.title), asString(review.body)].filter(Boolean).join(": ") || "(stars only)"),
+					kContext(asString(review.owner_reply) ? "Owner's new reply (replaces the one showing now):" : "Owner's reply:"),
 					{ type: "code", language: "bash", code: asString(review.reply_draft) },
-					{
-						type: "actions",
-						elements: [
+					kActions([
 							{ type: "button", label: "Approve the reply", action_id: "reply_mod", style: "primary", value: `approve|${asString(review.reply_rev)}|${review.id}` },
 							{ type: "button", label: "Reject the reply", action_id: "reply_mod", value: `reject|${asString(review.reply_rev)}|${review.id}` },
-						],
-					},
+						]),
 				]),
 			]
 		: [];
@@ -676,7 +675,7 @@ async function decideClaim(ctx: Ctx, settings: Settings, b: Budget, action: stri
 	const row = asRecord(claim.data);
 	const listingId = asString(row.listingId);
 	const release = async (message: string) => {
-		await ctx.storage.claims.updateIf(id, { where: { status: "approving" }, set: { status: "pending", rev: crypto.randomUUID() } });
+		await ctx.storage.claims.updateIf(id, { where: { status: "approving" }, set: { ...reopened() } });
 		return back({ message, type: "error" });
 	};
 	spend(b, 4);
@@ -716,12 +715,10 @@ async function renderMessages(ctx: Ctx, settings: Settings, b: Budget, extra: Ex
 	const opened = view.open && spend(b) ? asRecord(await ctx.storage.contacts.get(view.open)) : null;
 	const openedBlocks: BlockMap[] = opened?.listingId
 		? [
-				{ type: "section", text: asString(opened.listing_title) || "A listing" },
-				{ type: "context", text: [asString(opened.name), asString(opened.email)].filter(Boolean).join(", ") || "No name given" },
+				kSection(asString(opened.listing_title) || "A listing"),
+				kContext([asString(opened.name), asString(opened.email)].filter(Boolean).join(", ") || "No name given"),
 				{ type: "code", language: "bash", code: asString(opened.message) },
-				{
-					type: "actions",
-					elements: [
+				kActions([
 						{
 							type: "button",
 							label: "Delete this message",
@@ -731,23 +728,27 @@ async function renderMessages(ctx: Ctx, settings: Settings, b: Budget, extra: Ex
 							confirm: { title: "Delete this message?", text: "This cannot be undone.", confirm: "Delete", deny: "Cancel" },
 						},
 						{ type: "button", label: "Close", action_id: "message_mod", value: "close|" },
-					],
-				},
+					]),
 			]
 		: [];
+	// A waiting row off the queue (once the upgrade has queued every 0.6.x message) was taken by the
+	// hourly task: notified only if its listing's owner was told since it came. A site with no email
+	// provider before 0.7.1 took rows off without telling anyone (#100). One read for the page.
+	const off = upgradeDone(settings) ? listed.rows.filter((row) => row.notice === "waiting" && !queued.has(row.id)) : [];
+	const subs = off.length && spend(b) ? await ctx.storage.submissions.getMany([...new Set(off.map((row) => asString(row.listingId)))]) : null;
+	const told = (row: Row) => (asNumber(asRecord(subs?.get(asString(row.listingId))).noticed) ?? 0) >= Date.parse(asString(row.createdAt));
 	const notice = (row: Row) =>
 		row.notice === "none"
 			? "Owner not notified"
-			: // A waiting row off the queue was sent, once the upgrade has queued every 0.6.x message.
-				row.notice === "sent" || (row.notice === "waiting" && !queued.has(row.id) && upgradeDone(settings))
-				? settings.emailMessages
+			: !settings.emailMessages
+				? "Email notices are off"
+				: row.notice === "sent" || (off.includes(row) && (!subs || told(row)))
 					? "Owner notified"
-					: "Email notices are off"
-				: !settings.emailMessages
-					? "Email notices are off"
 					: settings.noMail
 						? "Not notified: this site cannot send email"
-						: "Notice goes out within the hour";
+						: off.includes(row)
+							? "Owner not notified"
+							: "Notice goes out within the hour";
 	const table = (await withTitles(ctx, listed.rows, b)).map((row) => ({
 		listing: asString(row.listing_title) || "A listing",
 		from: [asString(row.name), asString(row.email)].filter(Boolean).join(", ") || "No name given",
@@ -829,8 +830,12 @@ async function decideMessage(ctx: Ctx, settings: Settings, b: Budget, value: str
 
 /* ---- Settings ---- */
 
+/** A kit page's full address. EmDash learns the site address only at server start, so a fresh site has none until a restart. */
+const siteUrl = (ctx: Ctx, path: string) => (/^https?:\/\//.test(asString(ctx.site?.url)) ? new URL(path, asString(ctx.site.url)).href : "");
+
 export async function renderSettings(ctx: Ctx, settings: Settings, _b: Budget, extra: Extra = {}): Promise<BlockResponse> {
-	const importUrl = /^https?:\/\//.test(asString(ctx.site?.url)) ? new URL("/listings/import/", asString(ctx.site.url)).href : "";
+	const rc = settings.recat;
+	const importUrl = siteUrl(ctx, "/listings/import/");
 	const noStatus = settings.fields ? !settings.fields.includes("listing_status") : false;
 	return page("Listora settings", extra, [
 		{
@@ -839,7 +844,7 @@ export async function renderSettings(ctx: Ctx, settings: Settings, _b: Budget, e
 				{
 					label: "Listings",
 					blocks: [
-						{ type: "context", text: "New listings wait in the queue until you approve them, unless you turn that off." },
+						kContext("New listings wait in the queue until you approve them, unless you turn that off."),
 						{
 							type: "form",
 							block_id: "settings_submissions",
@@ -850,7 +855,10 @@ export async function renderSettings(ctx: Ctx, settings: Settings, _b: Budget, e
 									action_id: "default_listing_type",
 									label: "Default listing type",
 									initial_value: settings.defaultListingType,
-									options: LISTING_TYPES.map((type) => ({ label: type.name, value: type.slug })),
+									// Types offered for new listings, plus the current default if the owner has hidden it since.
+									options: settings.types
+										.filter((type) => !type.hidden || type.slug === settings.defaultListingType)
+										.map((type) => ({ label: type.name, value: type.slug })),
 								},
 								{ type: "text_input", action_id: "spam_keywords", label: "Blocked words, separated by commas", initial_value: settings.spamKeywords },
 							],
@@ -864,7 +872,7 @@ export async function renderSettings(ctx: Ctx, settings: Settings, _b: Budget, e
 						...(noStatus
 							? [{ type: "banner", title: "Expired listings stay on your listing pages", description: "Your listings type has no listing_status field, so an expired listing leaves Listora's directory routes but not pages that read the listings directly. The install guide shows how to add it.", variant: "default" }]
 							: []),
-						{ type: "context", text: "0 means a listing never expires. Above 0, it leaves the directory after that many days and its owner can renew it. Listora keeps each listing's date itself." },
+						kContext("0 means a listing never expires. Above 0, it leaves the directory after that many days and its owner can renew it. Listora keeps each listing's date itself."),
 						{
 							type: "form",
 							block_id: "settings_lifetime",
@@ -889,7 +897,7 @@ export async function renderSettings(ctx: Ctx, settings: Settings, _b: Budget, e
 									},
 								]
 							: []),
-						{ type: "context", text: "Owners add photos from their account. Each one waits on the Listing photos page until you approve it. 0 turns this off." },
+						kContext("Owners add photos from their account. Each one waits on the Listing photos page until you approve it. 0 turns this off."),
 						{
 							type: "form",
 							block_id: "settings_photos",
@@ -901,7 +909,7 @@ export async function renderSettings(ctx: Ctx, settings: Settings, _b: Budget, e
 				{
 					label: "Email",
 					blocks: [
-						{ type: "context", text: "One short notice an hour to the owner's account email. The message itself stays on the site." },
+						kContext("One short notice an hour to the owner's account email. The message itself stays on the site."),
 						{
 							type: "form",
 							block_id: "settings_messages",
@@ -913,15 +921,33 @@ export async function renderSettings(ctx: Ctx, settings: Settings, _b: Budget, e
 			],
 		},
 		// Not a tab: it is one link, and a fifth tab did not fit the tab row at 768 and 390.
-		{ type: "divider" },
+		kDivider,
 		{
 			type: "context",
 			// EmDash learns the site address only at server start, so a fresh site has none until a
 			// restart: name the page then, so the owner can still reach it.
 			text: `Import and export: download published listings, or add drafts from a spreadsheet. Nothing goes live until you approve it.${importUrl ? "" : " Open /listings/import/ on your site while signed in."}`,
 		},
-		...(importUrl ? [{ type: "actions", elements: [{ type: "link", label: "Open import and export", target: { kind: "external", url: importUrl } }] }] : []),
+		...(importUrl ? [kActions([{ type: "link", label: "Open import and export", target: { kind: "external", url: importUrl } }])] : []),
+		kDivider,
+		// The version token is the press it follows, so a second press (another tab, a double click) starts nothing.
+		kActions([{ type: "button", action_id: "recat", label: "Refresh categories now", value: String(rc.at) }]),
+		kContext(`A category changed in EmDash's sidebar shows in the directory within a few hours, at once when its listing is published, or when this refresh finishes.${rc.at ? (rc.done ? ` Last finished ${when(ctx, rc.done)}.` : ` Running since ${when(ctx, rc.at)}.`) : ""}`),
 	]);
+}
+
+const when = (ctx: Ctx, at: number) => `${day(ctx, at)}, ${new Date(at).toISOString().slice(11, 16)} (UTC)`;
+
+/** Refresh categories now: every listing's categories read again by the sweep chain (tasks.ts). Four calls at most. */
+async function refreshCats(ctx: Ctx, settings: Settings, b: Budget, token: string): Promise<BlockResponse> {
+	const rc = settings.recat;
+	spend(b, 3);
+	const running = (await ctx.cron?.list())?.some((task) => task.name.startsWith("sweep-more"));
+	if (token !== String(rc.at) || (running && !rc.done && rc.at)) return renderSettings(ctx, settings, b, { toast: { message: "A refresh is already running or just finished.", type: "info" } });
+	await ctx.settings.set(KEY.recat, (settings.recat = { at: Date.now(), done: 0 }));
+	// A chain already running goes back to the first listing by itself.
+	if (!running) await ctx.cron?.schedule("sweep-more", { schedule: soon(), data: { at: "" } });
+	return renderSettings(ctx, settings, b, { toast: { message: "Refreshing categories in the background.", type: "success" } });
 }
 
 /**
@@ -930,13 +956,13 @@ export async function renderSettings(ctx: Ctx, settings: Settings, _b: Budget, e
  */
 async function refreshCaches(ctx: Ctx, settings: Settings, b: Budget): Promise<boolean> {
 	spend(b, 2);
-	const [collection, terms] = await Promise.all([ctx.schema?.getCollection(LISTINGS).catch(() => null) ?? null, ctx.taxonomies?.getTerms("listing_category").catch(() => []) ?? []]);
+	const [collection, terms] = await Promise.all([ctx.schema?.getCollection(LISTINGS).catch(nil) ?? null, ctx.taxonomies?.getTerms("listing_category").catch(() => []) ?? []]);
 	const fields = collection ? collection.fields.map((field) => field.slug) : null;
 	if (JSON.stringify(fields) !== JSON.stringify(settings.fields) && spend(b)) {
 		await ctx.settings.set(KEY.fields, fields);
 		settings.fields = fields;
 	}
-	const map = Object.fromEntries((terms ?? []).map((term) => [term.slug, term.id]));
+	const map = termMap(terms);
 	if (JSON.stringify(map) !== JSON.stringify(settings.terms) && spend(b)) {
 		await ctx.settings.set(KEY.terms, map);
 		settings.terms = map;
@@ -950,7 +976,8 @@ async function saveSettings(ctx: Ctx, settings: Settings, b: Budget, actionId: s
 	switch (actionId) {
 		case "save_submissions": {
 			spend(b, 3);
-			const type = LISTING_TYPES.some((item) => item.slug === asString(values.default_listing_type)) ? asString(values.default_listing_type) : "business";
+			const wanted = asString(values.default_listing_type);
+			const type = shownTypes(settings.types).some((item) => item.slug === wanted) || wanted === settings.defaultListingType ? wanted : "business";
 			await ctx.settings.set("default_listing_type", type);
 			await ctx.settings.set("require_moderation", asBoolean(values.require_moderation));
 			await ctx.settings.set("spam_keywords", asString(values.spam_keywords));
@@ -1003,7 +1030,7 @@ export async function renderWaiting(ctx: Ctx): Promise<BlockResponse> {
 	return {
 		blocks: [
 			total === 0
-				? { type: "section", text: "Nothing is waiting." }
+				? kSection("Nothing is waiting.")
 				: {
 						// Four tiles, one per kind: seven did not fit a half-width card at 1440.
 						type: "stats",
@@ -1014,17 +1041,14 @@ export async function renderWaiting(ctx: Ctx): Promise<BlockResponse> {
 							{ label: "Messages", value: messages },
 						],
 					},
-			{
-				type: "actions",
-				elements: [
+			kActions([
 					link("Listings queue", "/queue"),
 					...(edits ? [link("Listing changes", "/changes")] : []),
 					...(photos ? [link("Listing photos", "/photos")] : []),
 					link("Listing reviews", "/reviews"),
 					link("Claims", "/claims"),
 					link("Messages", "/messages"),
-				],
-			},
+				]),
 		],
 	};
 }
@@ -1043,8 +1067,8 @@ export function kitBlocks(ctx: Ctx, settings: Settings): BlockMap[] {
 	const guide = { type: "link", label: "Install guide", target: { kind: "external", url: `${REPO_URL}/blob/${tag}/docs/website/getting-started/install.md` } };
 	if (settings.kitDone) {
 		return [
-			{ type: "context", text: `Visitor pages come from the Listora site kit. After each plugin update, copy the kit for ${tag} again.` },
-			{ type: "actions", elements: [guide, { type: "button", action_id: "kit_show", label: "Show the setup steps again" }] },
+			kContext(`Visitor pages come from the Listora site kit. After each plugin update, copy the kit for ${tag} again.`),
+			kActions([guide, { type: "button", action_id: "kit_show", label: "Show the setup steps again" }]),
 		];
 	}
 	return [
@@ -1054,7 +1078,7 @@ export function kitBlocks(ctx: Ctx, settings: Settings): BlockMap[] {
 			description: "Installing Listora adds this admin, not pages on your site. The visitor pages come from the Listora site kit. Until you copy it, the addresses below show your site's 404 page.",
 			variant: "default",
 		},
-		{ type: "context", text: `From your site's root folder, run this command. It copies the kit for the version you have installed (${tag}) into a fresh folder only you can write to.` },
+		kContext(`From your site's root folder, run this command. It copies the kit for the version you have installed (${tag}) into a fresh folder only you can write to.`),
 		{
 			type: "code",
 			language: "bash",
@@ -1062,7 +1086,7 @@ export function kitBlocks(ctx: Ctx, settings: Settings): BlockMap[] {
 			// at 768 and wider. On a phone the guide link below has the same command.
 			code: [`kit="$(mktemp -d)" &&`, `  git clone --depth 1 \\`, `    --branch ${tag} \\`, `    ${REPO_URL} \\`, `    "$kit/emdash-listora" &&`, `  "$kit/emdash-listora/scripts/add-to-site.sh" .`].join("\n"),
 		},
-		{ type: "actions", elements: [{ ...guide, label: "Copy it from the install guide on a phone" }] },
+		kActions([{ ...guide, label: "Copy it from the install guide on a phone" }]),
 		{
 			type: "fields",
 			fields: [
@@ -1074,15 +1098,15 @@ export function kitBlocks(ctx: Ctx, settings: Settings): BlockMap[] {
 				{ label: "Owner dashboard", value: "/account/" },
 			],
 		},
-		{ type: "actions", elements: [{ type: "button", action_id: "kit_done", label: "Visitor pages are set up", style: "primary" }] },
+		kActions([{ type: "button", action_id: "kit_done", label: "Visitor pages are set up", style: "primary" }]),
 	];
 }
 
-function onboardBlocks(hasCollection: boolean, listings: boolean, sample: SampleState): BlockMap[] {
+function onboardBlocks(ctx: Ctx, hasCollection: boolean, listings: boolean, sample: SampleState): BlockMap[] {
+	const url = siteUrl(ctx, "/listings/sample/");
 	const missing = hasCollection
-		? "The listings collection is ready. Load sample data so the first visit shows real NYC cards, reviews, and a claim."
+		? `The listings collection is ready. Load sample data so the first visit shows cards, reviews, and a claim: 17 listings (3 Software), two waiting for your approval. It runs on the site kit page /listings/sample/ while you keep it open.${url ? "" : " Open it on your site while signed in."}`
 		: "This site has no listings collection yet. The command above prints the step that creates it. Then load sample data here.";
-	const running = sample.running;
 	return [
 		{ type: "banner", title: "Get a finished first look", description: missing, variant: hasCollection ? "default" : "alert" },
 		{
@@ -1090,30 +1114,10 @@ function onboardBlocks(hasCollection: boolean, listings: boolean, sample: Sample
 			fields: [
 				{ label: "Listings collection", value: hasCollection ? "Ready" : "Missing" },
 				{ label: "Published listings", value: listings ? "Yes" : "None yet" },
-				{ label: "Sample data", value: sample.done ? "Loaded" : running ? `Loading: ${sample.created} of ${sample.total} listings. More every minute.` : "Not loaded" },
+				{ label: "Sample data", value: sample.done ? "Loaded" : sample.running ? `Part loaded: ${sample.created} of ${sample.total} listings. Open the sample page to finish.` : "Not loaded" },
 			],
 		},
-		...(running || sample.done
-			? []
-			: [
-					{
-						type: "actions",
-						elements: [
-							{
-								type: "button",
-								action_id: "load_sample",
-								label: "Load sample directory",
-								style: "primary",
-								confirm: {
-									title: "Load sample listings?",
-									text: "Adds 12 NYC listings with reviews, favorites and a pending claim, plus two listings waiting for your approval. It takes a few minutes and runs by itself. Safe to run more than once.",
-									confirm: "Load sample data",
-									deny: "Cancel",
-								},
-							},
-						],
-					},
-				]),
+		...(hasCollection && url && !sample.done ? [kActions([{ type: "link", label: sample.running ? "Finish loading the sample directory" : "Load sample directory", target: { kind: "external", url } }])] : []),
 	];
 }
 
@@ -1130,15 +1134,15 @@ async function renderSetup(ctx: Ctx, settings: Settings, b: Budget, extra: Extra
 	}
 	const hasCollection = settings.fields ? true : await refreshCaches(ctx, settings, b);
 	spend(b, 2);
-	const [first, sample] = await Promise.all([hasCollection ? ctx.content?.list(LISTINGS, { limit: 1 }).catch(() => null) : null, sampleState(ctx)]);
+	const [first, sample] = await Promise.all([hasCollection ? ctx.content?.list(LISTINGS, { limit: 1 }).catch(nil) : null, sampleState(ctx)]);
 	const listings = Boolean(first?.items.length);
 	if (hasCollection && (listings || sample.done) && !sample.running && spend(b)) {
 		// From the next visit this page is the queue with the kit card on top.
 		await ctx.settings.set(KEY.ready, true);
 		settings.ready = true;
-		return page("Get started", extra, [...kit, { type: "divider" }, { type: "section", text: "Your directory has listings. Approve new ones in the Listings queue." }, { type: "actions", elements: [{ type: "link", label: "Open the Listings queue", target: { kind: "plugin-page", path: "/queue" } }] }]);
+		return page("Get started", extra, [...kit, kDivider, kSection("Your directory has listings. Approve new ones in the Listings queue."), kActions([{ type: "link", label: "Open the Listings queue", target: { kind: "plugin-page", path: "/queue" } }])]);
 	}
-	return page("Get started", extra, [...kit, { type: "divider" }, { type: "section", text: "Sample data fills the directory so the first visit looks finished." }, ...onboardBlocks(hasCollection, listings, sample)]);
+	return page("Get started", extra, [...kit, kDivider, kSection("Sample data fills the directory so the first visit looks finished."), ...onboardBlocks(ctx, hasCollection, listings, sample)]);
 }
 
 /* ---- Pages and dispatch ---- */
@@ -1147,7 +1151,7 @@ type Extra = { toast?: Toast; note?: string; total?: number };
 
 function page(title: string, extra: Extra, blocks: BlockMap[]): BlockResponse {
 	return {
-		blocks: [{ type: "header", text: title }, ...(extra.note ? [{ type: "banner", title: "Bringing your data over", description: extra.note, variant: "default" }] : []), ...blocks],
+		blocks: [kHeader(title), ...(extra.note ? [{ type: "banner", title: "Bringing your data over", description: extra.note, variant: "default" }] : []), ...blocks],
 		toast: extra.toast,
 	};
 }
@@ -1155,8 +1159,9 @@ function page(title: string, extra: Extra, blocks: BlockMap[]): BlockResponse {
 type ListKey = ListDef["key"];
 const viewFor = (settings: Settings, list: string) => (settings.views[list] ?? { show: PAGE, find: "", open: "" }) as View & { at?: string; back?: string[] };
 
-const PAGES: Array<[string, ListKey | "setup" | "settings"]> = [
+const PAGES: Array<[string, ListKey | "setup" | "settings" | "types"]> = [
 	["setup", "setup"],
+	["types", "types"],
 	["started", "setup"],
 	["settings", "settings"],
 	["changes", "changes"],
@@ -1210,6 +1215,13 @@ export async function handleAdmin(input: unknown, ctx: Ctx): Promise<BlockRespon
 	const settings = await loadSettings(ctx);
 	const which = PAGES.find(([key]) => path.includes(key))?.[1] ?? "queue";
 
+	// The Types page keeps no state of its own (types-admin.ts).
+	if (which === "types" || /^(types?|fields?)_/.test(action)) {
+		const note = type === "page_load" ? upgradeNote(await nudgeUpgrade(ctx, settings, b)) : "";
+		const shown = await handleTypes(ctx, settings, b, raw);
+		return note ? { ...shown, blocks: [shown.blocks[0], { type: "banner", title: "Bringing your data over", description: note, variant: "default" }, ...shown.blocks.slice(1)] } : shown;
+	}
+
 	if (type === "page_load") {
 		// Opening a page starts its list at the top.
 		if (which !== "setup" && which !== "settings") await saveView(ctx, settings, b, which, { at: "", back: [], find: "", show: PAGE, open: "" });
@@ -1241,13 +1253,7 @@ export async function handleAdmin(input: unknown, ctx: Ctx): Promise<BlockRespon
 		return renderSetup(ctx, settings, b, action === "kit_done" ? { toast: { message: "Noted. The install guide link stays on this page.", type: "success" } } : {});
 	}
 
-	if (type === "block_action" && action === "load_sample") {
-		const hasCollection = settings.fields ? true : await refreshCaches(ctx, settings, b);
-		if (!hasCollection) return renderSetup(ctx, settings, b, { toast: { message: "Create a listings collection first, then load sample data.", type: "error" } });
-		const started = await startSample(ctx, b);
-		return renderSetup(ctx, settings, b, { toast: { message: started.message, type: started.ok ? "success" : "error" } });
-	}
-
+	if (type === "block_action" && action === "recat") return refreshCats(ctx, settings, b, asString(raw.value));
 	if (type === "form_submit" && action.startsWith("save_")) return saveSettings(ctx, settings, b, action, asRecord(raw.values));
 
 	if (type === "block_action" && action === "review") {

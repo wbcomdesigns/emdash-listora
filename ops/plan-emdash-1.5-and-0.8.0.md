@@ -101,12 +101,25 @@ WordPress Listora Free ships "custom listing types with a flexible custom-field 
 | 7 | Keyword search through core | Use EmDash core search (`search()`, with collection search on) for keywords. The index handles type, category and sort. Drop the description from the stored `card` to keep rows small (50 ms CPU limit) |
 | 8 | Outside-source sync | A developer guide: create, update and publish through the content API, throttle, retry REENTRANT and 409, check the index afterwards. Add a hook budget test and a 6,000-listing filter and sort test. The sweep gets a follow-on run ("sweep-more") so a full repair takes hours, not days |
 
-Open owner questions, asked one at a time:
+Owner decisions (2026-11-13):
 
-1. Can built-in types be edited and deleted, or only hidden?
-2. Are the field kinds text, number, select, link and date enough?
-3. Are three sortable number slots per type enough?
-4. #83 (for 0.7.0).
+1. Built-in types: edit and hide, never delete. Custom types can be deleted only while no listing uses them.
+2. Field kinds: six. Text, number, choice from a list, link, date, yes/no. No multi-choice (categories and tags cover it).
+3. Sort slots: three number or date fields per type (`n1` to `n3`), offered once a type is picked.
+4. #83 (0.7.0): a listing a member adds counts as theirs, fixed in code (`SUBMITTER_IS_OWNER`), no admin setting.
+
+### Software type (owner, 2026-11-14)
+
+An 11th built-in type, `software`, for open-source skills, agents, plugins and apps. One type, not one per kind.
+
+- Location-less (item 5): no map, city, hours, directions, Open or Closed, address.
+- Structured data: schema.org `SoftwareApplication` (applicationCategory from "What it is", operatingSystem from "Works with", offers from Price, softwareVersion, aggregateRating from reviews).
+- Fields (the six kinds): What it is (choice: Plugin, Skill, Agent, MCP server, App, Library, Theme; shown as filter chips), Works with (choice: WordPress, EmDash, Claude Code, Cursor, VS Code, npm, Python, Any), Repository (link, main button), Homepage or docs (link), Install command (text, shown escaped in a code box with Copy, never run), Version (text), License (choice), Price (choice: Free, Freemium, Paid), Open source (yes/no), Stars or installs (number), Last release (date), Released (date).
+- Sort slots: stars or installs, last release, released.
+- Links from member-submitted listings carry `rel="nofollow ugc"`.
+- No `network:request` capability (it would make every site re-approve Listora). Live GitHub stars and latest release come from the site kit in the visitor's browser (GitHub's public API), and wbcomplugins.com's nightly sync writes them into the fields.
+- Sample directory gains two or three Software listings so the type shows on a fresh site.
+- Kit: a Software card (logo, one line, kind and platform badges, rating, stars, version and last release, View on GitHub) and a listing page section (Install box, Details, screenshots from the photo feature, reviews, poll, Maintained by / Claim).
 
 Not in 0.8.0: per-type moderation, maps for software, paid features, a native (trusted) block.
 

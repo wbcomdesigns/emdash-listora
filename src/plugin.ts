@@ -1,15 +1,17 @@
 import type { PluginContext, SandboxedPlugin } from "emdash/plugin";
 
 import { handleAdmin } from "./admin";
-import { hideListing, indexListing } from "./lib/directory";
+import { catsOf, hideListing, indexListing, onSite } from "./lib/directory";
 import { readRating } from "./lib/ratings";
 import { loadSettings } from "./lib/settings";
-import { LISTING_TYPES, LISTINGS, listingTypeBySlug } from "./lib/types";
-import { asNumber, asRecord, asString } from "./lib/util";
-import { sampleStep } from "./lib/onboard";
+import { webAddress } from "./lib/edits";
+import { LISTINGS, typeBySlug } from "./lib/types";
+import { asNumber, asRecord, asString, nil, none } from "./lib/util";
+import { sampleRoute } from "./lib/onboard";
+import { ownerOf } from "./lib/listings-query";
 import { claim, dashboard, edit, favorites, message, photo, photoRemove, privacy, renew, reply, review, submit } from "./member";
 import { contact, duplicate, listings, mapPoints, ratings, reviews, suggest } from "./public";
-import { expireAndWarn, notifyOwners, runUpgrade, scheduleAll, sweep, tidy } from "./tasks";
+import { expireAndWarn, notifyOwners, runUpgrade, scheduleAll, sweep, sweepFix, tidy } from "./tasks";
 import { exportCsv, importCsv } from "./transfer";
 import { PHOTO_MAX_BYTES } from "./lib/photos";
 export { imageType } from "./lib/photos";
@@ -26,15 +28,28 @@ type Item = { id: string; slug: string | null; status: string; data: Record<stri
 const itemOf = (content: unknown) => content as Item;
 
 /**
- * A listing changed state: bring its directory row up to date. One call when the row exists (a
- * merge), four when the listing is new to the index (its rating and its starting expiry date are
- * read). A plugin's own publish runs this too, after the call that published.
+ * A listing changed state: bring its directory row up to date. Three calls when the row exists (the
+ * settings, for the type's sort slots, its categories and a merge), six or seven when the listing is
+ * new to the index (its rating and its submission row are read), then its category rows (none to
+ * three calls). A plugin's own publish runs this too, after the call that published.
+ *
+ * A member's listing published from EmDash's own content screen or API, not Listora's queue, still
+ * has its submission waiting: it is approved here with the date the queue would give it, so the
+ * member manages it ("Managed by its author") whichever way it went live. The queue's own approval
+ * marks the row "approving" first, so the two never both decide.
  */
 async function indexFromHook(ctx: PluginContext, content: unknown): Promise<void> {
 	const item = itemOf(content);
 	if (!item?.id) return;
 	if (item.status !== "published") return hideListing(ctx, item.id);
-	await indexListing(ctx, item, async () => asNumber(asRecord(await ctx.storage.submissions.get(item.id).catch(() => null)).expires_at) ?? 0);
+	const [settings, cats] = await Promise.all([loadSettings(ctx), catsOf(ctx, item.id)]);
+	await indexListing(ctx, item, settings.types, async () => {
+		const sub = asRecord(await ctx.storage.submissions.get(item.id).catch(nil));
+		if (sub.status !== "pending" || !sub.member_id) return asNumber(sub.expires_at) ?? 0;
+		const exp = settings.expiryDays ? Date.now() + settings.expiryDays * 86_400_000 : 0;
+		await ctx.storage.submissions.updateIf(item.id, { where: { status: "pending" }, set: { status: "approved", expires_at: exp } }).catch(none);
+		return exp;
+	}, cats);
 }
 
 /**
@@ -63,9 +78,11 @@ const plugin: SandboxedPlugin = {
 				if (task === "notify" || task === "notify-more") await notifyOwners(ctx, event.name);
 				else if (task === "expire" || task === "expire-more") await expireAndWarn(ctx, event.name);
 				else if (task === "tidy") await tidy(ctx);
-				else if (task === "sweep") await sweep(ctx);
+				else if (task === "sweep" || task === "sweep-more") await sweep(ctx, event.name, event.data);
+				else if (task.startsWith("sweep-fix")) await sweepFix(ctx, event.data);
 				else if (task === "upgrade") await runUpgrade(ctx, event.name);
-				else if (event.name === "sample") await sampleStep(ctx);
+				// The per-minute sample task of 0.7.x: the kit's sample page loads it now.
+				else if (event.name === "sample") await ctx.cron?.cancel("sample").catch(none);
 			},
 		},
 		// The directory index follows every listing's state. EmDash tells the plugin when one changes.
@@ -84,7 +101,7 @@ const plugin: SandboxedPlugin = {
 			handler: async (event, ctx) => {
 				if (event.collection !== LISTINGS) return;
 				const id = asString(asRecord(event.content).id);
-				await ctx.storage.submissions.updateIf(id, { where: { gone: true }, set: { gone: false } }).catch(() => undefined);
+				await ctx.storage.submissions.updateIf(id, { where: { gone: true }, set: { gone: false } }).catch(none);
 				await indexFromHook(ctx, event.content);
 			},
 		},
@@ -93,7 +110,7 @@ const plugin: SandboxedPlugin = {
 			handler: async (event, ctx) => {
 				if (event.collection !== LISTINGS) return;
 				await hideListing(ctx, event.id);
-				await ctx.storage.submissions.updateIf(event.id, { where: {}, set: { gone: true } }).catch(() => undefined);
+				await ctx.storage.submissions.updateIf(event.id, { where: {}, set: { gone: true } }).catch(none);
 			},
 		},
 		// A save that changed the live listing (a listings type without drafts): the index follows it.
@@ -104,15 +121,23 @@ const plugin: SandboxedPlugin = {
 				if (item.status === "published" && !item.draftRevisionId) await indexFromHook(ctx, item);
 			},
 		},
-		// Adds the rating to a listing page's structured data. Nothing for unrated listings. Two calls.
+		// Adds the rating to a listing page's structured data (nothing for an unrated listing), and for
+		// Software the whole SoftwareApplication. Three calls,
+		// side by side: the rating, the listing's index row (its type) and the settings (the types store).
 		"page:metadata": {
 			handler: async (event, ctx) => {
 				const content = event.page.content;
 				if (!content || content.collection !== LISTINGS) return null;
-				const [stored, row] = await Promise.all([ctx.storage.ratings.get(content.id), ctx.storage.directory.get(content.id)]);
+				const [stored, row, settings] = await Promise.all([ctx.storage.ratings.get(content.id), ctx.storage.directory.get(content.id), loadSettings(ctx)]);
 				const rating = readRating(stored);
-				if (!rating.count) return null;
-				const schema = asString(asRecord(stored).schema) || listingTypeBySlug(asString(asRecord(row).type)).schemaType;
+				// The type's schema.org type as the owner has it now. A 0.6.x rating row's saved copy only
+				// when the listing is not in the index yet.
+				const slug = asString(asRecord(row).type);
+				const schema = slug ? typeBySlug(settings.types, slug).schemaType : asString(asRecord(stored).schema) || "LocalBusiness";
+				// Software gets the whole SoftwareApplication here (the kit page leaves its own block out);
+				// every other type only the rating, added to the page's own block.
+				const software = schema === "SoftwareApplication";
+				if (!software && !rating.count) return null;
 				return {
 					kind: "jsonld",
 					id: "listora-rating",
@@ -121,7 +146,8 @@ const plugin: SandboxedPlugin = {
 						// Same @id as the listing page's own block, so the two read as one thing.
 						"@id": `${event.page.canonical || event.page.url}#listing`,
 						"@type": schema,
-						aggregateRating: { "@type": "AggregateRating", ratingValue: rating.average, reviewCount: rating.count, bestRating: 5, worstRating: 1 },
+						...(software ? softwareGraph(asRecord(asRecord(row).card), event.page) : {}),
+						...(rating.count ? { aggregateRating: { "@type": "AggregateRating", ratingValue: rating.average, reviewCount: rating.count, bestRating: 5, worstRating: 1 } } : {}),
 					},
 				};
 			},
@@ -135,10 +161,12 @@ const plugin: SandboxedPlugin = {
 				ok: true,
 				plugin: ctx.plugin.id,
 				version: ctx.plugin.version,
-				listingsCollection: Boolean(await ctx.schema?.getCollection(LISTINGS).catch(() => null)),
+				listingsCollection: Boolean(await ctx.schema?.getCollection(LISTINGS).catch(nil)),
 			}),
 		},
-		types: { public: true, cacheControl: CACHE, handler: async () => ({ ok: true, items: LISTING_TYPES }) },
+		// Every type with its fields, hidden ones included (their listings still show the name): the kit
+		// offers only the ones not hidden. One call (the settings, where the owner's types live).
+		types: { public: true, cacheControl: CACHE, handler: async (_routeCtx, ctx) => ({ ok: true, items: (await loadSettings(ctx)).types }) },
 		listings: { public: true, cacheControl: CACHE, handler: async (routeCtx, ctx) => listings(routeCtx.input, ctx) },
 		search: {
 			public: true,
@@ -153,6 +181,19 @@ const plugin: SandboxedPlugin = {
 		duplicate: { public: true, cacheControl: CACHE, handler: async (routeCtx, ctx) => duplicate(routeCtx.input, ctx) },
 		ratings: { public: true, cacheControl: CACHE, methods: ["GET"], handler: async (routeCtx, ctx) => ratings(routeCtx.input, ctx) },
 		reviews: { public: true, cacheControl: CACHE, methods: ["GET"], handler: async (routeCtx, ctx) => reviews(routeCtx.input, ctx) },
+		// Who manages a listing, for its public page: "claim" when an approved claim moved it to a member,
+		// "author" when the member who added it does, else "" (and for a listing that is not on the site).
+		// Names no member. Two calls.
+		manager: {
+			public: true,
+			cacheControl: CACHE,
+			methods: ["GET"],
+			handler: async (routeCtx, ctx) => {
+				const id = asString(asRecord(routeCtx.input).listingId);
+				const [{ owner, row }, listed] = await Promise.all([ownerOf(ctx, id), id ? ctx.storage.directory.get(id) : null]);
+				return { ok: true, by: owner && onSite(asRecord(listed)) ? (row.claimed === true ? "claim" : "author") : "" };
+			},
+		},
 		contact: { public: true, methods: ["POST"], handler: async (routeCtx, ctx) => contact(routeCtx.input, routeCtx as { requestMeta?: unknown }, ctx) },
 		submit: { permission: MEMBER, methods: ["POST"], handler: async (routeCtx, ctx) => submit(routeCtx, ctx) },
 		review: { permission: MEMBER, methods: ["POST"], handler: async (routeCtx, ctx) => review(routeCtx, ctx) },
@@ -172,8 +213,43 @@ const plugin: SandboxedPlugin = {
 		export: { permission: ADMIN, methods: ["GET"], response: "raw", handler: async (routeCtx, ctx) => exportCsv(routeCtx.input, ctx) },
 		// Admin only: check a spreadsheet, then import it a few rows at a time. Nothing is ever published by an import.
 		import: { permission: ADMIN, methods: ["POST"], handler: async (routeCtx, ctx) => importCsv(routeCtx.input, ctx) },
+		// Admin only: the kit's sample page sends the sample directory here a step at a time.
+		sample: { permission: ADMIN, methods: ["POST"], handler: async (routeCtx, ctx) => sampleRoute(routeCtx.input, ctx) },
 		admin: { permission: ADMIN, handler: async (routeCtx, ctx) => handleAdmin(routeCtx.input, ctx) },
 	},
 };
+
+
+/** Google's app types for each "What it is" choice (Software app structured data guide). App has none that fits every app. */
+const APP_CATEGORY: Record<string, string> = { plugin: "DeveloperApplication", skill: "DeveloperApplication", agent: "DeveloperApplication", "mcp server": "DeveloperApplication", library: "DeveloperApplication", theme: "DesignApplication" };
+
+type Page = { url: string; canonical: string | null; title: string | null; pageTitle?: string | null; description: string | null; image: string | null };
+
+/**
+ * A Software listing's schema.org SoftwareApplication facts, from its directory row (no extra call):
+ * name, description, applicationCategory (and the choice itself as applicationSubCategory),
+ * operatingSystem from Works with ("Any" says nothing), softwareVersion, an Offer at price 0 for Free
+ * or Freemium (no price is stored for Paid, so none is given), the item's own address, the share image.
+ */
+function softwareGraph(card: Record<string, unknown>, page: Page): Record<string, unknown> {
+	const fields = asRecord(card.type_fields);
+	const text = (key: string) => asString(fields[key]).trim().slice(0, 120);
+	const what = text("what_it_is");
+	const works = text("works_with");
+	const price = text("price").toLowerCase();
+	const graph: Record<string, unknown> = {
+		name: asString(card.title) || page.pageTitle || page.title || "",
+		url: webAddress(fields.homepage) || webAddress(fields.repository) || page.canonical || page.url,
+	};
+	const description = asString(card.excerpt) || page.description;
+	if (description) graph.description = description;
+	if (APP_CATEGORY[what.toLowerCase()]) graph.applicationCategory = APP_CATEGORY[what.toLowerCase()];
+	if (what) graph.applicationSubCategory = what;
+	if (works && works.toLowerCase() !== "any") graph.operatingSystem = works;
+	if (text("version")) graph.softwareVersion = text("version");
+	if (price === "free" || price === "freemium") graph.offers = { "@type": "Offer", price: 0 };
+	if (page.image) graph.image = page.image;
+	return graph;
+}
 
 export default plugin;

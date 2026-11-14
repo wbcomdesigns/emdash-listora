@@ -4,7 +4,7 @@
 
 One living list of flow-level cases for Listora on EmDash. Walk all of it before every release. When you add or fix behaviour, add or change its case in the same pull request. There are no per-release QA files.
 
-Last walk: none yet for 0.7.0 (branch `0.7.0`, built 2026-10-20 on EmDash 1.3.1). The builder ran the automated tests only: every entry point's request count (tests/bridge-budget.test.ts, busy 500-listing seed and a 2000-listing directory), the race tests (tests/races.test.ts) and the security review fixes (tests/review-0-7-0.test.ts). Nothing was walked in a browser. Before release: an independent walk of this whole list on the Node lab and on the Cloudflare test site, with the registry install, plus the Cloudflare cases below.
+Last walk: 0.8.0 walk A on the Node lab (steps 4 to 5b, 2026-11-14); the full 0.8.0 walk (Node lab and Cloudflare testbed, registry install) is still to run before release. Earlier: none for 0.7.0 (branch `0.7.0`, built 2026-10-20 on EmDash 1.3.1). The builder ran the automated tests only: every entry point's request count (tests/bridge-budget.test.ts, busy 500-listing seed and a 2000-listing directory), the race tests (tests/races.test.ts) and the security review fixes (tests/review-0-7-0.test.ts). Nothing was walked in a browser. Before release: an independent walk of this whole list on the Node lab and on the Cloudflare test site, with the registry install, plus the Cloudflare cases below.
 
 ## Setup
 
@@ -196,6 +196,52 @@ Three roles, always in this order: **guest**, **member** (subscriber role), **ad
 | A-68 | Update a 0.6.3 site to 0.7.0 and open any Listora page | The Bringing your data over banner, then (minutes later) the banner is gone; the directory, ratings and waiting notices are all there | upgrade from 0.6.3 |
 | A-12 | Get started on a site with no listings collection | Clear "create the collection first" message, no crash | tells the owner to create the listings collection first |
 
+## Listing types, fields and Software (0.8.0)
+
+Walk as guest, member and admin where the case has a visitor screen. Auto names the test file.
+
+| ID | Steps | Expected | Auto |
+| --- | --- | --- | --- |
+| T-1 | Admin, Listora, Listing types | Stats Types 11 and Hidden 0; the list five to a page with Type (a button), Listings, Place, On the form, Made by; Next and Previous page work; at 390 the type name is on screen | type-editor |
+| T-2 | Add a type with a name, schema type, colour, icon and Listings have a place off; add a second with the same name in other case | The first opens ready for fields; the second is refused by name | type-editor |
+| T-3 | Edit a built-in type: rename, recolour, hide, show | Saved with a toast; a hidden type leaves the submit form and the directory chips; its listings keep it; there is no Delete on a built-in | type-editor |
+| T-4 | Delete your own type: once with a listing (published or draft), once as the default type, once unused | Refused twice with the reason; deleted after one confirm when unused | type-editor |
+| T-5 | Two tabs on one type: save in one, then the other | The second says the type changed since the page loaded and shows what is saved | type-editor |
+| T-6 | Add one field of each kind (text, number, choice, link, date, yes or no); a choice with one option; a label "City"; a second field on Sort 1 | Each saved and listed in the fields table; the one-choice field, the "City" label and the second Sort 1 are refused, each with a plain reason naming the field or column | type-editor, walk-a-fixes |
+| T-7 | Edit a field's label, then Remove field | The table shows the new label; after one confirm the field is gone from forms and pages; a listing's old value stays stored and shows again if a field with that key comes back | type-editor |
+| F-1 | As a member, add a listing of a type with every field kind, one field required | Inputs fit each kind (number box, drop-down, web address, date picker, checkbox); the form will not send without the required field; a link without http(s) is refused with the field's name | kit-fields, field-values |
+| F-2 | Open that listing as guest | A Details section lists every filled-in field with its label; no empty description card when there is no description | field-values, walk-a-fixes |
+| F-3 | Mark a field Show on directory cards, then open the directory | The card shows that field with its label; other fields do not show | kit-fields |
+| F-4 | As the owner, edit the listing: change a field, try to empty the required one | Emptying the required field is refused; the change waits under Listing changes, named by its field label, and lands on approval | field-values |
+| F-5 | Export a CSV, add a value in a field column, import it | One column per field label (shared labels share a column); the value arrives on the draft; a value of the wrong kind refuses the row with the reason | field-values |
+| L-1 | Pick a type without a place in the directory | No location box, no city chips, no map; the cards show no city | field-values |
+| L-2 | Add a listing of that type, and import a row of it with a city and address | The form has no city or address fields; neither the listing nor the imported draft stores a city, address or position | walk-a-fixes |
+| L-3 | Open a listing of that type, and view its page source | No map, address, hours, directions or Open and Closed; no address or geo in the structured data | field-values |
+| S-1 | Pick Software in the directory | The What it is chips (Plugin, Skill, Agent, MCP server, App, Library, Theme), the sorts Stars or installs, Last release and Released, Software cards with badges, stars, version and View on GitHub; no Calendar button | software, walk-a-fixes, release-080 |
+| S-2 | Choose a chip, then type a search | Only that kind shows; the chip stays chosen through the search; picking another type drops it | walk-a-fixes |
+| S-3 | Open a Software listing | Badges, stars, version and last release; View on GitHub or Repository, Docs, Save, Share, Claim, Report; the Install box with Copy (copies, never runs); About, Screenshots, Details, Reviews, Maintained by or the claim form | software |
+| S-4 | View the Software listing's page source; go offline and reload | One SoftwareApplication block with the fields that are filled in; offline, the stored stars and release show with no error | software |
+| S-5 | On a listing a member manages, read the Repository, Docs and website links | Each carries rel="nofollow ugc" | security-links |
+| D-1 | Admin, Get started, Load sample directory on a fresh site | The kit page `/listings/sample/` shows "Loading listings: x of 17", then "The sample directory is loaded." with links to the directory and the queue; the intro says 17 listings with 3 Software listings, two waiting for approval | release-080, plugin |
+| D-2 | Close the sample page part way, reopen it; then press Load again on a site with more than 100 listings | Continue loading finishes; Load again adds nothing twice | walk-a-fixes |
+| D-3 | Open `/listings/sample/` as a member | "Only a site admin can load the sample directory." | plugin |
+| K-1 | File a listing under two categories; open each category chip | The listing shows under both; take it out of one and it leaves that chip only | scale-and-lows |
+| K-2 | Sort a type by Sort 1, then Sort 1 low to high, with some listings missing a value | Listings with a value in order, then those without, in either direction; Next goes on to the rest | directory-index, scale-and-lows |
+| K-3 | Calendar button: no type, Event, Restaurant, Software; open the calendar | Shows for no type and Event only; the calendar lists upcoming events, including one added in 0.8.0 and the sample event | release-080 |
+| K-4 | A member adds a listing; a different listing is claimed and the claim approved | The first shows Managed by its author (neutral); the second shows Claimed listing (green) | walk-a-fixes |
+
+## Cloudflare (0.8.0)
+
+On the Cloudflare test site (`~/code/emdash-plugin-testbed`). Install 0.7.1 from the registry with listings (some in two categories), reviews and waiting items in place, then update to 0.8.0 from the registry and copy the kit from `v0.8.0`. Open no admin page during CF8-1 to CF8-3. Every case must end without "Too many subrequests" in the Worker logs.
+
+| ID | Steps | Expected | Auto |
+| --- | --- | --- | --- |
+| CF8-1 | Right after the update, submit a listing and send a message | "The directory is finishing an update. Try again in a moment." while the indexes build; both work a minute or so later | |
+| CF8-2 | Open only `/listings/` and `/_emdash/api/plugins/<id>/listings` now and then for a few hours | The directory works throughout; listings from before the update reach their second category, the city chips, and Software chips and sorts as the background catch-up passes them, with no admin visit | scale-and-lows (sweep rate) |
+| CF8-3 | After the catch-up, count listings under each category and type | Counts match the content; no listing missing from a category it is filed under | scale-and-lows |
+| CF8-4 | Admin, Listing types: add a type and a field with Sort 1 and chips; give two listings values | Saved without errors; the sort and the chip work in the directory within minutes | type-editor |
+| CF8-5 | Load sample directory on a fresh testbed | 17 listings load a step at a time with no time-out; Load again adds nothing | plugin |
+
 ## Cloudflare (0.7.0)
 
 On the Cloudflare test site (`~/code/emdash-plugin-testbed`), registry install, kit from the tag. Every case must end without "Too many subrequests" in the Worker logs and without Something went wrong on the page.
@@ -212,7 +258,7 @@ On the Cloudflare test site (`~/code/emdash-plugin-testbed`), registry install, 
 | CF-8 | Import a 100-row file while other admin pages are in use, then export | 100 drafts in the queue, none twice; if the site is slow the page waits and retries, or says how many rows were added and offers Continue from the row it stopped at; never the server's own text (0.7.1). The export holds every published listing | route import, an import cut off part way |
 | CF-9 | A guest message, then wait for the hourly notice | One notice to the owner's account address; the message shows in their account | cron notify |
 | CF-10 | Expiry on with a listing past its date and one inside its last seven days | The next daily run expires one and warns the other's owner | cron expire |
-| CF-11 | Load sample directory on a fresh site | Loading, then 14 listings with reviews a few minutes later | cron sample |
+| CF-11 | Get started, Load sample directory, on a fresh site: the kit page `/listings/sample/` loads it; close it part way and open it again | Progress, then "The sample directory is loaded." with 17 listings (3 of them Software, 2 waiting in the queue) and their reviews. Reopened part way it offers Continue loading and adds nothing twice. A subscriber sees "Only a site admin can load the sample directory." | loads from the kit's rows through the admin sample route |
 | CF-12 | Delete my data for a member with reviews and saved listings | Done after a few automatic parts; the ratings of their reviewed listings moved | route privacy (erase, each step) |
 | CF-13 | Owner photos on R2 | The uploaded photo shows in the admin and, approved, on the listing | |
 
@@ -234,7 +280,7 @@ Screens: archive, detail, submit, calendar, account, and the three admin pages. 
 
 ## Known gaps (do not fail a release on these, do not hide them)
 
-- The plugin's directory routes read the directory index, which follows each listing through the content hooks; a listing whose hook did not run is put right by the hourly sweep, so it can take up to a few hours to show in those routes. The kit's own directory page reads the listings directly (the newest 500). Public reads are cached for 30 seconds, so a change can take that long to show
+- The plugin's directory routes read the directory index, which follows each listing through the content hooks; a listing whose hook did not run is put right by the hourly sweep, so it can take up to a few hours to show in those routes. The kit's directory page reads the same index a page at a time (0.8.0); keyword search goes through EmDash's site search. Public reads are cached for 30 seconds, so a change can take that long to show
 - Text, place, feature and distance filters on the plugin's directory routes read up to 600 listings per request and hand back a cursor; a rare text on a large directory takes several requests. Each request carries whole listing cards, so a directory of very long descriptions is the first place to watch Cloudflare's 50 ms CPU limit
 - The scheduled tasks (hourly owner notice, daily expiry and warning) are proven by automated tests, not by waiting for a real schedule. No real mail provider has been tested: the lab prints mail
 - Owner photos are proven on local storage only, not on Cloudflare R2
@@ -244,7 +290,7 @@ Screens: archive, detail, submit, calendar, account, and the three admin pages. 
 - The contact limit is per visitor address (IPv6 by its /64). On a host that passes no address, guest messages are refused with a plain message
 - Owner notices and expiry warnings go to the address on the listing's submission row (the member's account address when they added or claimed it), or the one their account page last kept
 - Rewriting a published review takes it off the page until it is approved again
-- The spreadsheet export carries the main details of each listing (14 columns). Categories, hours, photos and the extra fields of each type are not in it, so it is not a full backup
+- The spreadsheet export carries the main details of each listing and one column per type field label (0.8.0). Categories, hours and photos are not in it, so it is not a full backup
 - An admin list holds up to 300 waiting items, 25 at a time with Load more
 - Categories on the add-a-listing form are not narrowed by listing type
 - Primary button text in dark mode follows the site theme's own colours

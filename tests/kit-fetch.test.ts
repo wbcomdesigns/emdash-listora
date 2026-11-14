@@ -63,6 +63,16 @@ describe("kit finds Listora's routes on any install", () => {
 		expect(seen).toHaveLength(3);
 	});
 
+	it("on a plain-HTTP page (no crypto.subtle) asks the name instead of failing (shared kit 6)", async () => {
+		inBrowser();
+		vi.stubGlobal("crypto", {});
+		const call = await fresh();
+		const seen: string[] = [];
+		vi.stubGlobal("fetch", async (url: string) => (seen.push(url), url.includes("/listora/") ? ok() : missing()));
+		expect((await call("health")).status).toBe(200);
+		expect(seen).toEqual(["/_emdash/api/plugins/listora/health"]);
+	});
+
 	it("keeps Listora's own 404 answer instead of trying another address", async () => {
 		inBrowser();
 		const call = await fresh();

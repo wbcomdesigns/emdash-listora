@@ -2,6 +2,39 @@
 
 Versions match `package.json`, the git tag, and the EmDash registry release. Newest first. Never publish a version that is not on `origin/main`.
 
+## [0.8.0] - 2026-11-14
+
+Listing types you can edit, custom fields and a built-in Software type. No new permissions. Copy the kit again after you update, with the new tag.
+
+- New      - A Listing types admin page to add your own types and to rename, recolour or hide the built-in ones.
+- New      - Custom fields per type (text, number, choice, link, date, yes or no), on the submit and edit forms, the listing page, directory cards and CSV import and export.
+- New      - Types without a place, which hide the map, city, address, opening hours, directions and location search everywhere.
+- New      - A built-in Software type for plugins, skills, agents, MCP servers, apps, libraries and themes, with an Install box, live GitHub stars and software structured data.
+- New      - Filter chips for one choice field per type, such as What it is for Software.
+- New      - Visitors can sort a picked type by up to three of its number or date fields, highest or lowest first, such as stars or last release.
+- New      - A listing a member added shows Managed by its author, whether it was approved in Listora's queue or published from EmDash's content screen, and Claimed listing stays for approved claims.
+- New      - A Refresh categories now button on the Settings page reads every listing's categories again in the background and says when it finished.
+- New      - The sample directory loads from its own page in the site kit and now adds 17 listings, including 3 Software listings.
+- Improve  - The directory pages through the plugin's index, so filters and sorts work on any number of listings.
+- Improve  - Keyword search uses EmDash's own site search.
+- Improve  - A listing filed under several categories is found under each of them, and a category changed in the admin shows in the directory within about an hour (a few hours on very large directories), or at once when the listing is published.
+- Improve  - Renaming a choice keeps listings that chose it on the renamed choice.
+- Improve  - After updating, sites show finishing an update for a short time while the new indexes build, and the data catches up by itself in the background within hours, with no admin visit needed.
+- Fix      - A type the site no longer knows shows its own name instead of Business.
+- Fix      - The Calendar button shows only with no type or Event picked, and the calendar lists events added in 0.8.0.
+- Fix      - Loading the sample directory again on a site with many listings no longer adds them twice.
+- Fix      - CSV import stores no address for a type without a place, and the forms no longer ask for amenities on one.
+- Fix      - A required yes or no field can be answered No.
+- Fix      - A field labelled Constructor works like any other.
+- Fix      - The background catch-up never undoes a renewal or a new rating made at the same moment, and never shows a listing unpublished while it ran.
+- Fix      - Admin decision buttons no longer carry a stale waiting count.
+- Fix      - Messages sent before 0.7.1 say whether the owner was told.
+- Fix      - Card titles, breadcrumbs and map zoom are easier to tap on a phone.
+- Dev      - A developer guide for syncing listings from an outside source through the content API.
+- Dev      - Storage indexes match every filtered and sorted query, and unused ones were removed.
+- Dev      - The site kit reaches the plugin by name when the browser has no crypto.subtle.
+- Compat   - Needs EmDash 1.2.0 or later; tested on EmDash 1.5.0.
+
 ## [0.7.1] - 2026-11-13
 
 Fixes from the first walk of 0.7.0 on a Cloudflare site. Copy the kit again after you update, with the new tag.

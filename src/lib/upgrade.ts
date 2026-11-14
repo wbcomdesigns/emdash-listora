@@ -1,11 +1,11 @@
 import type { PluginContext } from "emdash/plugin";
 
 import { spend, type Budget } from "./budget";
-import { listingPart } from "./directory";
+import { listingPart, termMap } from "./directory";
 import { fromLegacy, readRating } from "./ratings";
 import { KEY, type Settings } from "./settings";
 import { LISTINGS } from "./types";
-import { asRecord, asString } from "./util";
+import { asRecord, asString, nil, none, notApplied } from "./util";
 
 /**
  * Bringing a 0.6.x site's data over to 0.7.0, one step per plugin call (Cloudflare allows 10 requests
@@ -57,26 +57,26 @@ export async function upgradeStep(ctx: PluginContext, settings: Settings, b: Bud
 	const seen = await ctx.kv.getVersioned<Record<string, unknown>>(STATE);
 	const state = parseState(seen?.value);
 	const rev = seen?.revision ?? null;
-	const claim = async (to: State) => spend(b) && (await ctx.kv.compareAndSet(STATE, rev, { ...to, at: Date.now() }).catch(() => ({ applied: false }))).applied;
+	const claim = async (to: State) => spend(b) && (await ctx.kv.compareAndSet(STATE, rev, { ...to, at: Date.now() }).catch(notApplied)).applied;
 
 	let after: State = state;
 	if (state.step === "prep") {
 		if (!spend(b, 4)) return state;
 		const [kit, collection, terms] = await Promise.all([
-			ctx.kv.get<string>(KEY.kit).catch(() => null),
-			ctx.schema?.getCollection(LISTINGS).catch(() => null) ?? null,
+			ctx.kv.get<string>(KEY.kit).catch(nil),
+			ctx.schema?.getCollection(LISTINGS).catch(nil) ?? null,
 			ctx.taxonomies?.getTerms("listing_category").catch(() => []) ?? [],
 		]);
 		after = { ...state, step: "index", cursor: "" };
 		if (!(await claim(after))) return state;
 		await ctx.settings.set(KEY.fields, collection ? collection.fields.map((field) => field.slug) : null);
 		if (kit === "1" && spend(b)) await ctx.settings.set(KEY.kit, true);
-		if (spend(b)) await ctx.settings.set(KEY.terms, Object.fromEntries((terms ?? []).map((term) => [term.slug, term.id])));
+		if (spend(b)) await ctx.settings.set(KEY.terms, termMap(terms));
 	} else if (state.step === "index") {
 		if (!spend(b, 4)) return state;
 		// No listings type (prep found none): nothing to index. Asking for its rows would fail inside the
 		// bridge, where a failure goes unanswered until the request is cancelled.
-		const page = !settings.fields ? { items: [], hasMore: false, cursor: undefined } : await ctx.content?.list(LISTINGS, { limit: 100, where: { status: "published" }, ...(state.cursor ? { cursor: state.cursor } : {}) }).catch(() => null);
+		const page = !settings.fields ? { items: [], hasMore: false, cursor: undefined } : await ctx.content?.list(LISTINGS, { limit: 100, where: { status: "published" }, ...(state.cursor ? { cursor: state.cursor } : {}) }).catch(nil);
 		const items = page?.items ?? [];
 		const ids = items.map((item) => item.id);
 		const [have, ratings] = ids.length
@@ -87,7 +87,7 @@ export async function upgradeStep(ctx: PluginContext, settings: Settings, b: Bud
 			.map((item) => {
 				const rating = readRating(ratings.get(item.id));
 				const expires = Date.parse(asString(asRecord(item.data).expires_at));
-				return { id: item.id, data: { ...listingPart(item), exp: Number.isFinite(expires) ? expires : 0, warned: 0, avg: rating.average, rc: rating.count, rseq: 0 } };
+				return { id: item.id, data: { ...listingPart(item, settings.types), exp: Number.isFinite(expires) ? expires : 0, warned: 0, avg: rating.average, rc: rating.count, rseq: 0 } };
 			});
 		if (rows.length) await ctx.storage.directory.putMany(rows);
 		const more = Boolean(page?.hasMore && page.cursor);
@@ -122,7 +122,7 @@ export async function upgradeStep(ctx: PluginContext, settings: Settings, b: Bud
 		}
 		return after;
 	}
-	if (spend(b)) await ctx.cron?.schedule(next, { schedule: soon() }).catch(() => undefined);
+	if (spend(b)) await ctx.cron?.schedule(next, { schedule: soon() }).catch(none);
 	return after;
 }
 
@@ -135,8 +135,8 @@ export async function upgradeStep(ctx: PluginContext, settings: Settings, b: Bud
  */
 export async function nudgeUpgrade(ctx: PluginContext, settings: Settings, b: Budget): Promise<State | null> {
 	if (upgradeDone(settings) || !spend(b)) return null;
-	const state = parseState(await ctx.kv.get(STATE).catch(() => null));
-	if (Date.now() - state.at > 120_000 && spend(b)) await ctx.cron?.schedule("upgrade", { schedule: new Date().toISOString() }).catch(() => undefined);
+	const state = parseState(await ctx.kv.get(STATE).catch(nil));
+	if (Date.now() - state.at > 120_000 && spend(b)) await ctx.cron?.schedule("upgrade", { schedule: new Date().toISOString() }).catch(none);
 	return state;
 }
 

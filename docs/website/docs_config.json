@@ -6,7 +6,7 @@
   "tagline": "Directory listings for EmDash. The plugin is the engine. Screens live on the site kit.",
   "note": "GitHub-only documentation. Metadata only. No publish or sync target.",
   "images_dir": "images",
-  "version": "0.6.1",
+  "version": "0.8.0",
   "sections": [
     {
       "name": "Getting Started",
@@ -27,7 +27,8 @@
         { "slug": "submit", "title": "Add a listing" },
         { "slug": "reviews-claims", "title": "Reviews and claims" },
         { "slug": "owner-dashboard", "title": "Your account" },
-        { "slug": "admin", "title": "Admin screens" }
+        { "slug": "admin", "title": "Admin screens" },
+        { "slug": "listing-types", "title": "Listing types" }
       ]
     },
     {
@@ -53,6 +54,7 @@
       "pages": [
         { "slug": "plugin-and-site-kit", "title": "Plugin, site kit, and host" },
         { "slug": "routes", "title": "Plugin routes" },
+        { "slug": "outside-sync", "title": "Sync listings from an outside source" },
         { "slug": "site-kit", "title": "Site kit" }
       ]
     },
@@ -61,6 +63,7 @@
       "folder": "whats-new",
       "description": "Registry versions, newest first.",
       "pages": [
+        { "slug": "0-8-0", "title": "0.8.0" },
         { "slug": "0-7-1", "title": "0.7.1" },
         { "slug": "0-7-0", "title": "0.7.0" },
         { "slug": "0-6-3", "title": "0.6.3" },

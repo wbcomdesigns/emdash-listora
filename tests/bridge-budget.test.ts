@@ -8,7 +8,7 @@ import type { PluginRuntimeTestHost } from "@emdash-cms/plugin-test";
 // @ts-expect-error plain module shared with the lab seed
 import { listingsCollection } from "../site-kit/seed/collection.mjs";
 import { HOUR, visitorKey, windowOf } from "../src/lib/rates";
-import { createPluginRuntimeTestHost, settle } from "./site";
+import { createPluginRuntimeTestHost, SAMPLE, settle, taskData } from "./site";
 
 /**
  * Bridge calls per entry point, each at the worst case a busy site sets up (see the seeds below).
@@ -25,10 +25,11 @@ const MEASURED: Record<string, number> = {
 	"admin page_load /queue (upgrade running)": 6,
 	"cron upgrade (each step)": 9,
 	"route health": 1,
-	"route types": 0,
+	"route types": 1,
 	"route listings (first page)": 4,
 	"route listings (next page)": 4,
 	"route listings (filtered, nothing matches)": 6,
+	"route listings (slot sort, no listing has a value)": 5,
 	"route search": 2,
 	"route search suggest": 2,
 	"route search map": 6,
@@ -37,12 +38,14 @@ const MEASURED: Record<string, number> = {
 	"route ratings ids (80)": 3,
 	"route reviews (500 on the listing)": 2,
 	"route reviews next page": 2,
+	// 0.8.0 step 9b: and its index row, so it answers only for a listing on the site.
+	"route manager": 2,
 	"route contact (guest, owned listing)": 6,
 	"route submit (moderated, category)": 6,
 	"route submit (moderation off, category)": 9,
 	"route submit (moderation off, nothing kept, new category)": 8,
-	"route review (first, listing with 500 reviews)": 7,
-	"route review (rewrite of a published one)": 9,
+	"route review (first, listing with 500 reviews)": 6,
+	"route review (rewrite of a published one)": 8,
 	"route claims": 5,
 	"route favorites GET (100 saved)": 1,
 	"route favorites GET ids (100)": 1,
@@ -69,7 +72,8 @@ const MEASURED: Record<string, number> = {
 	"route reply (listing with 500 reviews)": 6,
 	"route privacy (view)": 3,
 	"route export (500 listings, one part)": 7,
-	"route import check (100 rows)": 9,
+	"route import check (100 rows)": 7,
+	"route import check (100 rows, types by name)": 7,
 	"route import (one batch of 2)": 8,
 	"route import (one batch of 2, both cut off before)": 7,
 	"route import (one batch of 2, nothing kept)": 9,
@@ -105,6 +109,21 @@ const MEASURED: Record<string, number> = {
 	"admin save_lifetime (refused)": 1,
 	"admin save_photos": 2,
 	"admin save_messages": 2,
+	// 0.8.0 step 9c: Refresh categories now (the task list, the press, the chain's first step).
+	"admin recat": 3,
+	"admin recat (again, already running)": 2,
+	"admin page_load /types": 6,
+	"admin types_page": 6,
+	"admin type_add": 4,
+	"admin type_open": 2,
+	"admin type_save": 4,
+	"admin type_hide": 4,
+	"admin type_delete (refused, a listing uses it)": 3,
+	"admin type_delete": 9,
+	"admin field_open": 1,
+	"admin field_add (a sort: backfill starts)": 6,
+	"admin field_save": 6,
+	"admin field_remove": 6,
 	"admin kit_show": 4,
 	"admin kit_done": 4,
 	"admin review approve (expiry on)": 8,
@@ -113,18 +132,18 @@ const MEASURED: Record<string, number> = {
 	"admin review forget (row with no listing)": 6,
 	"admin review approve (cut off before)": 6,
 	"admin photo_mod approve": 9,
-	"admin photo_mod reject": 6,
-	"admin photo_mod approve (cut off before)": 5,
+	"admin photo_mod reject": 7,
+	"admin photo_mod approve (cut off before)": 6,
 	"admin edit_mod approve": 9,
-	"admin edit_mod reject": 4,
-	"admin edit_mod approve (listing changed since)": 6,
+	"admin edit_mod reject": 5,
+	"admin edit_mod approve (listing changed since)": 7,
 	"admin reply_mod approve": 8,
 	"admin reply_mod reject": 7,
 	"admin review_mod approve": 8,
 	"admin review_mod reject": 6,
 	"admin review_mod approve (500 published)": 8,
 	"admin claim_mod approve": 9,
-	"admin claim_mod reject": 4,
+	"admin claim_mod reject": 5,
 	"admin message_mod ask": 6,
 	"admin message_mod close": 5,
 	"admin message_mod done": 5,
@@ -133,13 +152,15 @@ const MEASURED: Record<string, number> = {
 	"hook plugin:activate": 6,
 	// Plus one (the upgrade task) on a site whose 0.7.0 upgrade has not finished: 8.
 	"cron notify (first run after an update)": 7,
-	"hook content:afterPublish (listing in the index)": 1,
-	"hook content:afterPublish (listing new to the index)": 4,
-	"hook content:afterSave (published, no draft)": 1,
-	"hook content:afterUnpublish": 1,
-	"hook content:afterRestore": 2,
-	"hook content:afterDelete": 2,
-	"hook page:metadata": 2,
+	"hook content:afterPublish (listing in the index)": 5,
+	// 0.8.0 step 9b: a row new to the index has no category rows to read first.
+	"hook content:afterPublish (listing new to the index)": 7,
+	"hook content:afterSave (published, no draft)": 4,
+	"hook content:afterUnpublish": 3,
+	"hook content:afterRestore": 6,
+	"hook content:afterDelete": 4,
+	"hook page:metadata": 3,
+	"hook page:metadata (software, unrated)": 3,
 	"cron notify (each run, 100 waiting, 50 owners)": 8,
 	"cron notify (everyone told within the hour)": 3,
 	"cron notify (email off, 100 waiting)": 3,
@@ -147,8 +168,13 @@ const MEASURED: Record<string, number> = {
 	"cron expire (each run, warning 50 owners)": 8,
 	"cron tidy": 5,
 	"cron sweep (each run)": 9,
-	"admin load_sample (start)": 6,
-	"cron sample (each step)": 9,
+	"cron sweep-more (each run)": 9,
+	// 0.8.0 step 9b: fix tasks merge listing fields and read categories, seven changes each (nine when a listing also left a category).
+	"cron sweep-fix (seven changes)": 8,
+	// 0.8.0 step 7b: samples already on the site are found by title in the index and the queue (two reads), not in one page of 100 listings.
+	"route sample (start)": 5,
+	"route sample (listings, each step)": 9,
+	"route sample (related)": 8,
 	"admin save_lifetime (off)": 3,
 	"route privacy (erase, each step)": 9,
 	"2000: cron upgrade (each step)": 9,
@@ -162,6 +188,8 @@ const MEASURED: Record<string, number> = {
 	"2000: route ratings all (next part)": 8,
 	"2000: route duplicate": 2,
 	"2000: route export (one part of 700)": 8,
+	"2000: route listings (software by stars, each page)": 5,
+	"2000: route listings (software by stars, nothing matches the text)": 3,
 };
 
 /** Every entry above MAX_BRIDGE_CALLS. Empty since 0.7.0, and the last test holds it there. */
@@ -373,6 +401,12 @@ describe("bridge calls per entry point, worst case", () => {
 		expect(await measure("route listings (next page)", () => route("listings", { cursor: first.cursor }))).toMatchObject({ ok: true });
 		const scan = await measure("route listings (filtered, nothing matches)", () => route("listings", { q: "zzzz", type: "restaurant", city: "Town 1", amenity: "wifi", lat: 40.2, lng: -73.2, radius: 50, sort: "rating" }));
 		expect(scan).toMatchObject({ ok: true, items: [], total: null });
+		// From here on restaurants sort by a slot no listing has a value for: every sort reads past the
+		// empty first part, the hooks fill slots, and the sweep backfills all 500 rows.
+		await rt.fixtures.plugin.setting("types", [{ slug: "restaurant", fields: [{ key: "seats", label: "Seats", kind: "number", slot: 1 }] }]);
+		const sorted = await measure("route listings (slot sort, no listing has a value)", () => route("listings", { type: "restaurant", sort: "n1" }));
+		expect(sorted).toMatchObject({ ok: true, total: 450 });
+		expect((sorted as unknown as { items: unknown[] }).items).toHaveLength(24);
 	});
 	it("search", async () => {
 		expect(await measure("route search", () => route("search", { q: "place", sort: "title" }))).toMatchObject({ ok: true });
@@ -391,6 +425,7 @@ describe("bridge calls per entry point, worst case", () => {
 		const first = await measure("route reviews (500 on the listing)", () => route("reviews", { listingId: L[0] }, { method: "GET" }));
 		expect(first).toMatchObject({ ok: true, count: 3 });
 		expect(await measure("route reviews next page", () => route("reviews", { listingId: L[0], cursor: first.cursor }, { method: "GET" }))).toMatchObject({ ok: true });
+		expect(await measure("route manager", () => route("manager", { listingId: L[0] }, { method: "GET" }))).toMatchObject({ ok: true });
 	});
 	it("contact", async () => {
 		const meta = { ip: "203.0.113.7", userAgent: null, referer: null, geo: null };
@@ -474,6 +509,9 @@ describe("bridge calls per entry point, worst case", () => {
 	it("import", async () => {
 		const csv = ["title,city,listing_type", ...Array.from({ length: 100 }, (_, i) => `Imported ${i},City ${i},restaurant`)].join("\n");
 		expect(await measure("route import check (100 rows)", () => route("import", { csv, mode: "check" }, { method: "POST" }))).toMatchObject({ ok: true, valid: 100 });
+		// Types written by name are matched against the site's types (the settings read every check makes).
+		const named = ["title,city,listing_type", ...Array.from({ length: 100 }, (_, i) => `Named ${i},City ${i},Real estate`)].join("\n");
+		expect(await measure("route import check (100 rows, types by name)", () => route("import", { csv: named, mode: "check" }, { method: "POST" }))).toMatchObject({ ok: true, valid: 100 });
 		const batch = ["title,city,listing_type", ...Array.from({ length: 2 }, (_, i) => `Batch ${i},City ${i},restaurant`)].join("\n");
 		expect(await measure("route import (one batch of 2)", () => route("import", { csv: batch, mode: "import" }, { method: "POST" }))).toMatchObject({ ok: true, imported: 2 });
 		// Drafts a cut-off request created without their queue rows: given them, not created again.
@@ -586,6 +624,11 @@ describe("bridge calls per entry point, worst case", () => {
 		await measure("hook content:afterDelete", () => hook("content:afterDelete", { collection: "listings", id: fresh.id, permanent: false }), { hook: true });
 		const page = { page: { url: "https://busy.test/listings/place-000", path: "/listings/place-000", locale: null, kind: "content", pageType: "listing", title: "Place 000", description: null, canonical: null, image: null, content: { collection: "listings", id: L[0], slug: "place-000" } } };
 		expect(await measure("hook page:metadata", () => hook("page:metadata", page), { hook: true })).toMatchObject({ kind: "jsonld" });
+		// A Software listing gets its whole SoftwareApplication from the same three reads, rated or not.
+		const app = await rt.fixtures.content("listings", { data: { title: "Hooked App", listing_type: "software", listing_status: "live", type_fields: JSON.stringify({ what_it_is: "Plugin", version: "2.0.0", price: "Free" }) }, slug: "hooked-app", status: "published" } as never);
+		await hook("content:afterPublish", { collection: "listings", content: app });
+		const appPage = { page: { ...page.page, url: "https://busy.test/listings/hooked-app", path: "/listings/hooked-app", title: "Hooked App", content: { collection: "listings", id: app.id, slug: "hooked-app" } } };
+		expect(await measure("hook page:metadata (software, unrated)", () => hook("page:metadata", appPage), { hook: true })).toMatchObject({ graph: { "@type": "SoftwareApplication", softwareVersion: "2.0.0" } });
 	});
 
 	/* ---- Scheduled tasks, each run measured until its work is done ---- */
@@ -625,18 +668,102 @@ describe("bridge calls per entry point, worst case", () => {
 	it("cron tidy and sweep", async () => {
 		await measure("cron tidy", () => hook("cron", cronEvent("tidy")));
 		await measure("cron tidy", () => hook("cron", cronEvent("tidy")));
-		// A listing whose content hook never ran: the sweep puts it in the index.
+		// A listing whose content hook never ran, on a site with categories: the hourly run finds work
+		// in its first 100 listings and starts the chain there.
 		const missed = await rt.fixtures.content("listings", { data: { title: "Missed Cafe", listing_type: "restaurant" }, slug: "missed", status: "published" } as never);
-		for (let n = 0; n < 15; n += 1) await measure("cron sweep (each run)", () => hook("cron", cronEvent("sweep")));
+		await rt.fixtures.plugin.setting("state_terms", { cafes: "term-cafes" });
+		taskData.clear();
+		await measure("cron sweep (each run)", () => hook("cron", cronEvent("sweep")));
+		expect(taskData.has("sweep-more")).toBe(true);
+		// While the chain runs, the hourly run leaves it alone.
+		await measure("cron sweep (each run)", () => hook("cron", cronEvent("sweep")));
+		// The chain under both its names (each run's position in its data), the slot backfill (types set
+		// in "listings") and the category tasks it hands listings to.
+		let name = "sweep-more";
+		for (let run = 0; run < 15 && name; run += 1) {
+			const data = taskData.get(name);
+			taskData.delete(name);
+			await measure("cron sweep-more (each run)", () => hook("cron", { ...cronEvent(name), data }));
+			const tail = name.endsWith("-2") ? "-2" : "";
+			for (const lane of ["a", "b", "c", "d"]) {
+				const fix = `sweep-fix-${lane}${tail}`;
+				if (!taskData.has(fix)) continue;
+				const jobs = taskData.get(fix);
+				taskData.delete(fix);
+				await measure("cron sweep-fix (seven changes)", () => hook("cron", { ...cronEvent(fix), data: jobs }));
+			}
+			name = ["sweep-more", "sweep-more-2"].find((next) => taskData.has(next)) ?? "";
+		}
+		expect((await rt.inspect.storage.list<Record<string, unknown>>("directory")).filter((row) => "n1" in row.data).length).toBeGreaterThan(30);
 		expect(await rt.inspect.storage.get("directory", missed.id)).toMatchObject({ vis: true, title: "Missed Cafe" });
+		// Rows the upgrade built have no category rows: the category tasks read each listing's categories (0.8.0).
+		expect((await rt.inspect.storage.list<Record<string, unknown>>("dircats")).filter((row) => Array.isArray(row.data.cats)).length).toBeGreaterThan(30);
+
+		// Refresh categories now (0.8.0 step 9c): the press, a second press, and its chain to the last
+		// listing, every category read again, under the same names and pins as the hourly chain.
+		const recat = (value: string) => admin({ type: "block_action", action_id: "recat", value, page: "/settings" });
+		taskData.clear();
+		expect((await measure("admin recat", () => recat("0"))).toast?.type).toBe("success");
+		expect((await measure("admin recat (again, already running)", () => recat("0"))).toast?.type).toBe("info");
+		name = "sweep-more";
+		for (let run = 0; run < 80 && name; run += 1) {
+			const data = taskData.get(name);
+			taskData.delete(name);
+			await measure("cron sweep-more (each run)", () => hook("cron", { ...cronEvent(name), data }));
+			const tail = name.endsWith("-2") ? "-2" : "";
+			for (const lane of ["a", "b", "c", "d"]) {
+				const fix = `sweep-fix-${lane}${tail}`;
+				if (!taskData.has(fix)) continue;
+				const jobs = taskData.get(fix);
+				taskData.delete(fix);
+				await measure("cron sweep-fix (seven changes)", () => hook("cron", { ...cronEvent(fix), data: jobs }));
+			}
+			name = ["sweep-more", "sweep-more-2"].find((next) => taskData.has(next)) ?? "";
+		}
+		expect(name).toBe("");
+		expect(await rt.inspect.setting("state_recat")).toMatchObject({ done: expect.any(Number) });
+	});
+
+	it("admin type editor", async () => {
+		type Page = Out & { blocks: Array<Record<string, unknown>> };
+		const types = (input: Record<string, unknown>) => admin({ page: "/types", ...input }) as Promise<Page>;
+		const formId = (page: Page, prefix: string) => String(page.blocks.find((block) => block.type === "form" && String(block.block_id).startsWith(prefix))?.block_id);
+		const buttonValue = (page: Page, action: string) => String((page.blocks.flatMap((block) => (block.elements as Array<Record<string, unknown>>) ?? []).find((element) => element.action_id === action) ?? {}).value);
+		await measure("admin page_load /types", () => types({ type: "page_load" }));
+		await measure("admin types_page", () => types({ type: "block_action", action_id: "types_page", value: { cursor: "5" } }));
+		const added = await measure("admin type_add", () => types({ type: "form_submit", action_id: "type_add", block_id: "type_add", values: { name: "Boat hire", schema: "LocalBusiness", color: "#0E7490", icon: "leaf", location: true } }));
+		expect(added.toast?.type).toBe("success");
+		const opened = await measure("admin type_open", () => types({ type: "block_action", action_id: "type_open", value: "boat-hire" }));
+		const saved = await measure("admin type_save", () => types({ type: "form_submit", action_id: "type_save", block_id: formId(opened, "type|"), values: { name: "Boat hire", schema: "LocalBusiness", color: "#0E7490", icon: "leaf", location: false } }));
+		expect(saved.toast?.type).toBe("success");
+		const withField = await measure("admin field_add (a sort: backfill starts)", () => types({ type: "form_submit", action_id: "field_add", block_id: formId(saved, "field_add|"), values: { label: "Berths", kind: "number", slot_number: "1" } }));
+		expect(withField.toast?.type).toBe("success");
+		const field = await measure("admin field_open", () => types({ type: "block_action", action_id: "field_open", value: "boat-hire|berths" }));
+		const fieldSaved = await measure("admin field_save", () => types({ type: "form_submit", action_id: "field_save", block_id: formId(field, "field|"), values: { label: "Berths", kind: "number", slot_number: "2" } }));
+		expect(fieldSaved.toast?.type).toBe("success");
+		const again = await types({ type: "block_action", action_id: "field_open", value: "boat-hire|berths" });
+		expect((await measure("admin field_remove", () => types({ type: "block_action", action_id: "field_remove", value: buttonValue(again, "field_remove") }))).toast?.type).toBe("success");
+		const typePage = await types({ type: "block_action", action_id: "type_open", value: "boat-hire" });
+		const hidden = await measure("admin type_hide", () => types({ type: "block_action", action_id: "type_hide", value: buttonValue(typePage, "type_hide") }));
+		expect(hidden.toast?.type).toBe("success");
+		// A listing of the type: delete is refused after the check.
+		const boat = await rt.fixtures.content("listings", { data: { title: "Boat One", listing_type: "boat-hire" }, slug: "boat-one", status: "draft" } as never);
+		expect((await measure("admin type_delete (refused, a listing uses it)", () => types({ type: "block_action", action_id: "type_delete", value: buttonValue(hidden, "type_delete") }))).toast?.type).toBe("error");
+		await (rt.actions.content.trash as (c: string, id: string) => Promise<unknown>)("listings", boat.id);
+		// The trash's afterDelete hook runs deferred: let it finish so its calls are not counted below.
+		await settle();
+		const fresh = await types({ type: "block_action", action_id: "type_open", value: "boat-hire" });
+		expect((await measure("admin type_delete", () => types({ type: "block_action", action_id: "type_delete", value: buttonValue(fresh, "type_delete") }))).toast).toMatchObject({ type: "success" });
 	});
 
 	/* ---- Last: the ones that change most ---- */
 
-	it("admin load_sample", async () => {
-		await measure("admin load_sample (start)", () => act("load_sample", undefined, "/setup"));
-		const done = async () => (await rt.inspect.kv.get<{ step?: string }>("state:sample"))?.step === "done";
-		await steps("cron sample (each step)", () => hook("cron", cronEvent("sample")), done);
+	it("route sample", async () => {
+		// As the kit's sample page sends it: start, the listings a few at a time, then the rest.
+		const send = (step: string) => route("sample", { step, ...SAMPLE }, { method: "POST" });
+		expect(await measure("route sample (start)", () => send("start"))).toMatchObject({ ok: true, step: "listings" });
+		await steps("route sample (listings, each step)", () => send("listings"), async () => (await rt.inspect.kv.get<{ step?: string }>("state:sample"))?.step !== "listings");
+		expect(await measure("route sample (related)", () => send("related"))).toMatchObject({ ok: true, step: "done" });
 	});
 	it("admin save_lifetime off", async () => {
 		expect((await measure("admin save_lifetime (off)", () => admin({ type: "form_submit", action_id: "save_lifetime", values: { expiry_days: 0 }, page: "/settings" }))).toast?.type).toBe("success");
@@ -688,7 +815,8 @@ describe("a directory of 2000 listings", () => {
 		await rt.fixtures.collection(listingsCollection as never);
 		for (let i = 0; i < 2000; i += 1) {
 			const made = await rt.fixtures.content("listings", {
-				data: { title: `Spot ${pad(i, 4)}`, listing_type: i % 2 ? "restaurant" : "hotel", city: `Town ${i % 40}`, lat: 40 + i / 10_000, lng: -73, amenities: "wifi", listing_status: "live", is_featured: i % 50 === 0 },
+				// Every tenth is Software; half of those have a star count (sort slot 1).
+				data: { title: `Spot ${pad(i, 4)}`, listing_type: i % 10 === 0 ? "software" : i % 2 ? "restaurant" : "hotel", type_fields: i % 20 === 0 ? JSON.stringify({ stars: i }) : "", city: `Town ${i % 40}`, lat: 40 + i / 10_000, lng: -73, amenities: "wifi", listing_status: "live", is_featured: i % 50 === 0 },
 				slug: `spot-${pad(i, 4)}`,
 				status: "published",
 			} as never);
@@ -726,6 +854,16 @@ describe("a directory of 2000 listings", () => {
 		expect(Object.keys((rest as { ratings: Record<string, unknown> }).ratings).length).toBeGreaterThan(0);
 		expect(await measure("2000: route duplicate", () => route("duplicate", { title: "Spot 1999" }))).toMatchObject({ ok: true, matches: [expect.objectContaining({ title: "Spot 1999" })] });
 		await measure("2000: route export (one part of 700)", () => route("export", { part: "1" }, { method: "GET" }));
+		// 200 Software listings by stars, most first: 100 with a count, then 100 without, page by page.
+		const seen: string[] = [];
+		let cursor: string | null = null;
+		do {
+			const page = (await measure("2000: route listings (software by stars, each page)", () => route("listings", { type: "software", sort: "n1", ...(cursor ? { cursor } : {}) }))) as unknown as { items: Array<{ id: string; type_fields: { stars?: number } }>; cursor: string | null };
+			seen.push(...page.items.map((item) => item.id));
+			cursor = page.cursor;
+		} while (cursor && seen.length < 400);
+		expect(new Set(seen).size).toBe(200);
+		expect(await measure("2000: route listings (software by stars, nothing matches the text)", () => route("listings", { type: "software", sort: "n1", q: "zzzz" }))).toMatchObject({ ok: true, items: [] });
 	});
 
 	it("keeps every entry within the budget", () => {

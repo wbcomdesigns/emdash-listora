@@ -12,6 +12,8 @@ Copy these into an EmDash site after the plugin is installed.
 | `site-kit/pages/` | Archive, detail, submit, calendar, account |
 | `site-kit/seed/listings.mjs` | Collection fields, taxonomies, 33 NYC listings |
 | `site-kit/pages/listings/import.astro` | Import and export, admins only |
+| `site-kit/pages/listings/sample.astro` | Load the sample directory, admins only |
+| `site-kit/lib/listora-sample.json` | The sample listings, reviews, claim and saved listings that page sends |
 | `site-kit/public/vendor/listora-sample.csv` | Sample spreadsheet for import |
 | `site-kit/README.md` | Owner apply commands |
 

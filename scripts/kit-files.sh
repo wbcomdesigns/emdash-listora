@@ -11,11 +11,13 @@ site-kit/listora-ui.css src/styles/listora-ui.css
 site-kit/lib/listora.ts src/lib/listora.ts
 site-kit/lib/listora-strings.ts src/lib/listora-strings.ts
 site-kit/lib/wbcom-kit.ts src/lib/wbcom-kit.ts
+site-kit/lib/listora-sample.json src/lib/listora-sample.json
 site-kit/pages/listings/index.astro src/pages/listings/index.astro
 site-kit/pages/listings/[slug].astro src/pages/listings/[slug].astro
 site-kit/pages/listings/submit.astro src/pages/listings/submit.astro
 site-kit/pages/listings/calendar.astro src/pages/listings/calendar.astro
 site-kit/pages/listings/import.astro src/pages/listings/import.astro
+site-kit/pages/listings/sample.astro src/pages/listings/sample.astro
 site-kit/pages/account/index.astro src/pages/account/index.astro
 MAP
 (cd "$PLUGIN" && find site-kit/blocks -type f | sort | while read -r f; do echo "$f src/listora-block/${f#site-kit/blocks/}"; done)

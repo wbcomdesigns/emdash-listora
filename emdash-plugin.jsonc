@@ -10,7 +10,7 @@
 	"repo": "https://github.com/wbcomdesigns/emdash-listora",
 	"author": { "name": "Wbcom Designs", "url": "https://wbcomdesigns.com", "email": "security@wbcomdesigns.com" },
 	"security": { "email": "security@wbcomdesigns.com" },
-	"description": "A moderated local directory: search, a map, 10 listing types, member submissions, reviews, claims and a dashboard.",
+	"description": "A moderated directory: search, a map, editable listing types with custom fields, a Software type, member submissions, reviews and claims.",
 	"sections": {
 		"description": { "file": "./docs/registry/description.md" },
 		"installation": { "file": "./docs/registry/installation.md" },
@@ -36,31 +36,34 @@
 	"allowedHosts": [],
 	"storage": {
 		"submissions": {
-			"indexes": ["status", "createdAt", "title", "member_id", "tl", "gone", "owner_email"]
+			"indexes": ["status", "createdAt", "title", "member_id", "tl", "gone", "owner_email", ["member_id", "createdAt"]]
 		},
 		"directory": {
-			"indexes": ["vis", "pub", "type", "tl", "cl", "feat", "avg", "rc", "exp"]
+			"indexes": ["vis", "pub", "type", "tl", "feat", "avg", "rc", "exp", ["vis", "type", "n1"], ["vis", "type", "n2"], ["vis", "type", "n3"], ["vis", "type", "ch", "feat"], ["vis", "cy", "feat"], ["vis", "type", "feat"], ["vis", "type", "avg"], ["vis", "type", "tl"], ["vis", "feat"], ["vis", "avg"], ["vis", "tl"]]
+		},
+		"dircats": {
+			"indexes": [["cat", "vis", "feat"], ["cat", "vis", "avg"], ["cat", "vis", "tl"], ["cat", "vis", "type", "n1"], ["cat", "vis", "type", "n2"], ["cat", "vis", "type", "n3"], ["cat", "vis", "cy", "feat"], ["cat", "vis", "type", "ch", "feat"]]
 		},
 		"events": {
-			"indexes": ["savedAt", "contentId", "collection"]
+			"indexes": []
 		},
 		"reviews": {
-			"indexes": ["status", "listingId", "member_id", "createdAt", "reply_status", "reply_by", "stars"]
+			"indexes": ["status", "listingId", "member_id", "createdAt", "reply_status", "reply_by", "stars", ["listingId", "status", "createdAt"], ["reply_status", "createdAt"], ["member_id", "createdAt"]]
 		},
 		"claims": {
-			"indexes": ["status", "listingId", "member_id", "createdAt"]
+			"indexes": ["status", "listingId", "member_id", "createdAt", ["member_id", "createdAt"]]
 		},
 		"favorites": {
-			"indexes": ["member_id", "listingId", "createdAt"]
+			"indexes": ["member_id", "listingId", "createdAt", ["member_id", "createdAt"]]
 		},
 		"photos": {
-			"indexes": ["status", "listingId", "member_id", "createdAt"]
+			"indexes": ["status", "listingId", "member_id", "createdAt", ["member_id", "createdAt"]]
 		},
 		"edits": {
-			"indexes": ["status", "listingId", "member_id", "createdAt"]
+			"indexes": ["status", "listingId", "member_id", "createdAt", ["member_id", "createdAt"]]
 		},
 		"contacts": {
-			"indexes": ["listingId", "createdAt", "status", "notice", "owner_done"]
+			"indexes": ["listingId", "createdAt", "status", "notice", "owner_done", ["listingId", "createdAt"], ["notice", "createdAt"]]
 		},
 		"notice_queue": {
 			"indexes": ["listingId"]
@@ -73,9 +76,6 @@
 		},
 		"rates": {
 			"indexes": ["w", "who"]
-		},
-		"blocked": {
-			"indexes": ["member_id", "createdAt"]
 		}
 	},
 	"admin": {
@@ -123,6 +123,12 @@
 				"group": "Listora"
 			},
 			{
+				"path": "/types",
+				"label": "Listing types",
+				"icon": "tag",
+				"group": "Listora"
+			},
+			{
 				"path": "/settings",
 				"label": "Settings",
 				"icon": "settings",
@@ -142,23 +148,6 @@
 				"description": "A short notice to the owner's account email. The message itself stays on the site. Needs a mail provider.",
 				"type": "boolean",
 				"default": true
-			},
-			"default_listing_type": {
-				"label": "Default listing type",
-				"type": "select",
-				"default": "business",
-				"options": [
-					{ "value": "business", "label": "Business" },
-					{ "value": "restaurant", "label": "Restaurant" },
-					{ "value": "real-estate", "label": "Real estate" },
-					{ "value": "hotel", "label": "Hotel" },
-					{ "value": "event", "label": "Event" },
-					{ "value": "job", "label": "Job" },
-					{ "value": "healthcare", "label": "Healthcare" },
-					{ "value": "education", "label": "Education" },
-					{ "value": "place", "label": "Place" },
-					{ "value": "classified", "label": "Classified" }
-				]
 			},
 			"expiry_days": {
 				"label": "Listings expire after this many days (0 = never)",
