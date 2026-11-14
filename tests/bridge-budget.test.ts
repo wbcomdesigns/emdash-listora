@@ -154,6 +154,7 @@ const MEASURED: Record<string, number> = {
 	"hook content:afterRestore": 4,
 	"hook content:afterDelete": 2,
 	"hook page:metadata": 3,
+	"hook page:metadata (software, unrated)": 3,
 	"cron notify (each run, 100 waiting, 50 owners)": 8,
 	"cron notify (everyone told within the hour)": 3,
 	"cron notify (email off, 100 waiting)": 3,
@@ -613,6 +614,11 @@ describe("bridge calls per entry point, worst case", () => {
 		await measure("hook content:afterDelete", () => hook("content:afterDelete", { collection: "listings", id: fresh.id, permanent: false }), { hook: true });
 		const page = { page: { url: "https://busy.test/listings/place-000", path: "/listings/place-000", locale: null, kind: "content", pageType: "listing", title: "Place 000", description: null, canonical: null, image: null, content: { collection: "listings", id: L[0], slug: "place-000" } } };
 		expect(await measure("hook page:metadata", () => hook("page:metadata", page), { hook: true })).toMatchObject({ kind: "jsonld" });
+		// A Software listing gets its whole SoftwareApplication from the same three reads, rated or not.
+		const app = await rt.fixtures.content("listings", { data: { title: "Hooked App", listing_type: "software", listing_status: "live", type_fields: JSON.stringify({ what_it_is: "Plugin", version: "2.0.0", price: "Free" }) }, slug: "hooked-app", status: "published" } as never);
+		await hook("content:afterPublish", { collection: "listings", content: app });
+		const appPage = { page: { ...page.page, url: "https://busy.test/listings/hooked-app", path: "/listings/hooked-app", title: "Hooked App", content: { collection: "listings", id: app.id, slug: "hooked-app" } } };
+		expect(await measure("hook page:metadata (software, unrated)", () => hook("page:metadata", appPage), { hook: true })).toMatchObject({ graph: { "@type": "SoftwareApplication", softwareVersion: "2.0.0" } });
 	});
 
 	/* ---- Scheduled tasks, each run measured until its work is done ---- */

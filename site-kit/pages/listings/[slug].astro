@@ -10,7 +10,11 @@ import { Image } from "emdash/ui";
 import Layout from "../../layouts/ListoraLayout.astro";
 import {
 	asNumber,
+	countLabel,
 	detailValue,
+	isSoftware,
+	relativeTime,
+	softwareView,
 	hasPlace,
 	imageUrl,
 	storedDetails,
@@ -29,7 +33,7 @@ import {
 	websiteHref,
 	weekdayIndex,
 } from "../../lib/listora";
-import { minutes, openPhoto, photoAlt, photosOf, S } from "../../lib/listora-strings";
+import { copyNamed, minutes, openPhoto, photoAlt, photosOf, S } from "../../lib/listora-strings";
 import "../../styles/listora-ui.css";
 
 const slug = decodeSlug(Astro.params.slug);
@@ -83,9 +87,17 @@ const services = (() => {
 	}
 })();
 // What this type of listing adds, in the type's field order: a home's bedrooms, a job's salary.
-const facts = typeFacts(data, typeOf(types, data.listing_type), { dateFormat: site?.dateFormat, timeZone: zone });
+const listingType = typeOf(types, data.listing_type);
+const facts = typeFacts(data, listingType, { dateFormat: site?.dateFormat, timeZone: zone });
 // A member wrote the links of a listing they manage: search engines are told so.
 const factRel = claimed ? "nofollow ugc" : undefined;
+// Software gets its own sections: version and badges, Repository and Docs, an Install box, Maintained by.
+const sw = isSoftware(listingType) ? softwareView(data, listingType) : null;
+const swBadges = sw ? [sw.kind, sw.worksWith, sw.license, sw.price, sw.openSource ? S.software.openSource : ""].filter(Boolean) : [];
+// WB Polls' slot, when that kit is on the site too: nothing when it is not, or no poll is attached.
+const PollSlot = (Object.values(import.meta.glob("../../components/PollSlot.astro", { eager: true }))[0] as { default?: unknown } | undefined)?.default as
+	| ((props: { collection: string; id: string }) => unknown)
+	| undefined;
 const isEvent = data.listing_type === "event";
 const details = storedDetails(data);
 const hasContact = Boolean(data.phone || website || data.email);
@@ -135,7 +147,8 @@ const schema = {
 	image={photo}
 	content={{ collection: "listings", id: data.id, slug }}
 >
-	<script type="application/ld+json" set:html={jsonForScript(schema)} />
+	{/* A Software listing's SoftwareApplication data comes from the plugin (page:metadata), with its version, price and rating. */}
+	{sw ? null : <script type="application/ld+json" set:html={jsonForScript(schema)} />}
 	<div class="listora-block" data-zone={zone}>
 		<article class="listora-detail">
 			<nav class="listora-detail__breadcrumb" aria-label={S.listing.breadcrumb}>
@@ -168,7 +181,8 @@ const schema = {
 
 			{
 				gallery.length > 0 ? (
-					<section class="listora-gallery" aria-label={S.listing.photos}>
+					<section class="listora-gallery" aria-label={sw ? S.software.screenshots : S.listing.photos}>
+						{sw ? <h2 class="listora-software__heading">{S.software.screenshots}</h2> : null}
 						<ul class="listora-gallery__thumbs">
 							{gallery.map((row, index) => (
 								<li>
@@ -224,6 +238,30 @@ const schema = {
 						</div>
 						<h1 class="listora-detail__title">{data.title}</h1>
 						{
+							sw ? (
+								<>
+									{swBadges.length ? (
+										<ul class="listora-software__badges" aria-label={S.software.badges}>
+											{swBadges.map((badge) => <li class="listora-chip">{badge}</li>)}
+										</ul>
+									) : null}
+									<p class="listora-software__meta" data-gh={sw.github || undefined} data-gh-release>
+										<span data-gh-wrap hidden={sw.stars === null}>
+											<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
+											<span data-gh-stars>{sw.stars === null ? "" : countLabel(sw.stars)}</span>
+											<span class="listora-sr-only">{S.software.stars}</span>
+										</span>
+										<span data-gh-wrap hidden={!sw.version && !sw.lastRelease}>
+											<span class="listora-sr-only">{S.software.version}</span>
+											<span data-gh-version>{sw.version}</span>
+											<span class="listora-sr-only">{S.software.lastRelease}</span>
+											<time datetime={sw.lastRelease || undefined} data-relative>{sw.lastRelease ? relativeTime(sw.lastRelease) : ""}</time>
+										</span>
+									</p>
+								</>
+							) : null
+						}
+						{
 							place ? (
 								<p class="listora-detail__address">
 									<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
@@ -237,6 +275,12 @@ const schema = {
 						{data.excerpt ? <p class="listora-detail__lead">{data.excerpt}</p> : null}
 
 						<div class="listora-detail__actions">
+							{sw?.repository ? (
+								<a class="listora-btn" href={sw.repository} rel={factRel}>{sw.github ? S.software.viewOnGithub : S.software.repository}</a>
+							) : null}
+							{sw?.homepage ? (
+								<a class="listora-btn listora-btn--secondary" href={sw.homepage} rel={factRel}>{S.software.docs}</a>
+							) : null}
 							<button class="listora-btn listora-btn--secondary" type="button" id="fav-btn" aria-pressed="false" data-id={data.id}>
 								<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
 									<path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
@@ -266,6 +310,8 @@ const schema = {
 									<a class="listora-btn listora-btn--secondary" href="#claim-form">{S.listing.claim}</a>
 								) : null
 							}
+							{/* Report opens the message form with a first line filled in: it reaches the admin's Messages, and the owner when there is one. */}
+							{sw ? <button class="listora-btn listora-btn--ghost" type="button" data-report>{S.software.report}</button> : null}
 						</div>
 					</header>
 
@@ -282,6 +328,20 @@ const schema = {
 					</div>
 
 					<div id="tab-details" role="tabpanel" aria-labelledby="tab-btn-details">
+						{
+							sw?.install ? (
+								<section class="listora-panel listora-software__install" aria-labelledby="listora-install-heading">
+									<h2 id="listora-install-heading">{S.software.install}</h2>
+									{/* Shown as text only, never run: the visitor copies it. */}
+									<div class="listora-software__command">
+										<code id="listora-install-command">{sw.install}</code>
+										<button type="button" class="listora-btn listora-btn--secondary" data-copy="listora-install-command" aria-label={copyNamed(String(data.title))}>{S.software.copy}</button>
+									</div>
+									<p class="listora-helper" data-copy-note>{S.software.installHelp}</p>
+								</section>
+							) : null
+						}
+						{sw && data.description ? <h2 class="listora-software__heading">{S.software.about}</h2> : null}
 						{
 							data.description ? (
 								<p class="listora-detail__copy">{data.description}</p>
@@ -334,6 +394,11 @@ const schema = {
 								</p>
 							) : null
 						}
+						{sw && PollSlot ? (
+							<section class="listora-software__poll" aria-label={S.software.poll}>
+								<PollSlot collection="listings" id={data.id} />
+							</section>
+						) : null}
 					</div>
 
 					<div id="tab-reviews" hidden role="tabpanel" aria-labelledby="tab-btn-reviews">
@@ -418,7 +483,7 @@ const schema = {
 					{
 						data.owner_name ? (
 							<div class="listora-detail__owner-card">
-								<h2>{S.listing.listedBy}</h2>
+								<h2>{sw ? S.software.maintainedBy : S.listing.listedBy}</h2>
 								<p class="listora-detail__owner-name">{data.owner_name}</p>
 							</div>
 						) : null
@@ -439,7 +504,7 @@ const schema = {
 									</a>
 								) : null}
 								{website ? (
-									<a class="listora-detail__contact-item" href={website} rel="noopener noreferrer">
+									<a class="listora-detail__contact-item" href={website} rel={claimed ? "nofollow ugc noopener noreferrer" : "noopener noreferrer"}>
 										<span class="listora-detail__contact-icon listora-detail__contact-icon--web" aria-hidden="true">
 											<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
 												<circle cx="12" cy="12" r="10"></circle>
@@ -530,12 +595,12 @@ const schema = {
 								</div>
 								<p class="listora-detail__claimed-badge" id="claim-taken" hidden>{S.listing.claimedByOwner}</p>
 								<div id="claim-signin" hidden>
-									<h2>{S.listing.claimTitle}</h2>
+									<h2>{sw ? S.software.claimTitle : S.listing.claimTitle}</h2>
 									<p class="listora-helper">{S.listing.claimHelp}</p>
 									<a class="listora-btn" data-signin href="/_emdash/admin/login">{S.listing.signInClaim}</a>
 								</div>
 								<form id="claim-form" class="listora-form">
-									<h2>{S.listing.claimTitle}</h2>
+									<h2>{sw ? S.software.claimTitle : S.listing.claimTitle}</h2>
 									<p class="listora-helper">{S.listing.claimHelp}</p>
 									<div class="listora-field">
 										<label class="listora-label" for="claim-name">
@@ -574,7 +639,7 @@ const schema = {
 
 <link rel="stylesheet" href="/vendor/leaflet/leaflet.css" />
 <script>
-	import { api, day, esc, notify, signInUrl, viewer } from "../../lib/listora";
+	import { api, day, esc, liveGithub, notify, signInUrl, viewer } from "../../lib/listora";
 	import { outOf5, photoPosition, reviewSummary, S } from "../../lib/listora-strings";
 
 	const favBtn = document.getElementById("fav-btn");
@@ -837,6 +902,37 @@ const schema = {
 	});
 
 	loadReviews();
+
+	// Software on github.com: live stars and latest release from GitHub, read in the visitor's browser.
+	// The stored values stay when GitHub cannot be reached. Also brings "last release" up to today.
+	liveGithub();
+
+	// The install command is copied, never run.
+	document.querySelectorAll<HTMLButtonElement>("[data-copy]").forEach((button) => {
+		button.addEventListener("click", async () => {
+			const code = document.getElementById(button.dataset.copy || "");
+			const note = button.closest("section")?.querySelector<HTMLElement>("[data-copy-note]");
+			try {
+				await navigator.clipboard.writeText(code?.textContent ?? "");
+				button.textContent = S.software.copied;
+				window.setTimeout(() => (button.textContent = S.software.copy), 2000);
+			} catch {
+				// No clipboard (an insecure page, a refused permission): the line is selected to copy by hand.
+				if (code) window.getSelection()?.selectAllChildren(code);
+				if (note) note.textContent = S.software.copyFailed;
+			}
+		});
+	});
+
+	// Report: the message form, with its first line written.
+	document.querySelector("[data-report]")?.addEventListener("click", () => {
+		document.getElementById("tab-btn-contact")?.click();
+		const message = document.getElementById("c-message") as HTMLTextAreaElement | null;
+		if (!message) return;
+		if (!message.value) message.value = S.software.reportMessage;
+		message.focus();
+		message.setSelectionRange(message.value.length, message.value.length);
+	});
 
 	const mapEl = document.getElementById("detail-map");
 	if (mapEl) {

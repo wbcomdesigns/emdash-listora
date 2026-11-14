@@ -281,6 +281,29 @@ export const S = {
 		signInClaim: "Sign in to claim this listing",
 		claimedByOwner: "This listing is managed by its owner.",
 	},
+	// The Software look: its card in the directory and the sections of its listing page.
+	software: {
+		viewOnGithub: "View on GitHub",
+		repository: "Repository",
+		docs: "Docs",
+		report: "Report",
+		reportMessage: "Something is wrong with this listing: ",
+		install: "Install",
+		installHelp: "Copy this line and run it yourself. Check what it does first.",
+		copy: "Copy",
+		copied: "Copied",
+		copyFailed: "Select the line and copy it.",
+		about: "About",
+		screenshots: "Screenshots",
+		maintainedBy: "Maintained by",
+		claimTitle: "Do you maintain this?",
+		stars: "stars or installs",
+		version: "Version",
+		lastRelease: "Last release",
+		openSource: "Open source",
+		badges: "About this software",
+		poll: "Poll",
+	},
 	account: {
 		title: "Your listings",
 		description: "Owner dashboard for listings, reviews, claims, and favorites.",
@@ -383,6 +406,14 @@ export function pageOf(page: number, pages: number): string {
 
 export function pageNumber(page: number): string {
 	return `Page ${page}`;
+}
+
+export function starsOf(count: string): string {
+	return `${count} stars or installs`;
+}
+
+export function copyNamed(title: string): string {
+	return `Copy the install command for ${title}`;
 }
 
 export function saveNamed(title: string): string {

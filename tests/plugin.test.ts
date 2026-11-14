@@ -255,7 +255,7 @@ describe("sample directory queue", () => {
 		}
 		// The published samples are in the directory index, with their ratings.
 		const directory = (await route("listings", {}, { method: "GET" })) as { total: number; items: Array<{ title: string; rating_count: number }> };
-		expect(directory.total).toBe(12);
+		expect(directory.total).toBe(15);
 		expect(directory.items.find((item) => item.title === "The Golden Fork")?.rating_count).toBe(3);
 		// A row left by an earlier release points at an entry that does not exist.
 		await rt.fixtures.plugin.storage("submissions", "listing-gone", { listingId: "listing-gone", title: "Gone Shop", status: "pending", createdAt: "2026-01-01T00:00:00.000Z" });
@@ -277,7 +277,7 @@ describe("sample directory queue", () => {
 		expect(published).toContain("Listing published.");
 		await settle();
 		expect(((await rt.inspect.content.get("listings", owl)) as { status: string }).status).toBe("published");
-		expect(((await route("listings", {}, { method: "GET" })) as { total: number }).total).toBe(13);
+		expect(((await route("listings", {}, { method: "GET" })) as { total: number }).total).toBe(16);
 		expect(JSON.stringify(await route("admin", { type: "block_action", action_id: "review", value: `forget:${dock}`, page: "/queue" }))).toContain("This listing exists");
 		expect(JSON.stringify(await route("admin", { type: "block_action", action_id: "review", value: "forget:listing-gone", page: "/queue" }))).toContain("Removed from the queue.");
 		expect(await rt.inspect.storage.get("submissions", "listing-gone")).toBeNull();
@@ -309,11 +309,11 @@ describe("sample directory queue", () => {
 			await settle();
 			return answer;
 		};
-		expect(await send("start")).toMatchObject({ ok: true, step: "listings", created: 0, total: 16 });
+		expect(await send("start")).toMatchObject({ ok: true, step: "listings", created: 0, total: 19 });
 		const first = await send("listings");
 		expect(first.created).toBeGreaterThan(0);
 		// The page was closed part way: opening it again goes on from there, not from the start.
-		expect(await route("sample", { step: "state" }, { method: "POST" } as never)).toMatchObject({ ok: true, running: true, created: first.created, total: 16 });
+		expect(await route("sample", { step: "state" }, { method: "POST" } as never)).toMatchObject({ ok: true, running: true, created: first.created, total: 19 });
 		expect(await send("start")).toMatchObject({ step: "listings", created: first.created });
 		let step = "listings";
 		for (let n = 0; n < 20 && step !== "done"; n += 1) step = (await send(step)).step;
@@ -321,7 +321,7 @@ describe("sample directory queue", () => {
 		const titles = (await rt.inspect.content.list("listings")).map((item) => String((item.data as { title: string }).title));
 		expect(titles).not.toContain("Bad Type");
 		expect(titles).not.toContain("Bad Choice");
-		expect(titles.length).toBe(14);
+		expect(titles.length).toBe(17);
 		// A restaurant's details are the type's own fields.
 		const fork = (await rt.inspect.content.list("listings")).find((item) => (item.data as { title: string }).title === "The Golden Fork")!;
 		const details = (fork.data as { type_fields: unknown }).type_fields;
@@ -335,7 +335,7 @@ describe("sample directory queue", () => {
 		expect(JSON.stringify(await route("admin", { type: "page_load", page: "/setup" }))).not.toContain("listings/sample/");
 		// Loading again adds nothing twice.
 		for (step = "start"; step !== "done"; ) step = (await send(step)).step;
-		expect((await rt.inspect.content.list("listings")).length).toBe(14);
+		expect((await rt.inspect.content.list("listings")).length).toBe(17);
 	});
 
 	it("leaves the per-minute sample task a 0.7.x site may still have scheduled to cancel itself, writing nothing", async () => {

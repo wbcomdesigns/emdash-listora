@@ -398,6 +398,178 @@ export function cardFacts(data: Record<string, unknown>, type: ListingTypeInfo, 
 	return typeFacts(data, type, { dateFormat, cards: true }).map((fact) => (fact.kind === "choice" ? fact.value : `${fact.label}: ${fact.value}`));
 }
 
+/** A type drawn with the Software look: the built-in Software type, or any type the owner gave that schema.org type. */
+export const isSoftware = (type: ListingTypeInfo) => type.schemaType === "SoftwareApplication";
+
+/** "owner/repo" for a repository on github.com, else "". Only what GitHub allows in names gets through. */
+export function githubRepo(value: unknown): string {
+	const match = /^https:\/\/(?:www\.)?github\.com\/([A-Za-z0-9](?:[A-Za-z0-9-]{0,38}))\/([A-Za-z0-9._-]{1,100})\/?$/.exec(websiteHref(value).replace(/\.git\/?$/, "").replace(/[?#].*$/, ""));
+	return match && !/^\.+$/.test(match[2]) ? `${match[1]}/${match[2]}` : "";
+}
+
+export type SoftwareView = {
+	kind: string;
+	worksWith: string;
+	license: string;
+	price: string;
+	openSource: boolean;
+	version: string;
+	stars: number | null;
+	lastRelease: string;
+	repository: string;
+	homepage: string;
+	install: string;
+	github: string;
+};
+
+/**
+ * What the Software card and page show, read from the listing's details. Only fields the type still
+ * has are read (the owner may remove one), a choice in the owner's spelling, links only when safe.
+ */
+export function softwareView(data: Record<string, unknown>, type: ListingTypeInfo): SoftwareView {
+	const stored = storedDetails(data);
+	const fields = new Map((type.fields ?? []).map((field) => [field.key, field]));
+	const raw = (key: string) => (fields.has(key) ? stored[key] : undefined);
+	const text = (key: string, max = 120) => String(raw(key) ?? "").trim().slice(0, max);
+	const pick = (key: string) => {
+		const value = text(key);
+		return fields.get(key)?.options?.find((option) => option.toLowerCase() === value.toLowerCase()) ?? value;
+	};
+	const stars = Number(raw("stars"));
+	const repository = websiteHref(raw("repository"));
+	return {
+		kind: pick("what_it_is"),
+		worksWith: pick("works_with"),
+		license: pick("license"),
+		price: pick("price"),
+		openSource: raw("open_source") === true || raw("open_source") === "true",
+		version: text("version", 40),
+		stars: raw("stars") !== undefined && raw("stars") !== "" && Number.isFinite(stars) && stars >= 0 ? Math.round(stars) : null,
+		lastRelease: /^\d{4}-\d{2}-\d{2}/.test(text("last_release")) ? text("last_release", 30) : "",
+		repository,
+		homepage: websiteHref(raw("homepage")),
+		install: text("install_command", 300),
+		github: githubRepo(repository),
+	};
+}
+
+/** A count as a visitor reads it: 950, 1.2K, 3.4M. */
+export const countLabel = (value: number) => new Intl.NumberFormat("en-US", { notation: "compact", maximumFractionDigits: 1 }).format(value);
+
+/** "3 days ago", "last month", "2 years ago" for a date, or "" when it is not one. */
+export function relativeTime(value: unknown, now = Date.now()): string {
+	const time = Date.parse(String(value ?? ""));
+	if (!Number.isFinite(time)) return "";
+	const days = Math.round((time - now) / 86_400_000);
+	const format = new Intl.RelativeTimeFormat("en-US", { numeric: "auto" });
+	if (Math.abs(days) < 7) return format.format(days, "day");
+	if (Math.abs(days) < 30) return format.format(Math.round(days / 7), "week");
+	if (Math.abs(days) < 365) return format.format(Math.round(days / 30), "month");
+	return format.format(Math.round(days / 365), "year");
+}
+
+/** Every `time[data-relative]` on the page says how long ago it was, as of now (a cached page keeps its date). */
+export function refreshTimes(root: ParentNode = document): void {
+	root.querySelectorAll<HTMLTimeElement>("time[data-relative]").forEach((node) => {
+		const label = relativeTime(node.dateTime);
+		if (label) node.textContent = label;
+	});
+}
+
+export type GithubFacts = { stars?: number; tag?: string; date?: string };
+const GH_CACHE = "listora-gh:";
+
+/**
+ * Stars, and the latest release when asked, from GitHub's public API, read in the visitor's browser
+ * (the plugin has no network permission). The answer is kept for the browser session. Any failure,
+ * a rate limit included, answers null and stops further asks this session, so the page keeps the
+ * stored values and never shows an error.
+ */
+export async function githubFacts(repo: string, release: boolean): Promise<GithubFacts | null> {
+	if (!/^[A-Za-z0-9-]+\/[A-Za-z0-9._-]+$/.test(repo)) return null;
+	const key = `${GH_CACHE}${repo}${release ? "#r" : ""}`;
+	const store = (() => {
+		try {
+			return window.sessionStorage;
+		} catch {
+			return null;
+		}
+	})();
+	const read = (name: string) => {
+		try {
+			return store?.getItem(name) ?? null;
+		} catch {
+			return null;
+		}
+	};
+	const write = (name: string, value: string) => {
+		try {
+			store?.setItem(name, value);
+		} catch {
+			// Storage full or blocked: the next page asks again.
+		}
+	};
+	const kept = read(key);
+	if (kept) {
+		try {
+			return JSON.parse(kept) as GithubFacts;
+		} catch {
+			// Asked again below.
+		}
+	}
+	if (read(`${GH_CACHE}off`)) return null;
+	const get = async (path: string) => {
+		const response = await fetch(`https://api.github.com/repos/${repo}${path}`, { headers: { Accept: "application/vnd.github+json" }, referrerPolicy: "no-referrer", credentials: "omit" });
+		if (response.status === 404) return null;
+		if (!response.ok) throw new Error(String(response.status));
+		return (await response.json()) as Record<string, unknown>;
+	};
+	try {
+		const [info, latest] = await Promise.all([get(""), release ? get("/releases/latest") : null]);
+		const facts: GithubFacts = {};
+		const stars = Number(info?.stargazers_count);
+		if (info && Number.isFinite(stars) && stars >= 0) facts.stars = Math.round(stars);
+		const tag = typeof latest?.tag_name === "string" ? latest.tag_name.trim().slice(0, 40) : "";
+		const date = typeof latest?.published_at === "string" && Number.isFinite(Date.parse(latest.published_at)) ? latest.published_at : "";
+		if (tag && date) Object.assign(facts, { tag, date });
+		write(key, JSON.stringify(facts));
+		return facts;
+	} catch {
+		write(`${GH_CACHE}off`, "1");
+		return null;
+	}
+}
+
+/**
+ * Live GitHub numbers for every `[data-gh="owner/repo"]` block on the page: its `[data-gh-stars]`
+ * text, and on a block with `data-gh-release` its `[data-gh-version]` text and `time[data-relative]`.
+ * Text only, never markup. What could not be read keeps the stored value.
+ */
+export async function liveGithub(root: ParentNode = document): Promise<void> {
+	const blocks = [...root.querySelectorAll<HTMLElement>("[data-gh]")];
+	// A part with no stored value waits hidden (data-gh-wrap) until GitHub fills it.
+	const show = (slot: Element, text: string) => {
+		slot.textContent = text;
+		slot.closest("[data-gh-wrap]")?.removeAttribute("hidden");
+	};
+	const repos = new Map<string, HTMLElement[]>();
+	for (const block of blocks) repos.set(block.dataset.gh ?? "", [...(repos.get(block.dataset.gh ?? "") ?? []), block]);
+	await Promise.all(
+		[...repos].map(async ([repo, nodes]) => {
+			const facts = await githubFacts(repo, nodes.some((node) => node.hasAttribute("data-gh-release")));
+			if (!facts) return;
+			for (const node of nodes) {
+				if (facts.stars !== undefined) node.querySelectorAll("[data-gh-stars]").forEach((slot) => show(slot, countLabel(facts.stars as number)));
+				if (facts.tag && facts.date && node.hasAttribute("data-gh-release")) {
+					node.querySelectorAll("[data-gh-version]").forEach((slot) => show(slot, facts.tag as string));
+					node.querySelectorAll<HTMLTimeElement>("time[data-relative]").forEach((slot) => (slot.dateTime = facts.date as string));
+				}
+			}
+		}),
+	);
+	refreshTimes(root);
+}
+
 export function mapsDirectionsUrl(lat: number, lng: number): string {
 	return `https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=;${lat},${lng}`;
 }

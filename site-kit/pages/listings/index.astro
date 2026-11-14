@@ -4,7 +4,11 @@ import { Image } from "emdash/ui";
 import Layout from "../../layouts/ListoraLayout.astro";
 import {
 	cardFacts,
+	countLabel,
 	hasPlace,
+	isSoftware,
+	relativeTime,
+	softwareView,
 	loadTypes,
 	placeholderHtml,
 	isOpenNow,
@@ -372,7 +376,11 @@ function amenityList(value: unknown): string[] {
 						const open = hours.length ? isOpenNow(hours, zone) : null;
 						const amenities = amenityList(listing.data.amenities);
 						const owner = String(listing.data.owner_name || "");
-						const facts = cardFacts(listing.data, typeOf(types, listing.data.listing_type), settings?.dateFormat);
+						const listingType = typeOf(types, listing.data.listing_type);
+						const facts = cardFacts(listing.data, listingType, settings?.dateFormat);
+						// Software has a card of its own: what it is, what it works with, its license, price, stars and last release.
+						const sw = isSoftware(listingType) ? softwareView(listing.data, listingType) : null;
+						const badges = sw ? [sw.kind, sw.worksWith, sw.license, sw.price].filter(Boolean) : [];
 						return (
 							<article class="listora-card" data-slug={listing.id} data-type={listing.data.listing_type} data-city={located ? listing.data.city : undefined} data-lat={located ? listing.data.lat : undefined} data-lng={located ? listing.data.lng : undefined}>
 								<div class="listora-card-media">
@@ -399,8 +407,38 @@ function amenityList(value: unknown): string[] {
 										{open === true ? <span class="listora-open">{S.common.open}</span> : null}
 										{open === false ? <span class="listora-closed">{S.common.closed}</span> : null}
 									</p>
-									{owner ? <p class="listora-meta">{S.directory.listedBy} {owner}</p> : null}
-									{facts.length ? (
+									{owner ? <p class="listora-meta">{sw ? S.software.maintainedBy : S.directory.listedBy} {owner}</p> : null}
+									{sw ? (
+										<>
+											{listing.data.excerpt ? <p class="listora-software__summary">{listing.data.excerpt}</p> : null}
+											{badges.length ? (
+												<ul class="listora-software__badges" aria-label={S.software.badges}>
+													{badges.map((badge) => <li class="listora-chip">{badge}</li>)}
+												</ul>
+											) : null}
+											<p class="listora-software__meta" data-gh={sw.github || undefined}>
+												<span data-gh-wrap hidden={sw.stars === null}>
+													<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
+													<span data-gh-stars>{sw.stars === null ? "" : countLabel(sw.stars)}</span>
+													<span class="listora-sr-only">{S.software.stars}</span>
+												</span>
+												{sw.version || sw.lastRelease ? (
+													<span>
+														{sw.version ? <span data-gh-version>{sw.version}</span> : null}
+														{sw.lastRelease ? <time datetime={sw.lastRelease} data-relative>{relativeTime(sw.lastRelease)}</time> : null}
+													</span>
+												) : null}
+											</p>
+											{sw.repository ? (
+												<p>
+													<a class="listora-btn listora-btn--secondary listora-software__repo" href={sw.repository} rel={listing.data.is_claimed ? "nofollow ugc" : undefined}>
+														{sw.github ? S.software.viewOnGithub : S.software.repository}
+													</a>
+												</p>
+											) : null}
+										</>
+									) : null}
+									{!sw && facts.length ? (
 										<p class="listora-card__features">
 											{facts.map((fact) => <span>{fact}</span>)}
 										</p>
@@ -410,7 +448,7 @@ function amenityList(value: unknown): string[] {
 											{amenities.map((item) => <span>{item}</span>)}
 										</p>
 									) : null}
-									{listing.data.excerpt ? <p>{listing.data.excerpt}</p> : null}
+									{!sw && listing.data.excerpt ? <p>{listing.data.excerpt}</p> : null}
 								</div>
 							</article>
 						);
@@ -443,7 +481,7 @@ function amenityList(value: unknown): string[] {
 
 <link rel="stylesheet" href="/vendor/leaflet/leaflet.css" />
 <script>
-	import { api, esc, goSignIn, savedIds } from "../../lib/listora";
+	import { api, esc, goSignIn, liveGithub, savedIds } from "../../lib/listora";
 	import { rated, S } from "../../lib/listora-strings";
 
 	const form = document.getElementById("listora-search-form") as HTMLFormElement | null;
@@ -512,6 +550,7 @@ function amenityList(value: unknown): string[] {
 		fillRatings();
 		drawMap();
 		askSaved();
+		liveGithub();
 	}
 	// Back and forward bring the matching page.
 	window.addEventListener("popstate", () => location.reload());
@@ -532,6 +571,8 @@ function amenityList(value: unknown): string[] {
 		});
 	}
 	fillRatings();
+	// Software cards on github.com: live stars from GitHub, in the visitor's browser. The stored number stays if that fails.
+	liveGithub();
 
 	q?.addEventListener("input", () => {
 		if (clearBtn) clearBtn.hidden = !q.value;

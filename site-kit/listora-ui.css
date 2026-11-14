@@ -1973,3 +1973,110 @@ textarea.listora-input {
 		transform: none;
 	}
 }
+
+/* The Software look: badges, stars and release line, the Install box (0.8.0). Badges are labels, not buttons. */
+.listora-software__badges {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--listora-space-1);
+	margin: var(--listora-space-2) 0 0;
+	padding: 0;
+	list-style: none;
+}
+
+.listora-software__badges .listora-chip {
+	min-height: 0;
+	padding: 0.15rem 0.6rem;
+	background: var(--listora-bg-muted);
+	color: var(--listora-fg-muted);
+	font-size: var(--listora-text-size-xs);
+	font-weight: var(--listora-weight-medium);
+}
+
+.listora-software__summary,
+.listora-card-body > p.listora-software__summary {
+	display: -webkit-box;
+	overflow: hidden;
+	-webkit-line-clamp: 1;
+	line-clamp: 1;
+	-webkit-box-orient: vertical;
+	margin: 0;
+	color: var(--listora-fg-muted);
+}
+
+.listora-software__meta,
+.listora-card-body > p.listora-software__meta {
+	display: flex;
+	overflow: visible;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--listora-space-1) var(--listora-space-4);
+	margin: var(--listora-space-2) 0 0;
+	color: var(--listora-fg-muted);
+	font-size: var(--listora-text-size-sm);
+}
+
+.listora-card-body > p:has(> .listora-software__repo) {
+	display: block;
+	overflow: visible;
+}
+
+.listora-software__meta > span {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--listora-space-1);
+}
+
+.listora-software__meta > span[hidden] {
+	display: none;
+}
+
+/* "1.4.2 · 2 weeks ago": the dot only when both are there. */
+.listora-software__meta [data-gh-version]:not(:empty) ~ time:not(:empty)::before {
+	content: "\00B7";
+	margin-inline-end: var(--listora-space-1);
+}
+
+.listora-software__meta svg {
+	color: var(--listora-rating-text);
+}
+
+.listora-software__heading {
+	margin: var(--listora-space-4) 0 var(--listora-space-2);
+	font-size: var(--listora-text-size-lg);
+}
+
+.listora-software__command {
+	display: flex;
+	align-items: stretch;
+	gap: var(--listora-space-2);
+}
+
+.listora-software__command code {
+	flex: 1 1 auto;
+	min-width: 0;
+	overflow-x: auto;
+	padding: var(--listora-space-2) var(--listora-space-3);
+	border: 1px solid var(--listora-border-default);
+	border-radius: var(--listora-radius-sm);
+	background: var(--listora-bg-muted);
+	color: var(--listora-fg-default);
+	font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+	font-size: var(--listora-text-size-sm);
+	line-height: 1.6;
+	white-space: pre;
+}
+
+.listora-software__command .listora-btn {
+	flex: 0 0 auto;
+}
+
+.listora-software__poll {
+	margin-block-start: var(--listora-space-6);
+}
+
+@media (max-width: 480px) {
+	.listora-software__command {
+		flex-direction: column;
+	}
+}

@@ -4,6 +4,7 @@ import { handleAdmin } from "./admin";
 import { categoryOf, hideListing, indexListing } from "./lib/directory";
 import { readRating } from "./lib/ratings";
 import { loadSettings } from "./lib/settings";
+import { webAddress } from "./lib/edits";
 import { LISTINGS, typeBySlug } from "./lib/types";
 import { asNumber, asRecord, asString } from "./lib/util";
 import { sampleRoute } from "./lib/onboard";
@@ -107,7 +108,8 @@ const plugin: SandboxedPlugin = {
 				if (item.status === "published" && !item.draftRevisionId) await indexFromHook(ctx, item);
 			},
 		},
-		// Adds the rating to a listing page's structured data. Nothing for unrated listings. Three calls,
+		// Adds the rating to a listing page's structured data (nothing for an unrated listing), and for
+		// Software the whole SoftwareApplication. Three calls,
 		// side by side: the rating, the listing's index row (its type) and the settings (the types store).
 		"page:metadata": {
 			handler: async (event, ctx) => {
@@ -115,11 +117,14 @@ const plugin: SandboxedPlugin = {
 				if (!content || content.collection !== LISTINGS) return null;
 				const [stored, row, settings] = await Promise.all([ctx.storage.ratings.get(content.id), ctx.storage.directory.get(content.id), loadSettings(ctx)]);
 				const rating = readRating(stored);
-				if (!rating.count) return null;
 				// The type's schema.org type as the owner has it now. A 0.6.x rating row's saved copy only
 				// when the listing is not in the index yet.
 				const slug = asString(asRecord(row).type);
 				const schema = slug ? typeBySlug(settings.types, slug).schemaType : asString(asRecord(stored).schema) || "LocalBusiness";
+				// Software gets the whole SoftwareApplication here (the kit page leaves its own block out);
+				// every other type only the rating, added to the page's own block.
+				const software = schema === "SoftwareApplication";
+				if (!software && !rating.count) return null;
 				return {
 					kind: "jsonld",
 					id: "listora-rating",
@@ -128,7 +133,8 @@ const plugin: SandboxedPlugin = {
 						// Same @id as the listing page's own block, so the two read as one thing.
 						"@id": `${event.page.canonical || event.page.url}#listing`,
 						"@type": schema,
-						aggregateRating: { "@type": "AggregateRating", ratingValue: rating.average, reviewCount: rating.count, bestRating: 5, worstRating: 1 },
+						...(software ? softwareGraph(asRecord(asRecord(row).card), event.page) : {}),
+						...(rating.count ? { aggregateRating: { "@type": "AggregateRating", ratingValue: rating.average, reviewCount: rating.count, bestRating: 5, worstRating: 1 } } : {}),
 					},
 				};
 			},
@@ -186,5 +192,38 @@ const plugin: SandboxedPlugin = {
 		admin: { permission: ADMIN, handler: async (routeCtx, ctx) => handleAdmin(routeCtx.input, ctx) },
 	},
 };
+
+
+/** Google's app types for each "What it is" choice (Software app structured data guide). App has none that fits every app. */
+const APP_CATEGORY: Record<string, string> = { plugin: "DeveloperApplication", skill: "DeveloperApplication", agent: "DeveloperApplication", "mcp server": "DeveloperApplication", library: "DeveloperApplication", theme: "DesignApplication" };
+
+type Page = { url: string; canonical: string | null; title: string | null; pageTitle?: string | null; description: string | null; image: string | null };
+
+/**
+ * A Software listing's schema.org SoftwareApplication facts, from its directory row (no extra call):
+ * name, description, applicationCategory (and the choice itself as applicationSubCategory),
+ * operatingSystem from Works with ("Any" says nothing), softwareVersion, an Offer at price 0 for Free
+ * or Freemium (no price is stored for Paid, so none is given), the item's own address, the share image.
+ */
+function softwareGraph(card: Record<string, unknown>, page: Page): Record<string, unknown> {
+	const fields = asRecord(card.type_fields);
+	const text = (key: string) => asString(fields[key]).trim().slice(0, 120);
+	const what = text("what_it_is");
+	const works = text("works_with");
+	const price = text("price").toLowerCase();
+	const graph: Record<string, unknown> = {
+		name: asString(card.title) || page.pageTitle || page.title || "",
+		url: webAddress(fields.homepage) || webAddress(fields.repository) || page.canonical || page.url,
+	};
+	const description = asString(card.excerpt) || page.description;
+	if (description) graph.description = description;
+	if (APP_CATEGORY[what.toLowerCase()]) graph.applicationCategory = APP_CATEGORY[what.toLowerCase()];
+	if (what) graph.applicationSubCategory = what;
+	if (works && works.toLowerCase() !== "any") graph.operatingSystem = works;
+	if (text("version")) graph.softwareVersion = text("version");
+	if (price === "free" || price === "freemium") graph.offers = { "@type": "Offer", price: 0 };
+	if (page.image) graph.image = page.image;
+	return graph;
+}
 
 export default plugin;

@@ -253,7 +253,7 @@ describe("limits and stepped work", () => {
 		expect(step).toBe("done");
 		const titles = (await rt.inspect.content.list("listings")).map((item) => String((item.data as { title: string }).title));
 		expect(titles.length).toBe(new Set(titles).size);
-		expect(titles.length).toBe(14);
+		expect(titles.length).toBe(17);
 	});
 
 	it("keeps a listing's index row and its rating copy when the content hook and a rating change land together", async () => {

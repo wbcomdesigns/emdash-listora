@@ -327,6 +327,67 @@
 				"cuisine": "chinese",
 				"price_range": "$"
 			}
+		},
+		{
+			"key": "listing-trailmark-mcp",
+			"title": "Trailmark MCP Server",
+			"excerpt": "Lets Claude Code search and read your trail maps and GPX files.",
+			"listing_type": "software",
+			"is_claimed": true,
+			"owner_name": "Dana Okafor",
+			"type_fields": {
+				"what_it_is": "MCP server",
+				"works_with": "Claude Code",
+				"repository": "https://github.com/fieldnote-sample/trailmark-mcp",
+				"homepage": "https://trailmark.example.com/docs/",
+				"install_command": "npx -y @fieldnote-sample/trailmark-mcp",
+				"version": "1.4.2",
+				"license": "MIT",
+				"price": "Free",
+				"open_source": true,
+				"stars": 1840,
+				"last_release": "2026-10-28",
+				"released": "2025-03-11"
+			}
+		},
+		{
+			"key": "listing-quillpad-theme",
+			"title": "Quillpad",
+			"excerpt": "A quiet reading theme for EmDash blogs, with a dark mode that follows the visitor.",
+			"listing_type": "software",
+			"type_fields": {
+				"what_it_is": "Theme",
+				"works_with": "EmDash",
+				"repository": "https://codeberg.org/fieldnote-sample/quillpad",
+				"homepage": "https://quillpad.example.com/",
+				"install_command": "npm install @fieldnote-sample/quillpad",
+				"version": "0.9.0",
+				"license": "GPL",
+				"price": "Freemium",
+				"open_source": true,
+				"stars": 312,
+				"last_release": "2026-09-14",
+				"released": "2025-11-02"
+			}
+		},
+		{
+			"key": "listing-ledgerline",
+			"title": "Ledgerline",
+			"excerpt": "Bookkeeping exports for small shops, as a Python library.",
+			"listing_type": "software",
+			"type_fields": {
+				"what_it_is": "Library",
+				"works_with": "Python",
+				"homepage": "https://ledgerline.example.com/",
+				"install_command": "pip install ledgerline",
+				"version": "3.1.0",
+				"license": "Proprietary",
+				"price": "Paid",
+				"open_source": false,
+				"stars": 5200,
+				"last_release": "2026-08-03",
+				"released": "2023-06-20"
+			}
 		}
 	],
 	"reviews": [
@@ -485,6 +546,30 @@
 			"body": "This review should stay off the public listing until someone approves it.",
 			"status": "pending",
 			"helpful": 0
+		},
+		{
+			"id": "rev-tm-1",
+			"listingId": "listing-trailmark-mcp",
+			"slug": "trailmark-mcp-server",
+			"member_id": "priya",
+			"author": "Priya Mehta",
+			"stars": 5,
+			"title": "Set up in two minutes",
+			"body": "Pasted the install line, restarted Claude Code and it found every GPX file in my notes folder.",
+			"status": "published",
+			"helpful": 4
+		},
+		{
+			"id": "rev-tm-2",
+			"listingId": "listing-trailmark-mcp",
+			"slug": "trailmark-mcp-server",
+			"member_id": "marcus",
+			"author": "Marcus Webb",
+			"stars": 4,
+			"title": "Useful, a little slow on big maps",
+			"body": "Search is quick. Reading a large map file takes a few seconds, but the answers are right.",
+			"status": "published",
+			"helpful": 1
 		}
 	],
 	"claim": {

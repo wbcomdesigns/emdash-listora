@@ -59,6 +59,74 @@ Press **Edit** on a field to change it, or to remove it with **Remove field** (i
 
 When you save a field's sort, Listora starts filling every listing's sort values straight away, a few listings a minute, so a sort is ready without waiting for the hourly check.
 
+## Software
+
+Software is one built-in type for plugins, skills, agents, MCP servers, apps, libraries and themes. It has no place: no map, address, city or opening hours. Its fields:
+
+| Field | Kind | Where it shows |
+| --- | --- | --- |
+| What it is | Choice: Plugin, Skill, Agent, MCP server, App, Library, Theme | Card badge, page badge |
+| Works with | Choice: WordPress, EmDash, Claude Code, Cursor, VS Code, npm, Python, Any | Card badge, page badge |
+| Repository | Link | The main button on the card and the page |
+| Homepage or docs | Link | **Docs** button on the page |
+| Install command | Text | The **Install** box on the page, with **Copy** |
+| Version | Text | Card and page, next to the last release |
+| License | Choice: MIT, GPL, Apache, BSD, Proprietary, Other | Card badge, page badge |
+| Price | Choice: Free, Freemium, Paid | Card badge, page badge |
+| Open source | Yes or no | Page badge |
+| Stars or installs | Number, Sort 1 | Card and page |
+| Last release | Date, Sort 2 | Card and page, as "2 weeks ago" |
+| Released | Date, Sort 3 | Details |
+
+### The card
+
+A Software card shows the logo (the listing's photo) or the type's icon, the name, a one-line summary (the excerpt), badges for What it is, Works with, License and Price, the rating, stars or installs, the version and how long ago it was released, a **View on GitHub** (or **Repository**) button, and the heart to save it.
+
+<!-- Screenshot for the walk: Software cards in the directory at 1440 and 390 -->
+
+### The listing page
+
+- **Header**: the badges, stars or installs, the version and last release, then **View on GitHub** or **Repository**, **Docs**, **Save**, **Share**, **Claim** and **Report**. **Report** opens the message form with a first line written; the message reaches Messages in the admin, and the owner when the listing has one.
+- **Install**: the install command in a code box with **Copy**. The page never runs it. When the browser cannot copy, the line is selected so the visitor can copy it by hand.
+- **About**: the listing's description.
+- **Screenshots**: the listing's photos, from the same photo feature as every type (photos an owner sends, or gallery rows added in the editor).
+- **Details**: every filled-in field.
+- **Reviews**, as on every listing.
+- **Poll**: when the WB Polls site kit is on the site, the poll attached to the listing, its content type or the site shows here. Without WB Polls nothing shows.
+- **Maintained by**: the owner's name once the listing is claimed, or the claim form.
+
+<!-- Screenshot for the walk: a Software listing page at 1440 and 390 -->
+
+### Live GitHub numbers
+
+When the repository is on github.com, the visitor's browser asks GitHub's public API for the stars and, on the listing page, the latest release tag and date, and shows them in place of the stored values. Listora itself makes no outside request and needs no network permission. Each browser asks once per session. If GitHub cannot be reached or has had too many requests from that visitor (60 an hour without signing in), the page keeps the stored values and shows no error. Keep the stored fields filled in: they are what search engines and visitors without GitHub see.
+
+### What search engines are told
+
+A Software listing page carries schema.org `SoftwareApplication` data, added by the plugin to the page head:
+
+| Property | From |
+| --- | --- |
+| `name`, `description` | The title and excerpt (or the page's SEO description) |
+| `applicationCategory` | What it is: `DeveloperApplication` for Plugin, Skill, Agent, MCP server and Library, `DesignApplication` for Theme. App has no single fit, so none is given |
+| `applicationSubCategory` | What it is, as written |
+| `operatingSystem` | Works with, left out for Any |
+| `softwareVersion` | Version |
+| `offers` | An offer at price 0 for Free and Freemium. Listora stores no price for Paid, so none is given |
+| `aggregateRating` | The listing's published reviews, once it has one |
+| `url` | Homepage or docs, else the repository, else the listing page |
+| `image` | The listing's share image |
+
+Google shows a software rich result only with a rating and a price, so a listing needs at least one review, and Free or Freemium, to qualify. Other types keep their own structured data, unchanged.
+
+### Links on member listings
+
+On a listing a member manages (added or claimed), the Repository, Docs, website and detail links carry `rel="nofollow ugc"`, so search engines know a member wrote them.
+
+### Sample listings
+
+**Load sample directory** adds three made-up Software listings (Trailmark MCP Server, Quillpad and Ledgerline) at example addresses, one with two reviews. Their GitHub address does not exist, so they show their stored numbers.
+
 ## Two admins at once
 
 Each save carries the version of the type you were shown. If someone else saved the type after your page loaded, your save is refused with **changed since this page loaded**, and the page shows what is saved now. Check it and save again. Nothing is overwritten without you seeing it.
