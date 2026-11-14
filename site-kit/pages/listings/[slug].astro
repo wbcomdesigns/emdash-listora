@@ -13,6 +13,7 @@ import {
 	imageUrl,
 	jsonForScript,
 	placeholderHtml,
+	typeOf,
 	hoursForWeek,
 	isOpenNow,
 	siteZone,
@@ -149,7 +150,7 @@ const schema = {
 					data.featured_image ? (
 						<Image image={data.featured_image} alt={String(data.title)} />
 					) : (
-						<Fragment set:html={placeholderHtml(String(data.listing_type || ""))} />
+						<Fragment set:html={placeholderHtml(typeOf(types, data.listing_type))} />
 					)
 				}
 			</div>

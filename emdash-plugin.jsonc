@@ -120,6 +120,12 @@
 				"group": "Listora"
 			},
 			{
+				"path": "/types",
+				"label": "Listing types",
+				"icon": "tag",
+				"group": "Listora"
+			},
+			{
 				"path": "/settings",
 				"label": "Settings",
 				"icon": "settings",

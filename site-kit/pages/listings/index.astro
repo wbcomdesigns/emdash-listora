@@ -279,7 +279,7 @@ function amenityList(value: unknown): string[] {
 									{listing.data.featured_image ? (
 										<Image image={listing.data.featured_image} alt="" />
 									) : (
-										<Fragment set:html={placeholderHtml(String(listing.data.listing_type || ""))} />
+										<Fragment set:html={placeholderHtml(typeOf(types, listing.data.listing_type))} />
 									)}
 									<span class="listora-badge">{typeName(listing.data.listing_type)}</span>
 									<span class="listora-badge listora-badge--featured">{S.common.featured}</span>
@@ -342,7 +342,7 @@ function amenityList(value: unknown): string[] {
 									{listing.data.featured_image ? (
 										<Image image={listing.data.featured_image} alt="" />
 									) : (
-										<Fragment set:html={placeholderHtml(String(listing.data.listing_type || ""))} />
+										<Fragment set:html={placeholderHtml(typeOf(types, listing.data.listing_type))} />
 									)}
 									<span class="listora-badge">{typeName(listing.data.listing_type)}</span>
 									{listing.data.is_featured ? <span class="listora-badge listora-badge--featured">{S.common.featured}</span> : null}

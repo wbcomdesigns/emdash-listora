@@ -11,6 +11,7 @@ import { nudgeUpgrade, upgradeDone, upgradeNote, type State } from "./lib/upgrad
 import { asBoolean, asRecord, asString, nowIso, readCursor } from "./lib/util";
 import { CLAIM_TIMEOUT_MS } from "./lib/util";
 import { scheduleAll } from "./tasks";
+import { handleTypes } from "./types-admin";
 
 export type BlockMap = Record<string, unknown> & { type: string };
 type Toast = { message: string; type: "success" | "error" | "info" };
@@ -1160,8 +1161,9 @@ function page(title: string, extra: Extra, blocks: BlockMap[]): BlockResponse {
 type ListKey = ListDef["key"];
 const viewFor = (settings: Settings, list: string) => (settings.views[list] ?? { show: PAGE, find: "", open: "" }) as View & { at?: string; back?: string[] };
 
-const PAGES: Array<[string, ListKey | "setup" | "settings"]> = [
+const PAGES: Array<[string, ListKey | "setup" | "settings" | "types"]> = [
 	["setup", "setup"],
+	["types", "types"],
 	["started", "setup"],
 	["settings", "settings"],
 	["changes", "changes"],
@@ -1214,6 +1216,13 @@ export async function handleAdmin(input: unknown, ctx: Ctx): Promise<BlockRespon
 	const b = budget(1);
 	const settings = await loadSettings(ctx);
 	const which = PAGES.find(([key]) => path.includes(key))?.[1] ?? "queue";
+
+	// The Types page keeps no state of its own (types-admin.ts).
+	if (which === "types" || /^(types?|fields?)_/.test(action)) {
+		const note = type === "page_load" ? upgradeNote(await nudgeUpgrade(ctx, settings, b)) : "";
+		const shown = await handleTypes(ctx, settings, b, raw);
+		return note ? { ...shown, blocks: [shown.blocks[0], { type: "banner", title: "Bringing your data over", description: note, variant: "default" }, ...shown.blocks.slice(1)] } : shown;
+	}
 
 	if (type === "page_load") {
 		// Opening a page starts its list at the top.

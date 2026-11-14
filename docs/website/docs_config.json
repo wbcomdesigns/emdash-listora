@@ -27,7 +27,8 @@
         { "slug": "submit", "title": "Add a listing" },
         { "slug": "reviews-claims", "title": "Reviews and claims" },
         { "slug": "owner-dashboard", "title": "Your account" },
-        { "slug": "admin", "title": "Admin screens" }
+        { "slug": "admin", "title": "Admin screens" },
+        { "slug": "listing-types", "title": "Listing types" }
       ]
     },
     {

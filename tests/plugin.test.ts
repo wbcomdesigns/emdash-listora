@@ -281,7 +281,7 @@ describe("sample directory queue", () => {
 		// The admin host validates Block Kit: the deleted row and the visitor pages card render.
 		for (const path of ["/queue", "/setup", "/changes", "/photos"]) {
 			const response = await route("admin", { type: "page_load", page: path });
-			expect(validateBlockResponse(response, { pluginPagePaths: ["/setup", "/queue", "/changes", "/photos", "/reviews", "/claims", "/messages", "/settings"] }), path).toMatchObject({ valid: true, errors: [] });
+			expect(validateBlockResponse(response, { pluginPagePaths: ["/setup", "/queue", "/changes", "/photos", "/reviews", "/claims", "/messages", "/types", "/settings"] }), path).toMatchObject({ valid: true, errors: [] });
 		}
 		const published = JSON.stringify(await route("admin", { type: "block_action", action_id: "review", value: `approve:${owl}`, page: "/queue" }));
 		expect(published).toContain("Listing published.");
@@ -1290,9 +1290,9 @@ describe("kit helpers that write member data into the page", () => {
 	});
 
 	it("draws the placeholder from a fixed icon set, whatever the listing type says", () => {
-		const out = placeholderHtml('"><script>alert(1)</script>');
+		const out = placeholderHtml({ icon: '"><script>alert(1)</script>' });
 		expect(out).not.toContain("alert");
-		expect(out).toBe(placeholderHtml("business"));
+		expect(out).toBe(placeholderHtml({ icon: "tag" }));
 	});
 });
 

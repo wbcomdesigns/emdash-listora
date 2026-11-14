@@ -107,6 +107,18 @@ const MEASURED: Record<string, number> = {
 	"admin save_lifetime (refused)": 1,
 	"admin save_photos": 2,
 	"admin save_messages": 2,
+	"admin page_load /types": 6,
+	"admin types_page": 6,
+	"admin type_add": 4,
+	"admin type_open": 2,
+	"admin type_save": 4,
+	"admin type_hide": 4,
+	"admin type_delete (refused, a listing uses it)": 3,
+	"admin type_delete": 9,
+	"admin field_open": 1,
+	"admin field_add (a sort: backfill starts)": 6,
+	"admin field_save": 6,
+	"admin field_remove": 6,
 	"admin kit_show": 4,
 	"admin kit_done": 4,
 	"admin review approve (expiry on)": 8,
@@ -646,6 +658,36 @@ describe("bridge calls per entry point, worst case", () => {
 		for (let n = 0; n < 15; n += 1) await measure("cron sweep-more (slot backfill, each run)", () => hook("cron", cronEvent(n % 2 ? "sweep-more-2" : "sweep-more")));
 		expect((await rt.inspect.storage.list<Record<string, unknown>>("directory")).filter((row) => "n1" in row.data).length).toBeGreaterThan(30);
 		expect(await rt.inspect.storage.get("directory", missed.id)).toMatchObject({ vis: true, title: "Missed Cafe" });
+	});
+
+	it("admin type editor", async () => {
+		type Page = Out & { blocks: Array<Record<string, unknown>> };
+		const types = (input: Record<string, unknown>) => admin({ page: "/types", ...input }) as Promise<Page>;
+		const formId = (page: Page, prefix: string) => String(page.blocks.find((block) => block.type === "form" && String(block.block_id).startsWith(prefix))?.block_id);
+		const buttonValue = (page: Page, action: string) => String((page.blocks.flatMap((block) => (block.elements as Array<Record<string, unknown>>) ?? []).find((element) => element.action_id === action) ?? {}).value);
+		await measure("admin page_load /types", () => types({ type: "page_load" }));
+		await measure("admin types_page", () => types({ type: "block_action", action_id: "types_page", value: { cursor: "5" } }));
+		const added = await measure("admin type_add", () => types({ type: "form_submit", action_id: "type_add", block_id: "type_add", values: { name: "Boat hire", schema: "LocalBusiness", color: "#0E7490", icon: "leaf", location: true } }));
+		expect(added.toast?.type).toBe("success");
+		const opened = await measure("admin type_open", () => types({ type: "block_action", action_id: "type_open", value: "boat-hire" }));
+		const saved = await measure("admin type_save", () => types({ type: "form_submit", action_id: "type_save", block_id: formId(opened, "type|"), values: { name: "Boat hire", schema: "LocalBusiness", color: "#0E7490", icon: "leaf", location: false } }));
+		expect(saved.toast?.type).toBe("success");
+		const withField = await measure("admin field_add (a sort: backfill starts)", () => types({ type: "form_submit", action_id: "field_add", block_id: formId(saved, "field_add|"), values: { label: "Berths", kind: "number", slot_number: "1" } }));
+		expect(withField.toast?.type).toBe("success");
+		const field = await measure("admin field_open", () => types({ type: "block_action", action_id: "field_open", value: "boat-hire|berths" }));
+		const fieldSaved = await measure("admin field_save", () => types({ type: "form_submit", action_id: "field_save", block_id: formId(field, "field|"), values: { label: "Berths", kind: "number", slot_number: "2" } }));
+		expect(fieldSaved.toast?.type).toBe("success");
+		const again = await types({ type: "block_action", action_id: "field_open", value: "boat-hire|berths" });
+		expect((await measure("admin field_remove", () => types({ type: "block_action", action_id: "field_remove", value: buttonValue(again, "field_remove") }))).toast?.type).toBe("success");
+		const typePage = await types({ type: "block_action", action_id: "type_open", value: "boat-hire" });
+		const hidden = await measure("admin type_hide", () => types({ type: "block_action", action_id: "type_hide", value: buttonValue(typePage, "type_hide") }));
+		expect(hidden.toast?.type).toBe("success");
+		// A listing of the type: delete is refused after the check.
+		const boat = await rt.fixtures.content("listings", { data: { title: "Boat One", listing_type: "boat-hire" }, slug: "boat-one", status: "draft" } as never);
+		expect((await measure("admin type_delete (refused, a listing uses it)", () => types({ type: "block_action", action_id: "type_delete", value: buttonValue(hidden, "type_delete") }))).toast?.type).toBe("error");
+		await (rt.actions.content.trash as (c: string, id: string) => Promise<unknown>)("listings", boat.id);
+		const fresh = await types({ type: "block_action", action_id: "type_open", value: "boat-hire" });
+		expect((await measure("admin type_delete", () => types({ type: "block_action", action_id: "type_delete", value: buttonValue(fresh, "type_delete") }))).toast).toMatchObject({ type: "success" });
 	});
 
 	/* ---- Last: the ones that change most ---- */

@@ -13,6 +13,7 @@ Open them from the admin menu, under Listora.
 | Listing reviews | Admin, Listora, Listing reviews | Moderate reviews, and owners' replies to reviews |
 | Claims | Admin, Listora, Claims | Moderate claims |
 | Messages | Admin, Listora, Messages | Messages from listing pages. Delete, in the Handle menu, opens the message and asks first |
+| Listing types | Admin, Listora, Listing types | Edit, hide and add listing types and their extra fields. See [Listing types](listing-types.md) |
 | Settings | Admin, Listora, Settings | One tab per group, one Save each |
 
 Get started opens with **Set up visitor pages**: the one command that copies the site kit for the installed version, the visitor addresses it adds, and a link to the install guide at that version. Press **Visitor pages are set up** once they work; after that the card is one line with the guide link and **Show the setup steps again**. Below it, Get started shows whether the listings collection exists, whether sample data is loaded, and a confirm button, until the directory has listings. Then the page is the queue, with the same card on top. Load sample is safe to click more than once: it adds 12 published listings and two drafts waiting in the Listings queue. A queue row whose listing was deleted or is in Trash says so and offers only **Remove from the queue**, which asks once. Approve and Reject each apply only while the listing still waits, so a stale click from a second tab is refused with a plain message.
@@ -27,7 +28,6 @@ Import and export live on the site kit page `/listings/import/`, for site admins
 
 ## Not built
 
-- Listing type editor (`/types`)
 - Search, maps, and review rules as their own settings tabs
 - Analytics
 - Email template editor

@@ -8,7 +8,7 @@ export type HourRow = { day: number; open: string; close: string };
  * A listing type as the plugin's `types` route gives it. The owner edits types in the admin (built-ins
  * and their own), so the kit never keeps a copy: every page asks the route (loadTypes).
  */
-export type ListingTypeInfo = { slug: string; name: string; schemaType?: string; color?: string; hidden?: boolean; location?: boolean };
+export type ListingTypeInfo = { slug: string; name: string; schemaType?: string; color?: string; icon?: string; hidden?: boolean; location?: boolean };
 
 /** The site's listing types, from the plugin, for an Astro page's server code. None when the plugin cannot be reached. */
 export async function loadTypes(locals: unknown): Promise<ListingTypeInfo[]> {
@@ -21,6 +21,7 @@ export async function loadTypes(locals: unknown): Promise<ListingTypeInfo[]> {
 			name: String(item.name),
 			schemaType: typeof item.schemaType === "string" ? item.schemaType : undefined,
 			color: typeof item.color === "string" ? item.color : undefined,
+			icon: typeof item.icon === "string" ? item.icon : undefined,
 			hidden: item.hidden === true,
 			location: item.location !== false,
 		}));
@@ -211,32 +212,47 @@ export function jsonForScript(value: unknown): string {
 		.replace(/\u2029/g, "\\u2029");
 }
 
-// One simple line icon per listing type, drawn inside a 24 by 24 box.
+// One simple line icon per icon name the type editor offers (src/lib/types.ts TYPE_ICONS), drawn
+// inside a 24 by 24 box. Each type names its icon, so the owner's own types get theirs too.
 const TYPE_ICONS: Record<string, string> = {
-	business: '<path d="M3 9h18l-1.5-5h-15L3 9Z"/><path d="M4 9v11h16V9M9 20v-6h6v6"/>',
-	restaurant:
-		'<path d="M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2M7 2v20M21 15V2a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3Zm0 0v7"/>',
-	"real-estate": '<path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M9 22V12h6v10"/>',
+	"building-2": '<path d="M3 9h18l-1.5-5h-15L3 9Z"/><path d="M4 9v11h16V9M9 20v-6h6v6"/>',
+	utensils: '<path d="M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2M7 2v20M21 15V2a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3Zm0 0v7"/>',
+	home: '<path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M9 22V12h6v10"/>',
 	hotel: '<path d="M2 4v16M2 8h18a2 2 0 0 1 2 2v10M2 17h20M6 8v9"/>',
-	event: '<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>',
-	job: '<rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/>',
-	healthcare: '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M12 8v8M8 12h8"/>',
-	education: '<path d="M22 10 12 5 2 10l10 5 10-5Z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/>',
-	place: '<path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/>',
-	software: '<path d="m16 18 6-6-6-6M8 6l-6 6 6 6"/>',
-	classified:
-		'<path d="M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z"/><circle cx="7.5" cy="7.5" r="1"/>',
+	calendar: '<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>',
+	briefcase: '<rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/>',
+	"heart-pulse": '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M12 8v8M8 12h8"/>',
+	"graduation-cap": '<path d="M22 10 12 5 2 10l10 5 10-5Z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/>',
+	"map-pin": '<path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/>',
+	tag: '<path d="M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z"/><circle cx="7.5" cy="7.5" r="1"/>',
+	code: '<path d="m16 18 6-6-6-6M8 6l-6 6 6 6"/>',
+	"shopping-bag": '<path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"/><path d="M3 6h18M16 10a4 4 0 0 1-8 0"/>',
+	coffee: '<path d="M17 8h1a4 4 0 1 1 0 8h-1"/><path d="M3 8h14v9a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4Z"/><path d="M6 2v2M10 2v2M14 2v2"/>',
+	music: '<path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>',
+	camera: '<path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/>',
+	book: '<path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>',
+	users: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>',
+	star: '<path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>',
+	wrench: '<path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>',
+	leaf: '<path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10Z"/><path d="M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12"/>',
+	globe: '<circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20M2 12h20"/>',
+	heart: '<path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/>',
 };
 
 /**
- * What a listing with no photo shows: a panel in the site's own colours with an icon for
- * its type. It is clearly not a photograph, and nothing is loaded from another website.
- * The icon set is fixed here, so the markup is safe to place with set:html or innerHTML.
+ * What a listing with no photo shows: a panel in the site's own colours with its type's icon. It is
+ * clearly not a photograph, and nothing is loaded from another website. Pass the type from
+ * `typeOf(types, slug)`: an icon the kit does not draw, or a type the site no longer has, gets the
+ * plain tag, never another type's icon. The icon set is fixed here, so the markup is safe to place
+ * with set:html or innerHTML.
  */
-export function placeholderHtml(type?: string): string {
-	const icon = TYPE_ICONS[type || ""] || TYPE_ICONS.business;
+export function placeholderHtml(type?: { icon?: string }): string {
+	const icon = TYPE_ICONS[type?.icon || ""] || TYPE_ICONS.tag;
 	return `<div class="listora-placeholder" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">${icon}</svg></div>`;
 }
+
+/** The icon names the kit draws, for the test that keeps them in step with the type editor's list. */
+export const KIT_ICONS = Object.keys(TYPE_ICONS);
 
 export function formatEventWhen(value: unknown, timeZone = "UTC"): string {
 	const raw = String(value || "").trim();

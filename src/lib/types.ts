@@ -210,6 +210,123 @@ export function slotsOf(type: ListingType, values: Record<string, unknown>): Par
 /** The types offered for a new listing. */
 export const shownTypes = (types: readonly ListingType[]) => types.filter((type) => !type.hidden);
 
+/* ---- The fixed lists the type editor offers (value, the name an owner reads) ---- */
+
+export const SCHEMA_TYPES: ReadonlyArray<readonly [string, string]> = [
+	["LocalBusiness", "Local business"],
+	["Restaurant", "Restaurant"],
+	["FoodEstablishment", "Food and drink"],
+	["Store", "Shop"],
+	["Residence", "Home or property"],
+	["Hotel", "Hotel"],
+	["LodgingBusiness", "Place to stay"],
+	["Event", "Event"],
+	["JobPosting", "Job"],
+	["MedicalBusiness", "Medical practice"],
+	["EducationalOrganization", "School or college"],
+	["Place", "Place"],
+	["TouristAttraction", "Attraction"],
+	["Offer", "Offer or classified"],
+	["Product", "Product"],
+	["Service", "Service"],
+	["ProfessionalService", "Professional service"],
+	["Organization", "Organization"],
+	["SoftwareApplication", "Software"],
+	["Thing", "Something else"],
+];
+
+export const TYPE_COLORS: ReadonlyArray<readonly [string, string]> = [
+	["#2563EB", "Blue"],
+	["#DC2626", "Red"],
+	["#16A34A", "Green"],
+	["#DB2777", "Pink"],
+	["#7C3AED", "Purple"],
+	["#0D9488", "Teal"],
+	["#0284C7", "Sky blue"],
+	["#0E7490", "Cyan"],
+	["#CA8A04", "Gold"],
+	["#059669", "Emerald"],
+	["#EA580C", "Orange"],
+	["#4F46E5", "Indigo"],
+	["#64748B", "Slate"],
+];
+
+/** Icon names the site kit draws (site-kit/lib/listora.ts TYPE_ICONS has one drawing for each). */
+export const TYPE_ICONS: ReadonlyArray<readonly [string, string]> = [
+	["building-2", "Building"],
+	["utensils", "Fork and knife"],
+	["home", "House"],
+	["hotel", "Bed"],
+	["calendar", "Calendar"],
+	["briefcase", "Briefcase"],
+	["heart-pulse", "Medical cross"],
+	["graduation-cap", "Graduation cap"],
+	["map-pin", "Map pin"],
+	["tag", "Price tag"],
+	["code", "Code"],
+	["shopping-bag", "Shopping bag"],
+	["coffee", "Coffee cup"],
+	["music", "Music"],
+	["camera", "Camera"],
+	["book", "Book"],
+	["users", "People"],
+	["star", "Star"],
+	["wrench", "Wrench"],
+	["leaf", "Leaf"],
+	["globe", "Globe"],
+	["heart", "Heart"],
+];
+
+export const KIND_NAMES: Record<FieldKind, string> = { text: "Text", number: "Number", choice: "Choice from a list", link: "Link", date: "Date", yesno: "Yes or no" };
+
+/** Most fields one type may have, and most types a site may add, so the settings record stays small. */
+export const MAX_FIELDS = 30;
+export const MAX_CUSTOM_TYPES = 40;
+
+/**
+ * A short token for a type as it is now. Every type editor decision carries the token of the type
+ * the admin was shown and is refused when the type has changed since, so two admins editing one
+ * type cannot overwrite each other without knowing (FNV-1a over the type's JSON).
+ */
+export function typeToken(type: ListingType): string {
+	const text = JSON.stringify(type);
+	let hash = 0x811c9dc5;
+	for (let i = 0; i < text.length; i += 1) hash = Math.imul(hash ^ text.charCodeAt(i), 0x01000193) >>> 0;
+	return hash.toString(36);
+}
+
+/** A slug or field key made from a name an owner typed, unique among `taken`. */
+export function keyFrom(name: string, taken: Iterable<string>, separator: "-" | "_", max: number): string {
+	const base =
+		name
+			.toLowerCase()
+			.normalize("NFKD")
+			.replace(/[^a-z0-9]+/g, separator)
+			.replace(new RegExp(`^\\${separator}+|\\${separator}+$`, "g"), "")
+			.slice(0, max - 3) || (separator === "-" ? "type" : "field");
+	const used = new Set(taken);
+	let key = base;
+	for (let n = 2; used.has(key); n += 1) key = `${base}${separator}${n}`;
+	return key;
+}
+
+/** The stored form of a type: everything but the built-in flag, which is decided at read time. */
+export const storedType = ({ builtin: _builtin, ...rest }: ListingType) => rest;
+
+/** The settings record with one type replaced (built-in or custom) or added. */
+export function withType(stored: unknown, type: ListingType): unknown[] {
+	const rows = Array.isArray(stored) ? stored : [];
+	const next = storedType(type);
+	const at = rows.findIndex((row) => asString(asRecord(row).slug) === type.slug);
+	return at < 0 ? [...rows, next] : rows.map((row, index) => (index === at ? next : row));
+}
+
+/** The settings record without a custom type. */
+export const withoutType = (stored: unknown, slug: string): unknown[] => (Array.isArray(stored) ? stored : []).filter((row) => asString(asRecord(row).slug) !== slug);
+
+/** The slot map of a type, for telling whether a save changed it. */
+export const slotMap = (type: ListingType) => JSON.stringify(type.fields.filter((field) => field.slot).map((field) => [field.key, field.slot]));
+
 export const LISTINGS = "listings";
 export const DEMO_MEMBER = "demo-member";
 
