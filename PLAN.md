@@ -8,8 +8,8 @@ Every task is a GitHub issue under the `0.8.0` milestone, worked on branch `0.8.
 
 | Step | Issue | Task | Needs |
 | --- | --- | --- | --- |
-| 1 | state to KV | SCOPE 10: internal state from settings to KV, with the read-old-write-new step | nothing |
-| 2 | types store | SCOPE 1 and 2: the KV types record, raw slugs, every reader moved, Software seeded as a built-in (fields only; its look is step 7) | 1 |
+| 1 | state to KV | Dropped by the owner on 2026-11-14 (SCOPE Decisions, item 10): no owner value, 7 paths over 9 calls | - |
+| 2 | types store | SCOPE 1 and 2: the settings types record, raw slugs, every reader moved, Software seeded as a built-in (fields only; its look is step 7) | 1 |
 | 3 | indexes and slots | SCOPE 5 and 11: `n1` to `n3` in the index filled by the hooks, composite indexes, unused ones removed, slot backfill through the sweep, slot sort on the `listings` route | 2 |
 | 4 | type editor | SCOPE 3: the Types admin page, type form, fields table and add-field form, delete rules | 2 |
 | 5 | field values and location-less | SCOPE 4 and 6: submit, edit, listing page, cards, CSV; every location surface checks the flag | 2, 4 |
