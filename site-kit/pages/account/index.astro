@@ -420,7 +420,7 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 		const link = document.createElement("a");
 		link.href = URL.createObjectURL(new Blob([JSON.stringify(mine, null, 2)], { type: "application/json" }));
 		link.download = "my-directory-data.json";
-		document.body.append(link);
+		document.body.appendChild(link);
 		link.click();
 		link.remove();
 		URL.revokeObjectURL(link.href);

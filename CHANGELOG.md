@@ -2,6 +2,12 @@
 
 Versions match `package.json`, the git tag, and the EmDash registry release. Newest first. Never publish a version that is not on `origin/main`.
 
+## [Unreleased]
+
+- New      - A Plain page option in the Listing types schema list, for a type whose listings point to a job or a course elsewhere and so should not claim a JobPosting or a school.
+- Improve  - The site kit type-checks cleanly on a Cloudflare Worker site: typed API answers, DOM calls the Worker types accept, and image values typed.
+- Fix      - The kit's directory page is never cached when the directory cannot answer, so "being prepared" cannot outlast the update.
+
 ## [0.8.0] - 2026-11-14
 
 Listing types you can edit, custom fields and a built-in Software type. No new permissions. Copy the kit again after you update, with the new tag.

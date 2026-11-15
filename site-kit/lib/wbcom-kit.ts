@@ -4,6 +4,9 @@
 
 import { getPublicPluginApiRouteHandler } from "emdash/plugin-utils";
 
+/** What the plugin routes answer: `{ data }` on success, `{ error: { message } }` on failure. */
+type ApiBody = { data?: ApiResult; error?: { message?: string } } | null;
+
 const ESCAPES: Record<string, string> = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
 
 /** Escape anything that came from the API before it goes into innerHTML. */
@@ -67,7 +70,7 @@ function remembered(plugin: string): string | null {
 /** EmDash's own answer for an address with no plugin behind it (not a plugin's answer). */
 async function routeMissing(response: Response): Promise<boolean> {
 	if (response.status !== 404) return false;
-	const body = await response.clone().json().catch(() => null);
+	const body = await (response.clone().json() as Promise<ApiBody>).catch(() => null);
 	return /route not found/i.test(String(body?.error?.message ?? ""));
 }
 
@@ -154,7 +157,7 @@ export async function api(plugin: string, path: string, body?: unknown, method =
 		if (response.status === 401) {
 			return { ok: false, error: { code: "SIGN_IN_REQUIRED", message: "Sign in to continue." } };
 		}
-		const json = await response.json().catch(() => null);
+		const json = await (response.json() as Promise<ApiBody>).catch(() => null);
 		if (!response.ok || !json) {
 			return { ok: false, error: { code: "FAILED", message: json?.error?.message || "Something went wrong. Try again." } };
 		}
