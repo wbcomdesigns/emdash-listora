@@ -8,7 +8,7 @@ This page is the team brief. Planning notes that fed it sit in [`ops/`](https://
 
 ## Proven
 
-The local lab (`~/code/emdash-local`, `http://localhost:4321`) passed `scripts/prove-lab.sh --all` after reset and the EmDash dev-bypass seed.
+The local lab (`emdash-local`, `http://localhost:4321`) passed `scripts/prove-lab.sh --all` after reset and the EmDash dev-bypass seed.
 
 - Sandboxed plugin with routes, storage, one hook, and Block Kit admin
 - 10 Free listing types

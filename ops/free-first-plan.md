@@ -76,7 +76,7 @@ Pass: side-by-side vs WP Free card/detail/submit at 1440 and 390.
 
 ## Local lab
 
-Keep `~/code/emdash-listora` + `~/code/emdash-local`.
+Keep `emdash-listora` + `emdash-local`.
 
 After Drop 1, the public pages must look like Listora Free, not the blog. After Drop 2, a clean second site applies the kit.
 

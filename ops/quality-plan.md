@@ -37,7 +37,7 @@ Slice A today fails (3) and (4) on public pages. Engine is proven. Presentation 
 
 ## Workstreams (run in parallel, ship together)
 
-### 1. Engine (`~/code/emdash-listora`)
+### 1. Engine (`emdash-listora`)
 
 Stay sandboxed. Follow `typescript-plugin-plan.md` slices A-J. Catalog is the backlog.
 

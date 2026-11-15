@@ -14,7 +14,7 @@ Owner asks (2026-11-13):
 | Listora published | 0.6.3 (2026-10-19), tested on EmDash 1.3.x |
 | Listora 0.7.0 | Built on branch `0.7.0`, PR #86 open, `package.json` already 0.7.0. Milestone issues #83, #84, #85 are open. Not walked, merged or tagged. Its manifest adds the `directory` collection and new indexes on submissions, reviews, contacts, ratings, notice_queue, rating_queue and rates |
 | Listora dependencies | peer `emdash >=1.2.0`. Dev: `emdash ^1.3.1`, `@emdash-cms/plugin-cli 0.13.3` (latest 0.13.6), `@emdash-cms/plugin-test ^0.2.8` (latest 0.2.12) |
-| Test sites | `~/code/emdash-lab-all` (Node, port 4340) on `emdash ^1.3.1`. `~/code/emdash-plugin-testbed` (Cloudflare) on `emdash ^1.3.0` with `@emdash-cms/cloudflare ^1.3.0`. Both run the sandbox runner |
+| Test sites | the shared lab site on `emdash ^1.3.1`. the Cloudflare test site (Cloudflare) on `emdash ^1.3.0` with `@emdash-cms/cloudflare ^1.3.0`. Both run the sandbox runner |
 | EmDash latest | 1.5.0 (2026-11-11), `@emdash-cms/sandbox-workerd` 0.9.7 |
 | Kit fetch helper | `listoraFetch` / `send` in `site-kit/lib/listora.ts` |
 | Open owner decision | #83: does a listing a member adds count as claimed? (`SUBMITTER_IS_OWNER`, default true) |
@@ -50,7 +50,7 @@ Owner asks (2026-11-13):
    4. Run `npx emdash migrate` by hand and read its KV warnings. Resolve any KV conflicts.
    5. Start on port 4340.
 4. Make a fresh standard site, required by the release gate and skill section 6.1:
-   1. `npm create emdash@latest ~/code/emdash-lab-150 -- --template blog --platform node --pm npm --yes`, plus the sandbox runner.
+   1. `npm create emdash@latest a fresh lab site -- --template blog --platform node --pm npm --yes`, plus the sandbox runner.
    2. Look at the bare site (home and a post, 1440 and 390, light and dark) before judging anything.
    3. If the site is in staging, take it live in settings.
 5. Testbed (Cloudflare), a drained update:

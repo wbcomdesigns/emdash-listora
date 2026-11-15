@@ -162,12 +162,12 @@ A slice is not done when the route returns JSON. Pair it with the screens in `op
 ## Gates
 
 ```bash
-cd ~/code/emdash-listora
+cd `emdash-listora`
 npm test
 npm run typecheck
 npm run build
 ```
 
-Restart `~/code/emdash-local` after every plugin rebuild. Lab pass/fail for slice A is in `ops/prototype-plan.md`. Each new slice adds route tests plus one browser path.
+Restart `emdash-local` after every plugin rebuild. Lab pass/fail for slice A is in `ops/prototype-plan.md`. Each new slice adds route tests plus one browser path.
 
 Publish to the registry only after slice B exists and a second site can apply the kit. Do not wait for J to publish A+B.
