@@ -1,73 +1,18 @@
-# Handoff (2026-10-20, 0.7.0 built, not released)
+# Handoff: Listora (2026-11-15)
 
-Read this first in a new session. Then `AGENTS.md`, `CONTRIBUTING.md`, and `docs/website/getting-started/new-machine.md`.
+Live: **0.8.0** on the EmDash registry as `@vapvarun.bsky.social/listora`. Public page: https://plugins.emdashcms.com/plugins/@vapvarun.bsky.social/listora
 
-This product is Free only. No Pro. Work is tracked as GitHub issues under version milestones and `Later`. There is no Basecamp board. Do not add Compare, Needs, credits, Google Maps, lead forms, verification, photo reviews, or native-plugin features.
+Test on a fresh `create-emdash` blog site (registry install, kit from the release tag) and on the Cloudflare test site. On Cloudflare, redeploy after a registry install or update before judging anything (emdash-cms/emdash#4865).
 
-## Now: 0.7.0 (branch `0.7.0`, PR open, milestone 0.7.0: #85, #83, #84)
+## Next: 0.8.1
 
-0.7.0 fits every entry point in Cloudflare's 10 requests per plugin call. Built and tested; not walked in a browser, not merged, not tagged, not published.
+Milestone `0.8.1` on GitHub holds the work, in this order:
 
-- Budget: `tests/bridge-budget.test.ts` measures every route, admin page and decision, hook and scheduled task (each step of a stepped one) on a 0.6.3-shaped busy seed and a 2000-listing directory. MEASURED is pinned, KNOWN_OVER is empty, the worst entry is 9. Re-measure with `VITE_BRIDGE_RECORD=1 npx vitest run tests/bridge-budget.test.ts`.
-- Races: `tests/races.test.ts`. Security review fixes: `tests/review-0-7-0.test.ts`.
-- Design: `src/lib/directory.ts` (the stored index), `src/lib/ratings.ts` (counters by increment, queue during the upgrade), `src/lib/upgrade.ts` (stepped 0.6.x upgrade), `src/lib/settings.ts` (one read), `src/lib/rates.ts`, `src/lib/refs.ts`, `src/tasks.ts` (scheduled work), `src/member.ts`, `src/public.ts`, `src/transfer.ts`, `src/admin.ts`.
-- Owner decision open on #83: does a listing a member adds count as claimed? `SUBMITTER_IS_OWNER` in `src/lib/types.ts`, true (recommended) by default.
+- #87 0.7.0 walk: low findings for the next release
+- #106 0.8.0 Cloudflare walk: low findings
+- #110 Next release: registry install text and shared kit
 
-Next, in order:
-1. Independent Sonnet walk of `docs/qa/QA_CHECKLIST.md` on the shared Node lab (the shared lab site, 4340) and the Cloudflare cases (CF-1 to CF-13) on the Cloudflare test site, registry install from a tag, kit from the tag. Update the 0.6.3 site to 0.7.0 there first (CF-1).
-2. Independent Opus review of `git diff v0.6.3..0.7.0`, and the automatic security review of the final commit.
-3. Only after both: drop "Cloudflare: not supported yet" from the install texts, merge, tag, publish (owner says publish).
-
-## Where the code lives
-
-| Thing | Where |
-| --- | --- |
-| Plugin (source of truth) | this repo, `main` |
-| Registry | `@vapvarun.bsky.social/listora`. Latest published is `0.6.3` (2026-10-19) |
-| Lab host | sibling EmDash site `emdash-local` (not this git repo) |
-| WordPress Listora | scope and visual reference only. Do not copy PHP |
-
-GitHub tag, `package.json`, and the registry version must stay the same number. Do not `--allow-overwrite`. Do not republish an old version.
-
-## What 0.3.0 changed
-
-- Member routes are private with `permission: "content:read"` and use `routeCtx.user`. A public route never gets a user. Never read a member id from the request
-- A member route must not write to or publish a listing. Rating and claimed flag change only on an admin decision
-- `import` is admin only. `reviews` is read only. New member route `review`
-- Moderation clicks carry the version the admin saw (`rev`). A rewritten or already-handled row is refused
-- Block Kit tables need `page_action_id`. Without it the whole admin page fails to render
-- Updating a published listing only saves a draft. `patchListing` in `src/lib/listings-query.ts` updates and republishes, and refuses (`busy`) when the listing already has unpublished edits so it never publishes someone's draft
-- Anything a member can write that an admin page later reads must not be able to break that page. `drainRatingDirty` is the pattern: small batch, each item isolated
-- Kit colours use `light-dark()` and follow the site theme. There is no `.dark` class block
-- Ratings are rows in plugin storage (`ratings`), written by `syncRating`. Nothing writes to a listing for a rating. Cards get them from the `ratings` route, listing pages from the `reviews` answer, structured data from the `page:metadata` hook
-- Public read routes carry `cacheControl` (30 seconds). Tests run inside workerd with no file system: read repo files in a test with a `?raw` import
-- Kit pages share `api`, `esc`, `notify` from `site-kit/lib/listora.ts`. Anything from the API goes through `esc` before `innerHTML`
-- Registry media: `icon.png`, `images/`, `docs/registry/*.md`, wired in `emdash-plugin.jsonc`
-
-## Start on any machine
-
-```bash
-git clone https://github.com/wbcomdesigns/emdash-listora.git
-cd emdash-listora
-npm install --legacy-peer-deps
-./scripts/setup-lab.sh
-./scripts/reset-lab.sh
-./scripts/prove-lab.sh --all
-```
-
-Override lab folder with `LISTORA_LAB`. After a kit change: edit `site-kit/`, then `./scripts/apply-kit.sh`. Second site for proving the kit off the starter: `npm create emdash@latest -- emdash-lab-listora2 --template portfolio --platform node --pm npm --yes` beside this repo, then run the lab scripts with `LISTORA_LAB=../emdash-lab-listora2 LISTORA_PORT=4322` (and `LISTORA_BASE=http://localhost:4322` for `prove-lab.sh`). After a plugin change: `npm run build`, then restart the lab dev server (reset-lab also wipes the lab database). Sign in on the lab with `/_emdash/api/setup/dev-bypass?redirect=/account/`.
-
-`emdash-plugin publish` needs `vapvarun.bsky.social`. Open a PR. The publisher ships after merge.
-
-## Next, in order
-
-0.6.3 is released: merged to `main`, tagged `v0.6.3`, published to the registry and on GitHub releases. It closed #77 to #81: stale "approving" claims (and photo "rejecting" claims) reopen after five minutes (`reopenStaleClaims` in `src/lib/util.ts`, guarded on status and claimedAt), the owner dashboard names the full review count, Settings names /listings/import/ before the site address is known, `readCursor` refuses a malformed cursor before storage sees it, and the account tabs wrap on a phone.
-
-1. Not yet walked for 0.6.3: 768, a keyboard pass, a subscriber walk, and a fresh-site registry install. Walk them on the shared lab (the shared lab site) and on the Cloudflare test site (the Cloudflare test site) once its browser walk runs.
-2. Issue #28 (type editor, reminders, health check) stays under Later until the owner picks it.
-3. Worth proving on the Cloudflare test site: a 100-row import, the scheduled tasks, owner photos on R2 (R2 must be enabled on the account first), real mail delivery.
-
-How a release is checked: an independent agent walks the checklist in a browser and looks at every screenshot, then an independent review reads `git diff <last tag>..HEAD`. On 0.6.3 that review found a reopened photo approval could add the photo twice; fixed before tagging.
+Then the release gate (`gate.sh`, which also checks that no public file carries machine paths and that the README is the product landing page), an independent walk on Node and Cloudflare, and publish only with the owner's go-ahead.
 
 ## How a release is verified
 
