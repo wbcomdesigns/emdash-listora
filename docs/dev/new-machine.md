@@ -11,7 +11,7 @@ Need Node.js 22.16 or later. Official site create: [Create your first EmDash sit
 Put the plugin anywhere. The default lab path is a sibling folder named `emdash-local`.
 
 ```bash
-# example: ~/code/emdash-listora and ~/code/emdash-local
+# example: `emdash-listora` and `emdash-local`
 git clone https://github.com/wbcomdesigns/emdash-listora.git
 cd emdash-listora
 npm install --legacy-peer-deps
@@ -49,7 +49,7 @@ If `LISTORA_LAB` already exists, it must be an EmDash Astro site (`astro.config`
 | Recopy kit after a chrome change | `./scripts/apply-kit.sh` |
 | Daily prove | `./scripts/reset-lab.sh` then `./scripts/prove-lab.sh --all` |
 
-Forms and directory chrome follow [Form presentation](../how-to/form-presentation.md) in this repo. You do not need `~/.claude/skills` on the new machine for those rules.
+Forms and directory chrome follow [Form presentation](../how-to/form-presentation.md) in this repo.
 
 ## What you cannot do from a new machine
 

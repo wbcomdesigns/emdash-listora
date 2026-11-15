@@ -232,7 +232,7 @@ Walk as guest, member and admin where the case has a visitor screen. Auto names 
 
 ## Cloudflare (0.8.0)
 
-On the Cloudflare test site (`~/code/emdash-plugin-testbed`). Install 0.7.1 from the registry with listings (some in two categories), reviews and waiting items in place, then update to 0.8.0 from the registry and copy the kit from `v0.8.0`. Open no admin page during CF8-1 to CF8-3. Every case must end without "Too many subrequests" in the Worker logs.
+On the Cloudflare test site (the Cloudflare test site). Install 0.7.1 from the registry with listings (some in two categories), reviews and waiting items in place, then update to 0.8.0 from the registry and copy the kit from `v0.8.0`. Open no admin page during CF8-1 to CF8-3. Every case must end without "Too many subrequests" in the Worker logs.
 
 | ID | Steps | Expected | Auto |
 | --- | --- | --- | --- |
@@ -244,7 +244,7 @@ On the Cloudflare test site (`~/code/emdash-plugin-testbed`). Install 0.7.1 from
 
 ## Cloudflare (0.7.0)
 
-On the Cloudflare test site (`~/code/emdash-plugin-testbed`), registry install, kit from the tag. Every case must end without "Too many subrequests" in the Worker logs and without Something went wrong on the page.
+On the Cloudflare test site (the Cloudflare test site), registry install, kit from the tag. Every case must end without "Too many subrequests" in the Worker logs and without Something went wrong on the page.
 
 | ID | Steps | Expected | Auto |
 | --- | --- | --- | --- |

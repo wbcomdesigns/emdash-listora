@@ -30,7 +30,7 @@ A 200 from a route is not a pass. The site owner has to see the screen and finis
 ## How to run
 
 ```bash
-cd ~/code/emdash-listora
+cd `emdash-listora`
 npm test
 ./scripts/reset-lab.sh
 ./scripts/prove-lab.sh --all

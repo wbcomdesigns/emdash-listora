@@ -27,7 +27,7 @@ Prototype scope is directory listings only. Claims, reviews, credits, maps, face
 - Sandboxed plugin `@wbcomdesigns/listora` 0.1.0
 - Routes: `health`, `listings`, `submit`, `admin`
 - Block Kit queue: approve, reject, settings
-- Local site kit on `~/code/emdash-local`: `listings` collection, taxonomies, `/listings/`, `/listings/[slug]/`, `/listings/submit/`
+- Local site kit on `emdash-local`: `listings` collection, taxonomies, `/listings/`, `/listings/[slug]/`, `/listings/submit/`
 
 ### Still to build before a second site can copy this
 
@@ -132,17 +132,17 @@ Primary menu:
 
 ## Local testing (current lab)
 
-Lab: `~/code/emdash-listora` + `~/code/emdash-local` on http://localhost:4321
+Lab: `emdash-listora` + `emdash-local` on http://localhost:4321
 
 ### Start
 
 ```bash
-cd ~/code/emdash-listora
+cd `emdash-listora`
 npm install --legacy-peer-deps
 npm test
 npm run build
 
-cd ~/code/emdash-local
+cd `emdash-local`
 npm run dev
 ```
 

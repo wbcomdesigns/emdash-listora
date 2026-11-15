@@ -14,7 +14,7 @@ This product is Free only. No Pro. Work is tracked as GitHub issues under versio
 - Owner decision open on #83: does a listing a member adds count as claimed? `SUBMITTER_IS_OWNER` in `src/lib/types.ts`, true (recommended) by default.
 
 Next, in order:
-1. Independent Sonnet walk of `docs/qa/QA_CHECKLIST.md` on the shared Node lab (`~/code/emdash-lab-all`, 4340) and the Cloudflare cases (CF-1 to CF-13) on `~/code/emdash-plugin-testbed`, registry install from a tag, kit from the tag. Update the 0.6.3 site to 0.7.0 there first (CF-1).
+1. Independent Sonnet walk of `docs/qa/QA_CHECKLIST.md` on the shared Node lab (the shared lab site, 4340) and the Cloudflare cases (CF-1 to CF-13) on the Cloudflare test site, registry install from a tag, kit from the tag. Update the 0.6.3 site to 0.7.0 there first (CF-1).
 2. Independent Opus review of `git diff v0.6.3..0.7.0`, and the automatic security review of the final commit.
 3. Only after both: drop "Cloudflare: not supported yet" from the install texts, merge, tag, publish (owner says publish).
 
@@ -63,7 +63,7 @@ Override lab folder with `LISTORA_LAB`. After a kit change: edit `site-kit/`, th
 
 0.6.3 is released: merged to `main`, tagged `v0.6.3`, published to the registry and on GitHub releases. It closed #77 to #81: stale "approving" claims (and photo "rejecting" claims) reopen after five minutes (`reopenStaleClaims` in `src/lib/util.ts`, guarded on status and claimedAt), the owner dashboard names the full review count, Settings names /listings/import/ before the site address is known, `readCursor` refuses a malformed cursor before storage sees it, and the account tabs wrap on a phone.
 
-1. Not yet walked for 0.6.3: 768, a keyboard pass, a subscriber walk, and a fresh-site registry install. Walk them on the shared lab (`~/code/emdash-lab-all`, port 4340) and on the Cloudflare test site (`~/code/emdash-plugin-testbed`) once its browser walk runs.
+1. Not yet walked for 0.6.3: 768, a keyboard pass, a subscriber walk, and a fresh-site registry install. Walk them on the shared lab (the shared lab site) and on the Cloudflare test site (the Cloudflare test site) once its browser walk runs.
 2. Issue #28 (type editor, reminders, health check) stays under Later until the owner picks it.
 3. Worth proving on the Cloudflare test site: a 100-row import, the scheduled tasks, owner photos on R2 (R2 must be enabled on the account first), real mail delivery.
 

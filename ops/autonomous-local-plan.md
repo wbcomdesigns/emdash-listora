@@ -11,7 +11,7 @@ Sources of truth (code wins over catalog):
 - `ops/ux-plan.md` (when a screen is done)
 - `ops/seed-inventory.tsv` (what data must exist)
 
-Lab: `~/code/emdash-listora` + `~/code/emdash-local`.
+Lab: `emdash-listora` + `emdash-local`.
 
 ## What 100% working means
 
@@ -96,7 +96,7 @@ For every drop:
 1. IMPLEMENT   plugin routes/storage + matching screens in the same drop
 2. SEED        add only the fields and rows this drop can render
 3. RESET       wipe local SQLite, apply seed, rebuild plugin, restart astro
-4. UNIT        cd ~/code/emdash-listora && npm test && npm run build
+4. UNIT        cd `emdash-listora` && npm test && npm run build
 5. PROVE       scripts/prove-lab.sh --drop N   (API + Playwright)
 6. LOOK        screenshots 1440 and 390 vs WP, write ops/reports/drop-N.md
 7. NEXT        if prove exits 0, start drop N+1 with no pause
@@ -251,13 +251,13 @@ Do not pause to ask "should I start Drop 2". The answer is yes after Drop 1 prov
 ## Reset recipe
 
 ```bash
-cd ~/code/emdash-listora && npm test && npm run build
-cd ~/code/emdash-local
+cd `emdash-listora` && npm test && npm run build
+cd `emdash-local`
 npx astro dev stop || true
 # wipe the local SQLite / data dir the lab uses (script documents the path)
 ./scripts/reset-lab.sh
 # wait until GET /_emdash/api/plugins/listora/health is 200
-cd ~/code/emdash-listora && ./scripts/prove-lab.sh --drop "$DROP"
+cd `emdash-listora` && ./scripts/prove-lab.sh --drop "$DROP"
 ```
 
 After a plugin rebuild, always restart. A stale workerd is a false fail.
