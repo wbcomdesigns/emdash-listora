@@ -220,7 +220,7 @@ async function renderQueue(ctx: Ctx, settings: Settings, b: Budget, extra: Extra
 					value: `forget:${listingId}`,
 					confirm: {
 						title: "Remove this row from the queue?",
-						text: "Its listing was deleted or moved to Trash. To approve it, restore it from Trash in Content, Listings first. Removing the row does not touch the listing.",
+						text: "Its listing was deleted or is in Trash. Restore it from Trash to approve it. Removing the row does not touch the listing.",
 						confirm: "Remove",
 						deny: "Cancel",
 					},
@@ -311,7 +311,7 @@ async function decideListing(ctx: Ctx, settings: Settings, b: Budget, action: st
 		await ctx.storage.submissions.updateIf(listingId, { where: { status: "approving" }, set: { status: "pending", ...(gone ? { gone: true } : {}) } });
 		return back(
 			gone
-				? { message: "That listing was deleted or moved to Trash, so it cannot be published. Restore it from Trash to approve it, or remove its row from the queue.", type: "error" }
+				? { message: "That listing was deleted or is in Trash. Restore it to approve it, or remove its row.", type: "error" }
 				: { message: "Could not publish that listing. It is waiting in the queue again. Check it in Content, Listings, then try once more.", type: "error" },
 		);
 	}
@@ -782,7 +782,7 @@ async function renderMessages(ctx: Ctx, settings: Settings, b: Budget, extra: Ex
 	}));
 	return page("Messages", extra, [
 		...(settings.emailMessages && settings.noMail
-			? [{ type: "banner", title: "This site cannot send email", description: "Owners were not told about new messages: the site has no email provider. Set one up under Settings, Email. Waiting notices go out once it works.", variant: "alert" }]
+			? [{ type: "banner", title: "This site cannot send email", description: "Owners were not told about new messages: the site has no email provider. Waiting notices go out once one is set up under Settings, Email.", variant: "alert" }]
 			: []),
 		stats("New", listed.total),
 		...openedBlocks,
@@ -945,7 +945,7 @@ export async function renderSettings(ctx: Ctx, settings: Settings, _b: Budget, e
 		kDivider,
 		// The version token is the press it follows, so a second press (another tab, a double click) starts nothing.
 		kActions([{ type: "button", action_id: "recat", label: "Refresh categories now", value: String(rc.at) }]),
-		kContext(`A category changed in EmDash's sidebar shows in the directory within a few hours, at once when its listing is published, or when this refresh finishes.${rc.at ? (rc.done ? ` Last finished ${when(ctx, rc.done)}.` : ` Running since ${when(ctx, rc.at)}.`) : ""}`),
+		kContext(`A category changed in the sidebar shows in the directory within a few hours, or at once after this refresh.${rc.at ? (rc.done ? ` Last finished ${when(ctx, rc.done)}.` : ` Running since ${when(ctx, rc.at)}.`) : ""}`),
 	]);
 }
 
@@ -1088,7 +1088,7 @@ export function kitBlocks(ctx: Ctx, settings: Settings): BlockMap[] {
 		{
 			type: "banner",
 			title: "Set up visitor pages",
-			description: "Installing Listora adds this admin, not pages on your site. The visitor pages come from the Listora site kit. Until you copy it, the addresses below show your site's 404 page.",
+			description: "The visitor pages come from the Listora site kit. Until you copy it, the addresses below show your site's 404 page.",
 			variant: "default",
 		},
 		kContext(`From your site's root folder, run this command. It copies the kit for the version you have installed (${tag}) into a fresh folder only you can write to.`),

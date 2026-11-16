@@ -1,5 +1,5 @@
 import { choiceOf, PLACE_FIELDS, type ListingType, type TypeField } from "./types";
-import { asRecord, asString, parseJson } from "./util";
+import { asBoolean, asRecord, asString, parseJson } from "./util";
 
 /** What an owner may change on their own listing. Type, featured, claimed and dates are not theirs. */
 export const EDITABLE = [
@@ -8,6 +8,7 @@ export const EDITABLE = [
 	"description",
 	"phone",
 	"email",
+	"email_public",
 	"website",
 	"address",
 	"city",
@@ -24,6 +25,7 @@ export const FIELD_LABELS: Record<string, string> = {
 	description: "Description",
 	phone: "Phone",
 	email: "Email",
+	email_public: "Show email publicly",
 	website: "Website",
 	address: "Address",
 	city: "City",
@@ -70,6 +72,7 @@ export function fieldValue(key: string, value: unknown): string {
 }
 
 export type Change = { label: string; was: string; next: string };
+const yesNo = (value: unknown) => (value ? "Yes" : "No");
 
 /**
  * The one place that decides what an edit does. The approval screen shows `changes` and the
@@ -77,18 +80,20 @@ export type Change = { label: string; was: string; next: string };
  * `type` is the listing's type: its fields decide which extra details an edit may set, and how
  * each is read and named. Details the type no longer has stay on the listing untouched.
  */
-export function editPatch(live: Record<string, unknown>, fields: Record<string, unknown>, type: Fields & { location?: boolean }): { patch: Record<string, string>; changes: Change[] } {
-	const patch: Record<string, string> = {};
+export function editPatch(live: Record<string, unknown>, fields: Record<string, unknown>, type: Fields & { location?: boolean }): { patch: Record<string, unknown>; changes: Change[] } {
+	const patch: Record<string, unknown> = {};
 	const changes: Change[] = [];
 	for (const key of EDITABLE) {
 		// A type without a location keeps the place it has: no change sets one, even one sent before the owner turned it off.
 		if (!(key in fields) || (type.location === false && (PLACE_FIELDS as readonly string[]).includes(key))) continue;
 		if (key !== "type_fields") {
-			const next = fieldValue(key, fields[key]);
-			const was = asString(live[key]);
+			// The one yes or no an owner sets: stored as true or false, read as Yes or No.
+			const flag = key === "email_public";
+			const next = flag ? asBoolean(fields[key]) : fieldValue(key, fields[key]);
+			const was = flag ? asBoolean(live[key]) : asString(live[key]);
 			if (was === next) continue;
 			patch[key] = next;
-			changes.push({ label: FIELD_LABELS[key], was, next });
+			changes.push({ label: FIELD_LABELS[key], was: flag ? yesNo(was) : (was as string), next: flag ? yesNo(next) : (next as string) });
 			continue;
 		}
 		const stored = storedDetails(live.type_fields);

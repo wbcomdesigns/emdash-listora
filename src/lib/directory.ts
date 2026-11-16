@@ -1,6 +1,6 @@
 import type { PluginContext } from "emdash/plugin";
 
-import { haversineKm, listingFromContent, matchesQuery, type ListingCard, type PublicCard } from "./catalog";
+import { haversineKm, listingFromContent, matchesQuery, publicCard, type ListingCard, type PublicCard } from "./catalog";
 import { EDITABLE } from "./edits";
 import { readRating } from "./ratings";
 import { chipField, choiceOf, LISTINGS, mapsSlot, SLOTS, slotsOf, typeBySlug, type ListingType, type Slot } from "./types";
@@ -48,8 +48,7 @@ export function listingPart(item: Item, types: readonly ListingType[]): Record<s
 	const data = asRecord(item.data);
 	const edit: Record<string, unknown> = {};
 	for (const key of EDITABLE) if (data[key] !== undefined && data[key] !== null) edit[key] = data[key];
-	// The listing's email is for its owner and the admin, never in a public answer (#115).
-	const { rating_avg: _avg, rating_count: _count, description: _long, email: _email, ...shown } = card;
+	const { rating_avg: _avg, rating_count: _count, description: _long, ...shown } = publicCard(card);
 	return {
 		vis: item.status === "published" && card.listing_status !== "expired",
 		pub: item.status === "published",
@@ -175,8 +174,8 @@ export const overdue = (row: Record<string, unknown>, now = Date.now()) => {
 
 /** The card a public route shows, with the rating copy. */
 export function cardOf(row: Record<string, unknown> & { id?: string }): PublicCard {
-	// Rows indexed before 0.8.1 still hold the email: it is dropped here, on the way out (#115).
-	const { email: _email, ...card } = asRecord(row.card) as unknown as ListingCard;
+	// Rows indexed before 0.8.1 hold the email with no flag: dropped here, on the way out (#115).
+	const card = publicCard(asRecord(row.card) as unknown as ListingCard);
 	return { ...card, id: asString(row.id) || card.id, rating_avg: asNumber(row.avg) ?? 0, rating_count: asNumber(row.rc) ?? 0 };
 }
 

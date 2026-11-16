@@ -16,7 +16,8 @@ if (!listingsModel) {
 }
 
 const have = new Set(listingsModel.fields.map((field) => field.slug));
-for (const field of extraFields) {
+// Core fields added in later versions (email_public, 0.8.1) reach a lab made before them.
+for (const field of [...listingsCollection.fields, ...extraFields]) {
 	if (!have.has(field.slug)) listingsModel.fields.push(field);
 }
 

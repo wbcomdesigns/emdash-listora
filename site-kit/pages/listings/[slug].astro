@@ -107,8 +107,9 @@ const PollSlot = (Object.values(import.meta.glob("../../components/PollSlot.astr
 	| undefined;
 const isEvent = data.listing_type === "event";
 const details = storedDetails(data);
-// The listing's email is never shown: visitors write through Contact, and only the owner and the admin see the address (#115).
-const hasContact = Boolean(data.phone || website);
+// The email shows only when the lister chose it; otherwise visitors write through Contact (#115).
+const email = data.email_public === true ? String(data.email || "") : "";
+const hasContact = Boolean(data.phone || website || email);
 // The share image is the listing's own photo, or none. Never a stock picture.
 const photoPath = imageUrl(data.featured_image, Astro.locals.emdash?.getPublicMediaUrl);
 // Share cards and search engines need a full address.
@@ -525,6 +526,17 @@ const schema = {
 											</svg>
 										</span>
 										{website.replace(/^https?:\/\//, "")}
+									</a>
+								) : null}
+								{email ? (
+									<a class="listora-detail__contact-item" href={`mailto:${email}`}>
+										<span class="listora-detail__contact-icon listora-detail__contact-icon--email" aria-hidden="true">
+											<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
+												<rect width="20" height="16" x="2" y="4" rx="2"></rect>
+												<path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"></path>
+											</svg>
+										</span>
+										{email}
 									</a>
 								) : null}
 							</div>

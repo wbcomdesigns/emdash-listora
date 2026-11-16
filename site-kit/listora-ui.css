@@ -1231,6 +1231,11 @@ ul.listora-chips {
 	color: var(--listora-success);
 }
 
+.listora-detail__contact-icon--email {
+	background: color-mix(in srgb, var(--listora-primary) 12%, transparent);
+	color: var(--listora-primary-text);
+}
+
 .listora-detail__contact-icon--web {
 	background: color-mix(in srgb, var(--listora-fg-faint) 16%, transparent);
 	color: var(--listora-fg-muted);

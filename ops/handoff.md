@@ -10,7 +10,7 @@ Branch `0.8.1`, pull request "Listora 0.8.1": the fixes from the 2026-11-16 QA p
 
 Then the release gate (`gate.sh`), an independent walk on Node and Cloudflare, and publish only with the owner's go-ahead.
 
-Bundle: `backend.js` is about 130.9 KB of the 131,072-byte cap per file. Any new engine code needs something taken out first: owner text in the admin and dead compat paths are what is left to trim.
+Bundle: `backend.js` is 130,882 of the 131,072-byte cap per file. Any new engine code needs something taken out first: owner text in the admin and dead compat paths are what is left to trim.
 
 ## How a release is verified
 
@@ -41,7 +41,7 @@ Every case in `docs/qa/QA_CHECKLIST.md` is run in a browser as guest, subscriber
 | Owner edits | `edit` route stores only the fields that differ in `edits` (one per listing). The admin applies them from the Listings queue with `patchListing`. `EDITABLE` in `plugin.ts` is the list an owner may change. The category is not editable by the owner |
 | Banner | `images/banner.png` is the dark-text lockup on a transparent ground. Check it on the registry page |
 | No-photo listings | `placeholderHtml(type)` in the kit lib: a panel with a type icon. No stock photos. The owner-chosen default image is dropped: EmDash's media picker cannot be used in a plugin admin form, and choosing by file name from a long list is not good enough to ship |
-| Listing email | Kept on the listing (owner edit form, admin, CSV). Never in a public route (`cardOf` drops it, also from rows indexed before 0.8.1) nor on the listing page. EmDash core still lets any signed-in member read a published entry through its content API |
+| Listing email | The lister chooses (owner, 2026-11-16): `email_public` yes/no field, off by default, set on the add and edit forms (edit waits for approval) or by the admin in Content. `publicCard` in catalog.ts is the one rule: the email is in a public card only when the flag is on; rows indexed before 0.8.1 have no flag and show none. The page draws the mailto only when on. A site needs the field from the seed command; without it the box saves nothing. EmDash core still lets any signed-in member read a published entry through its content API |
 | Live search | Loads the directory page for the new query and swaps in its results (`LIVE` ids in `index.astro`). One card renderer: the server's. The plugin `search`, `listings` and `types` routes are not used by the kit; they stay as the public API |
 | Near me | Removed. EmDash core sends `Permissions-Policy: geolocation=()` on every page |
 | Time zone | The site's own, from EmDash settings (`siteZone` in the kit lib). The plugin never computes open or closed: the page does, because a plugin cannot read the site zone. Listings no longer store a zone |

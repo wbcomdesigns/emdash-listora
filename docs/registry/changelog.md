@@ -11,12 +11,12 @@ kit="$(mktemp -d)" &&
   "$kit/emdash-listora/scripts/add-to-site.sh" .
 ```
 
-- Improve: a listing's email stays private, out of public routes and the listing page.
+- Improve: listers choose to show their email; off by default, so existing listings start hidden. Run the printed seed command.
 - Improve: the add form starts on your Default listing type.
 - Improve: the queue shows where each listing is and who sent it; a waiting claim shows as waiting.
 - Fix: long words wrap on the listing page and in admin tables.
 - Fix: text over its limit is refused, never cut; the forms show the limit.
-- Fix: no "Bringing your data over" note on a new install; "Listing settings saved."
+- Fix: no upgrade note on a new install; "Listing settings saved."
 - Fix: admin lists page with Next page; GitHub numbers show only when ahead of yours.
 
 ## 0.8.0

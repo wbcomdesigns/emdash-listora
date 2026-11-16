@@ -132,6 +132,10 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 					<div class="listora-field">
 						<label class="listora-label" for="email">{S.submit.email}</label>
 						<input id="email" class="listora-input" name="email" type="email" autocomplete="email" maxlength="120" aria-describedby="email-help" />
+						<div class="listora-check">
+							<input id="email_public" name="email_public" type="checkbox" value="true" aria-describedby="email-help" />
+							<label class="listora-label" for="email_public">{S.submit.emailPublic}</label>
+						</div>
 						<p class="listora-helper" id="email-help">{S.submit.emailHelp}</p>
 					</div>
 				</div>
@@ -414,7 +418,8 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 		renderTypeFields();
 		const set = (name: string, value: unknown) => {
 			const field = form.elements.namedItem(name);
-			if (field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement || field instanceof HTMLSelectElement) {
+			if (field instanceof HTMLInputElement && field.type === "checkbox") field.checked = value === true;
+			else if (field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement || field instanceof HTMLSelectElement) {
 				field.value = String(value ?? "");
 			}
 		};
@@ -465,6 +470,7 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 				description: text("description"),
 				phone: text("phone"),
 				email: text("email"),
+				email_public: data.get("email_public") === "true",
 				website: text("website"),
 				// Left out for a type without a location, so an edit keeps the address the listing has.
 				...(located ? Object.fromEntries(PLACE_KEYS.map((key) => [key, text(key)])) : {}),

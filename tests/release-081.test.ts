@@ -35,13 +35,13 @@ async function directory() {
 	return { rt: site, route, admin };
 }
 
-describe("#115 a listing's email stays out of every public answer", () => {
-	it("is kept on the listing for its owner and the admin, and left out of listings, search and ids", async () => {
+describe("#115 a listing's email is public only when the lister chooses", () => {
+	it("leaves it out of listings, search and ids when off, and for rows indexed before 0.8.1", async () => {
 		const { rt, route } = await directory();
 		const id = await publishListing(rt, { title: "Quiet Bakery", listing_type: "restaurant", email: "owner@bakery.example", city: "Austin" }, "quiet-bakery");
-		// A row indexed before 0.8.1 still holds the email in its card: it is dropped on the way out too.
+		// A row indexed before 0.8.1 holds the email in its card with no flag: it stays hidden.
 		const row = (await rt.inspect.storage.get<Record<string, unknown>>("directory", id))!;
-		await rt.fixtures.plugin.storage("directory", id, { ...row, card: { ...(row.card as object), email: "owner@bakery.example" } });
+		await rt.fixtures.plugin.storage("directory", id, { ...row, card: { ...(row.card as object), email: "owner@bakery.example", email_public: undefined } });
 		const answers = [await route("listings", {}), await route("listings", { q: "quiet" }), await route("listings", { ids: id }), await route("search", { q: "bakery" })];
 		for (const answer of answers) {
 			expect(answer.items?.some((item) => item.id === id)).toBe(true);
@@ -51,11 +51,44 @@ describe("#115 a listing's email stays out of every public answer", () => {
 		expect(((await rt.inspect.storage.get<{ edit: Record<string, unknown> }>("directory", id))!.edit).email).toBe("owner@bakery.example");
 	});
 
-	it("is not drawn on the listing page, and the add form says so", () => {
-		expect(listingPage).not.toMatch(/mailto:\$\{data\.email\}/);
-		expect(listingPage).toContain("const hasContact = Boolean(data.phone || website);");
-		expect(submitPage).toContain('aria-describedby="email-help"');
-		expect(submitPage).toContain("{S.submit.emailHelp}");
+	it("gives it in every public answer when on", async () => {
+		const { rt, route } = await directory();
+		const id = await publishListing(rt, { title: "Open Bakery", listing_type: "restaurant", email: "hello@open.example", email_public: true }, "open-bakery");
+		for (const answer of [await route("listings", {}), await route("listings", { ids: id }), await route("search", { q: "open" })]) {
+			expect(answer.items?.find((item) => item.id === id)).toMatchObject({ email: "hello@open.example" });
+		}
+	});
+
+	it("is off unless ticked on the add form, and on when ticked", async () => {
+		const { route, admin } = await directory();
+		const add = async (title: string, email: string, extra: Record<string, unknown>) => {
+			const sent = (await route("submit", { title, listing_type: "restaurant", email, agree_terms: true, ...extra }, { method: "POST", user: member(title) })) as Out & { listing: { id: string } };
+			await admin({ type: "block_action", action_id: "review", value: `approve:${sent.listing.id}`, page: "/queue" });
+			await settle();
+		};
+		await add("Hidden Deli", "hidden@deli.example", {});
+		await add("Shown Deli", "shown@deli.example", { email_public: true });
+		const all = JSON.stringify(await route("listings", {}));
+		expect(all).not.toContain("hidden@deli.example");
+		expect(all).toContain("shown@deli.example");
+	});
+
+	it("draws the link on the listing page only when on, and the add form asks", () => {
+		expect(listingPage).toContain('const email = data.email_public === true ? String(data.email || "") : "";');
+		expect(listingPage).toContain("href={`mailto:${email}`}");
+		expect(listingPage).not.toContain("mailto:${data.email}");
+		expect(submitPage).toContain('name="email_public" type="checkbox" value="true"');
+		expect(submitPage).toContain('email_public: data.get("email_public") === "true"');
+	});
+});
+
+describe("#115 the flag through an owner's edit", () => {
+	it("reads Yes or No on the approval screen and applies as true or false", async () => {
+		const { editPatch } = await import("../src/lib/edits");
+		const type = { fields: [] };
+		expect(editPatch({ email_public: false }, { email_public: true }, type)).toMatchObject({ patch: { email_public: true }, changes: [{ label: "Show email publicly", was: "No", next: "Yes" }] });
+		expect(editPatch({ email_public: true }, { email_public: "true" }, type).patch).toEqual({});
+		expect(editPatch({}, { email_public: false }, type).patch).toEqual({});
 	});
 });
 
@@ -65,8 +98,8 @@ describe("#114 over-long member text is refused in plain words, never cut", () =
 		const id = await publishListing(rt, { title: "Long Text Cafe", listing_type: "restaurant" });
 		const ana = { method: "POST", user: member("ana") };
 		const long = "A".repeat(1001);
-		expect(await route("review", { listingId: id, stars: 5, body: long }, ana)).toMatchObject({ ok: false, error: { code: "VALIDATION_ERROR", message: "A review can be up to 1000 characters. Shorten it and send again." } });
-		expect(await route("claims", { listingId: id, name: "Ana", email: "a@example.com", message: long }, ana)).toMatchObject({ ok: false, error: { message: "The message can be up to 1000 characters. Shorten it and send again." } });
+		expect(await route("review", { listingId: id, stars: 5, body: long }, ana)).toMatchObject({ ok: false, error: { code: "VALIDATION_ERROR", message: "A review can be up to 1000 characters." } });
+		expect(await route("claims", { listingId: id, name: "Ana", email: "a@example.com", message: long }, ana)).toMatchObject({ ok: false, error: { message: "The message can be up to 1000 characters." } });
 		expect(await route("contact", { listingId: id, message: long }, { method: "POST", meta: { ip: "203.0.113.9", userAgent: null, referer: null, geo: null } })).toMatchObject({ ok: false, error: { code: "VALIDATION_ERROR" } });
 		expect(await rt.inspect.storage.list("reviews")).toHaveLength(0);
 		// At the limit it is stored whole.

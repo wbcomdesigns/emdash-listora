@@ -4,9 +4,9 @@ Versions match `package.json`, the git tag, and the EmDash registry release. New
 
 ## [0.8.1] - 2026-11-16
 
-Fixes from the 0.8.0 QA pass. No new permissions. Copy the kit again after you update, with the new tag.
+Fixes from the 0.8.0 QA pass. No new permissions. Copy the kit again after you update, with the new tag, and run the seed command it prints: it adds the Show email publicly field.
 
-- Improve  - A listing's email stays private: it is left out of the public directory routes and the listing page, and the add form says so.
+- Improve  - The lister chooses whether a listing's email is public, with a Show my email publicly box on the add and edit forms, off by default; existing listings start hidden until their lister opts in.
 - Improve  - The add form starts on the Default listing type chosen in Settings.
 - Improve  - The Listings queue shows where each listing is and who sent it, so two listings with the same title can be told apart.
 - Improve  - A member who sent a claim sees that it is waiting instead of the claim form, and sending again changes nothing.

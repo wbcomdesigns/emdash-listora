@@ -267,7 +267,7 @@ describe("sample directory queue", () => {
 		const queue = JSON.stringify(await route("admin", { type: "page_load", page: "/queue" }));
 		expect(queue).toContain(`approve:${owl}`);
 		// Approving it finds the listing gone, and the row then offers only Remove.
-		expect(JSON.stringify(await route("admin", { type: "block_action", action_id: "review", value: "approve:listing-gone", page: "/queue" }))).toContain("deleted or moved to Trash");
+		expect(JSON.stringify(await route("admin", { type: "block_action", action_id: "review", value: "approve:listing-gone", page: "/queue" }))).toContain("deleted or is in Trash");
 		const after = JSON.stringify(await route("admin", { type: "page_load", page: "/queue" }));
 		expect(after).toContain("Gone Shop (deleted or in Trash)");
 		expect(after).toContain("forget:listing-gone");
@@ -2047,7 +2047,7 @@ describe("an approval that fails part way", () => {
 		await upgraded(rt);
 		// Gone before the click: moved to Trash in another tab.
 		await (rt.actions.content.trash as (c: string, id: string) => Promise<unknown>)("listings", id);
-		expect(await approve()).toContain("deleted or moved to Trash");
+		expect(await approve()).toContain("deleted or is in Trash");
 		expect(await rt.inspect.storage.get("submissions", id)).toMatchObject({ status: "pending", gone: true });
 		expect(JSON.stringify(await route("admin", { type: "page_load", page: "/queue" }))).toContain(`forget:${id}`);
 	});

@@ -59,7 +59,7 @@ Colours and fonts come from your site: the kit reads `--color-bg`, `--color-text
 
 ## A listings type made by hand
 
-If you created the `listings` type in the admin instead of with the seed command, it may lack optional fields. Listora only writes the fields your type has. Listora keeps each listing's expiry date itself, so the `expires_at` field is no longer needed (0.7.0). Without a `listing_status` field an expired listing leaves Listora's directory routes but still shows on pages that read the listings directly, and Admin, Listora, Settings, Lifetime says so. To add it, run the seed command again (it adds missing fields and skips the rest), or add a field with the slug `listing_status` in Content Types, Listings.
+If you created the `listings` type in the admin instead of with the seed command, it may lack optional fields. Listora only writes the fields your type has. Listora keeps each listing's expiry date itself, so the `expires_at` field is no longer needed (0.7.0). Without a `listing_status` field an expired listing leaves Listora's directory routes but still shows on pages that read the listings directly, and Admin, Listora, Settings, Lifetime says so. To add it, run the seed command again (it adds missing fields and skips the rest), or add a field with the slug `listing_status` in Content Types, Listings. The same goes for `email_public` (0.8.1), the yes/no field behind **Show my email publicly**: without it the box on the add form saves nothing and every listing's email stays private.
 
 ## Check four addresses
 

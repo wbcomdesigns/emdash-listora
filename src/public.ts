@@ -19,7 +19,7 @@ const REVIEWS_PER_PAGE = 20;
 /** Storage pages one directory request may read when a filter is checked row by row. */
 const SCAN_READS = 6;
 
-const GUEST_UNAVAILABLE = fail("GUEST_UNAVAILABLE", "This site cannot take messages from visitors yet: its host does not pass on visitor addresses. Call the listing or visit its website instead.");
+const GUEST_UNAVAILABLE = fail("GUEST_UNAVAILABLE", "This site cannot take messages from visitors yet. Call the listing or visit its website instead.");
 const BUILDING = fail("INDEX_BUILDING", "The directory is being prepared after an update. Try again in a few minutes.");
 
 /**

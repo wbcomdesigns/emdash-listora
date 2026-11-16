@@ -26,6 +26,8 @@ export type ListingCard = {
 	phone: string;
 	website: string;
 	email: string;
+	/** The lister chose to show the email (#115). Off, the email is in no public answer. */
+	email_public: boolean;
 	address: string;
 	city: string;
 	state: string;
@@ -71,6 +73,7 @@ export function listingFromContent(
 		phone: asString(data.phone),
 		website,
 		email: asString(data.email),
+		email_public: asBoolean(data.email_public),
 		address: asString(data.address),
 		city: asString(data.city),
 		state: asString(data.state),
@@ -95,8 +98,10 @@ export function listingFromContent(
 	};
 }
 
-/** A card as public routes give it: never the listing's email, which only its owner and the admin see. */
-export type PublicCard = Omit<ListingCard, "email">;
+/** A card as public routes give it: the email only when the lister chose to show it. */
+export type PublicCard = Omit<ListingCard, "email"> & { email?: string };
+/** The one place that decides whether a card's email is public. A row without the flag (indexed before 0.8.1) shows none. */
+export const publicCard = ({ email, ...card }: ListingCard): PublicCard => (card.email_public === true ? { ...card, email } : card);
 
 export type TypedCard = PublicCard & { type_name: string; type_color: string };
 

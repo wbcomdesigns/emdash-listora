@@ -28,7 +28,7 @@ export const REVIEW_BODY_MAX = 1000;
  * limit; this answers a request that skips them, or a kit one version behind.
  */
 export function tooLong(text: unknown, max: number, what: string) {
-	return asString(text).trim().length > max ? invalid(`${what} can be up to ${max} characters. Shorten it and send again.`) : null;
+	return asString(text).trim().length > max ? invalid(`${what} can be up to ${max} characters.`) : null;
 }
 
 // Strict on purpose: this value becomes a mail header.
@@ -71,6 +71,8 @@ export function parseSubmit(input: unknown): { ok: true; data: SubmitInput } | {
 			phone: text("phone"),
 			website: webAddress(raw.website),
 			email: plainEmail(raw.email),
+			// Off unless the lister ticks it: the email then shows on the listing and in the directory (#115).
+			email_public: asBoolean(raw.email_public),
 			address: text("address"),
 			city: text("city"),
 			state: text("state"),
@@ -365,7 +367,7 @@ export async function edit(routeCtx: { user?: unknown; input: unknown; request: 
 		const mine = waiting.status === "pending" && waiting.member_id === user.id;
 		const source = mine ? { ...current, ...asRecord(waiting.fields) } : current;
 		const values: Record<string, unknown> = {};
-		for (const key of EDITABLE) values[key] = asString(source[key]);
+		for (const key of EDITABLE) values[key] = key === "email_public" ? asBoolean(source[key]) : asString(source[key]);
 		// Every stored detail; a listing saved before 0.8.0 has some in fields of their own.
 		values.type_fields = sentDetails(source);
 		return { ok: true, listingId, listing_type: asString(current.listing_type), pending: mine, values };
