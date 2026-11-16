@@ -95,13 +95,16 @@ export function listingFromContent(
 	};
 }
 
-export type TypedCard = ListingCard & { type_name: string; type_color: string };
+/** A card as public routes give it: never the listing's email, which only its owner and the admin see. */
+export type PublicCard = Omit<ListingCard, "email">;
+
+export type TypedCard = PublicCard & { type_name: string; type_color: string };
 
 /**
  * A card as a route returns it: its type's current name and colour, from the types store. A type
  * without a location shows no place: the listing keeps what it stored, and no route gives it out.
  */
-export function withType(card: ListingCard, types: readonly ListingType[]): TypedCard {
+export function withType(card: PublicCard, types: readonly ListingType[]): TypedCard {
 	const type = typeBySlug(types, card.listing_type);
 	const place = type.location ? {} : { address: "", city: "", state: "", country: "", postal_code: "", lat: null, lng: null, hours: [], amenities: [], place: "" };
 	return { ...card, ...place, type_name: type.name, type_color: type.color };
@@ -122,7 +125,7 @@ export function haversineKm(
 	return 6371 * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
 }
 
-export function matchesQuery(listing: ListingCard, query: string): boolean {
+export function matchesQuery(listing: PublicCard, query: string): boolean {
 	if (!query) return true;
 	const hay = [
 		listing.title,
