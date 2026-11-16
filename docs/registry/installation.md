@@ -11,8 +11,6 @@ Stop the dev server and start it again. **Registry** now shows in the admin menu
 
 **3. You need Node 22.16 or later** for the `npx emdash seed` step.
 
-Checked on EmDash 1.3.1 with the `blog` template on Node.
-
 ## Install
 
 1. Admin, Registry, search **Listora**, Install, then accept the permissions.
@@ -21,7 +19,7 @@ Checked on EmDash 1.3.1 with the `blog` template on Node.
    ```bash
    kit="$(mktemp -d)" &&
      git clone --depth 1 \
-       --branch v0.8.0 \
+       --branch v0.8.1 \
        https://github.com/wbcomdesigns/emdash-listora \
        "$kit/emdash-listora" &&
      "$kit/emdash-listora/scripts/add-to-site.sh" .
@@ -31,6 +29,6 @@ Checked on EmDash 1.3.1 with the `blog` template on Node.
 4. Add the printed menu links in Admin, Menus.
 5. Open Listora, Get started.
 
-After each update, rerun step 2 with the new tag.
+After each update, rerun step 2 with the new tag. On Cloudflare, redeploy (`npm run deploy`) after installing or updating, or some requests answer "Plugin route not found" (emdash-cms/emdash#4865).
 
-Full guide: https://github.com/wbcomdesigns/emdash-listora/blob/v0.8.0/docs/website/getting-started/install.md
+Full guide: https://github.com/wbcomdesigns/emdash-listora/blob/v0.8.1/docs/website/getting-started/install.md

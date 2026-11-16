@@ -10,7 +10,7 @@ import { loadSettings, type Settings } from "./lib/settings";
 import { budget } from "./lib/budget";
 import { indexReady, nudgeUpgrade } from "./lib/upgrade";
 import { asNumber, asRecord, asString, fail, invalid, nowIso, READ_FAILED, readCursor, nil, none } from "./lib/util";
-import { NO_LISTING, plainEmail } from "./member";
+import { NO_LISTING, plainEmail, REVIEW_BODY_MAX as MESSAGE_MAX, tooLong } from "./member";
 
 type Ctx = PluginContext;
 
@@ -19,7 +19,7 @@ const REVIEWS_PER_PAGE = 20;
 /** Storage pages one directory request may read when a filter is checked row by row. */
 const SCAN_READS = 6;
 
-const GUEST_UNAVAILABLE = fail("GUEST_UNAVAILABLE", "This site cannot take messages from visitors yet: its host does not pass on visitor addresses. Call or email the listing instead.");
+const GUEST_UNAVAILABLE = fail("GUEST_UNAVAILABLE", "This site cannot take messages from visitors yet. Call the listing or visit its website instead.");
 const BUILDING = fail("INDEX_BUILDING", "The directory is being prepared after an update. Try again in a few minutes.");
 
 /**
@@ -240,6 +240,8 @@ export async function contact(input: unknown, request: { requestMeta?: unknown }
 	const email = asString(raw.email);
 	const message = asString(raw.message);
 	if (!listingId || !message) return invalid("Listing and message are required.");
+	const long = tooLong(message, MESSAGE_MAX, "The message");
+	if (long) return long;
 	if (asString(raw.company_website)) return fail("SPAM", "Message rejected.");
 	if (email.trim() && !plainEmail(email)) return fail("INVALID_EMAIL", "Enter a full email address, or leave it blank.");
 	const listing = await publicListing(ctx, listingId);
@@ -259,7 +261,7 @@ export async function contact(input: unknown, request: { requestMeta?: unknown }
 		name: clean(asString(raw.name).replace(/\s+/g, " "), 80),
 		email: plainEmail(email),
 		// Capped so the admin table can show every character.
-		message: clean(message, 1000),
+		message: clean(message, MESSAGE_MAX),
 		status: "new",
 		// A listing nobody owns has nobody to tell.
 		notice: owner ? "waiting" : "none",

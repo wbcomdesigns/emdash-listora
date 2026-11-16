@@ -26,6 +26,8 @@ export type ListingCard = {
 	phone: string;
 	website: string;
 	email: string;
+	/** The lister chose to show the email (#115). Off, the email is in no public answer. */
+	email_public: boolean;
 	address: string;
 	city: string;
 	state: string;
@@ -71,6 +73,7 @@ export function listingFromContent(
 		phone: asString(data.phone),
 		website,
 		email: asString(data.email),
+		email_public: asBoolean(data.email_public),
 		address: asString(data.address),
 		city: asString(data.city),
 		state: asString(data.state),
@@ -95,13 +98,18 @@ export function listingFromContent(
 	};
 }
 
-export type TypedCard = ListingCard & { type_name: string; type_color: string };
+/** A card as public routes give it: the email only when the lister chose to show it. */
+export type PublicCard = Omit<ListingCard, "email"> & { email?: string };
+/** The one place that decides whether a card's email is public. A row without the flag (indexed before 0.8.1) shows none. */
+export const publicCard = ({ email, ...card }: ListingCard): PublicCard => (card.email_public === true ? { ...card, email } : card);
+
+export type TypedCard = PublicCard & { type_name: string; type_color: string };
 
 /**
  * A card as a route returns it: its type's current name and colour, from the types store. A type
  * without a location shows no place: the listing keeps what it stored, and no route gives it out.
  */
-export function withType(card: ListingCard, types: readonly ListingType[]): TypedCard {
+export function withType(card: PublicCard, types: readonly ListingType[]): TypedCard {
 	const type = typeBySlug(types, card.listing_type);
 	const place = type.location ? {} : { address: "", city: "", state: "", country: "", postal_code: "", lat: null, lng: null, hours: [], amenities: [], place: "" };
 	return { ...card, ...place, type_name: type.name, type_color: type.color };
@@ -122,7 +130,7 @@ export function haversineKm(
 	return 6371 * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
 }
 
-export function matchesQuery(listing: ListingCard, query: string): boolean {
+export function matchesQuery(listing: PublicCard, query: string): boolean {
 	if (!query) return true;
 	const hay = [
 		listing.title,

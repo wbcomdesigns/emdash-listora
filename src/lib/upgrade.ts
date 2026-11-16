@@ -140,14 +140,29 @@ export async function nudgeUpgrade(ctx: PluginContext, settings: Settings, b: Bu
 	return state;
 }
 
+/**
+ * A new install with nothing from an earlier version: no published listing and no rating row. The
+ * upgrade is then marked done at once, so a new owner sees no "bringing your data over" note and the
+ * directory routes answer from the first listing (#117). Waiting messages are not looked for: only a
+ * 0.6.x site has them, and it updates without running this hook. Three calls, four when fresh.
+ */
+export async function markFreshInstall(ctx: PluginContext): Promise<boolean> {
+	const [collection, rated] = await Promise.all([ctx.schema?.getCollection(LISTINGS).catch(nil) ?? null, ctx.storage.ratings.count().catch(() => 1)]);
+	// Listings are read only when the type exists: asking for rows of a missing type fails inside the bridge.
+	const listed = collection ? ((await ctx.content?.list(LISTINGS, { limit: 1, where: { status: "published" } }).catch(nil))?.items.length ?? 1) : 0;
+	if (listed > 0 || rated > 0) return false;
+	await ctx.settings.set(KEY.upgrade, { done: true, index: true });
+	return true;
+}
+
 /** One line for an admin screen while the upgrade runs. */
 export function upgradeNote(state: State | null): string {
 	if (!state) return "";
 	const what =
 		state.step === "index" || state.step === "prep"
-			? `building the directory index (${state.indexed} listings so far). Until it is done, the directory routes of the plugin API ask callers to try again in a few minutes`
+			? `building the directory index (${state.indexed} listings so far)`
 			: state.step === "ratings"
 				? "carrying ratings over"
 				: "carrying waiting message notices over";
-	return `Listora is bringing this site's data over to 0.7.0: ${what}. It runs by itself, a step a minute. Everything here keeps working meanwhile.`;
+	return `Listora is bringing this site's data up to date after an update: ${what}. It runs by itself; everything here keeps working.`;
 }

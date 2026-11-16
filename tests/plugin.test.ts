@@ -40,6 +40,10 @@ async function directory() {
 	return site;
 }
 
+/** The cursor of a list's Next page button (#106: buttons, not the table's "Load more"). */
+const nextCursor = (page: { blocks: Array<{ elements?: Array<{ label?: string; value?: unknown }> }> }): string =>
+	String((page.blocks.flatMap((block) => block.elements ?? []).find((element) => element.label === "Next page")?.value as { cursor?: string } | undefined)?.cursor ?? "");
+
 const member = (id: string, role = 10) => ({
 	id,
 	email: `${id}@example.com`,
@@ -263,7 +267,7 @@ describe("sample directory queue", () => {
 		const queue = JSON.stringify(await route("admin", { type: "page_load", page: "/queue" }));
 		expect(queue).toContain(`approve:${owl}`);
 		// Approving it finds the listing gone, and the row then offers only Remove.
-		expect(JSON.stringify(await route("admin", { type: "block_action", action_id: "review", value: "approve:listing-gone", page: "/queue" }))).toContain("deleted or moved to Trash");
+		expect(JSON.stringify(await route("admin", { type: "block_action", action_id: "review", value: "approve:listing-gone", page: "/queue" }))).toContain("deleted or is in Trash");
 		const after = JSON.stringify(await route("admin", { type: "page_load", page: "/queue" }));
 		expect(after).toContain("Gone Shop (deleted or in Trash)");
 		expect(after).toContain("forget:listing-gone");
@@ -527,9 +531,11 @@ describe("moderation uses the version the admin saw", () => {
 		expect(await host!.storage("reviews").get(`rev-${a}-ana`)).toMatchObject({ status: "pending" });
 	});
 
-	it("caps a review at what the moderation table shows in full", async () => {
+	it("takes a review up to what the moderation table shows in full, and refuses a longer one (0.8.1)", async () => {
 		const { a } = await directory();
-		await host!.invokeRoute("review", { listingId: a, body: "x".repeat(5000) }, { method: "POST", user: ana });
+		expect(await host!.invokeRoute("review", { listingId: a, body: "x".repeat(5000) }, { method: "POST", user: ana })).toMatchObject({ ok: false, error: { code: "VALIDATION_ERROR" } });
+		expect(await host!.storage("reviews").get(`rev-${a}-ana`)).toBeNull();
+		await host!.invokeRoute("review", { listingId: a, body: "x".repeat(1000) }, { method: "POST", user: ana });
 		const saved = await host!.storage<{ body: string }>("reviews").get(`rev-${a}-ana`);
 		expect(saved!.body).toHaveLength(1000);
 	});
@@ -629,7 +635,14 @@ describe("contact messages", () => {
 			{ listingId: a, name: "Vee", email: "vee@example.com", message: "x".repeat(3000) },
 			{ method: "POST", meta: { ip: "203.0.113.9", userAgent: null, referer: null, geo: null } },
 		);
-		expect(sent).toMatchObject({ ok: true });
+		// Over the limit: refused in plain words, never cut (0.8.1).
+		expect(sent).toMatchObject({ ok: false, error: { code: "VALIDATION_ERROR" } });
+		const fits = await host!.invokeRoute(
+			"contact",
+			{ listingId: a, name: "Vee", email: "vee@example.com", message: "x".repeat(1000) },
+			{ method: "POST", meta: { ip: "203.0.113.9", userAgent: null, referer: null, geo: null } },
+		);
+		expect(fits).toMatchObject({ ok: true });
 		const rows = await host!.storage<{ message: string; status: string }>("contacts").list();
 		expect(rows).toHaveLength(1);
 		expect(rows[0].data.message).toHaveLength(1000);
@@ -1401,7 +1414,7 @@ describe("long admin lists", () => {
 				createdAt: new Date(Date.UTC(2026, 0, 1, 0, index)).toISOString(),
 			});
 		}
-		type Page = { blocks: Array<{ type: string; rows?: Array<{ title: string }>; next_cursor?: string; elements?: Array<{ action_id?: string }> }> };
+		type Page = { blocks: Array<{ type: string; rows?: Array<{ title: string }>; elements?: Array<{ action_id?: string; label?: string; value?: unknown }> }> };
 		const admin = (input: Record<string, unknown>) => rt.transport.invokeRoute("admin", input) as Promise<Page>;
 		const table = (page: Page) => page.blocks.find((block) => block.type === "table");
 		const titles = (page: Page) => table(page)?.rows?.map((row) => row.title) ?? [];
@@ -1410,7 +1423,7 @@ describe("long admin lists", () => {
 		expect(titles(first)).toHaveLength(25);
 		expect(titles(first)[0]).toBe("Listing 60");
 		expect(JSON.stringify(first)).toContain("60 listings in all");
-		const cursor = table(first)!.next_cursor!;
+		const cursor = nextCursor(first);
 		expect(cursor).toBeTruthy();
 		const second = await admin({ type: "block_action", action_id: "queue_page", value: { cursor, sort: null }, page: "/queue" });
 		expect(titles(second)[0]).toBe("Listing 35");
@@ -1934,11 +1947,11 @@ describe("more than 100 stored rows", () => {
 		const checked = (await rt.transport.invokeRoute("import", { csv: "title,city\nWaiting 000,Town 000\nWaiting 149,Town 149", mode: "check" }, { method: "POST" })) as { duplicates: unknown[] };
 		expect(checked.duplicates).toHaveLength(2);
 		// The queue shows 25 at a time and pages through all 150.
-		type Page = { blocks: Array<{ type: string; next_cursor?: string }> };
+		type Page = { blocks: Array<{ type: string; elements?: Array<{ label?: string; value?: unknown }> }> };
 		let page = (await rt.transport.invokeRoute("admin", { type: "page_load", page: "/queue" })) as Page;
 		expect(JSON.stringify(page)).toContain("150 listings in all, 25 per page.");
 		let pages = 1;
-		for (let cursor = page.blocks.find((block) => block.type === "table")?.next_cursor; cursor; cursor = page.blocks.find((block) => block.type === "table")?.next_cursor) {
+		for (let cursor = nextCursor(page); cursor; cursor = nextCursor(page)) {
 			page = (await rt.transport.invokeRoute("admin", { type: "block_action", action_id: "queue_page", value: { cursor }, page: "/queue" })) as Page;
 			pages += 1;
 		}
@@ -2034,7 +2047,7 @@ describe("an approval that fails part way", () => {
 		await upgraded(rt);
 		// Gone before the click: moved to Trash in another tab.
 		await (rt.actions.content.trash as (c: string, id: string) => Promise<unknown>)("listings", id);
-		expect(await approve()).toContain("deleted or moved to Trash");
+		expect(await approve()).toContain("deleted or is in Trash");
 		expect(await rt.inspect.storage.get("submissions", id)).toMatchObject({ status: "pending", gone: true });
 		expect(JSON.stringify(await route("admin", { type: "page_load", page: "/queue" }))).toContain(`forget:${id}`);
 	});
@@ -2097,6 +2110,8 @@ describe("scheduled tasks on EmDash 1.5's own scheduler", () => {
 		host = { dispose: () => rt.dispose() } as unknown as PluginTestHost;
 		await rt.fixtures.collection(listingsCollection as never);
 		for (let i = 0; i < 5; i += 1) await rt.fixtures.content("listings", { data: { title: `Cafe ${i}`, listing_type: "restaurant" }, slug: `cafe-${i}`, status: "published" } as never);
+		// An updated site: the first visitor starts the upgrade (a new install schedules none, 0.8.1).
+		await rt.transport.invokeRoute("listings", {});
 		const names = new Set<string>();
 		let clock = Date.now();
 		for (let minute = 0; minute < 40; minute += 1) {
@@ -2124,8 +2139,8 @@ describe("scheduled tasks on EmDash 1.5's own scheduler", () => {
 			await settle();
 		};
 		const done = async () => (await rt.inspect.setting<{ done?: boolean }>("upgrade_0_7"))?.done === true;
-		// The install's own upgrade runs to the end on the empty site, so its task is gone.
-		for (let i = 0; i < 20 && !(await done()); i += 1) await minute();
+		// A new install with nothing to bring over is marked done at once and schedules no upgrade (0.8.1).
+		await rt.transport.invokeHook("plugin:install", {});
 		expect(await done()).toBe(true);
 		// Then the site looks like a 0.6.x site just updated from the registry: listings with no index
 		// rows, no upgrade state, and no upgrade task (EmDash runs no hook on an update).

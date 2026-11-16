@@ -54,7 +54,7 @@ export async function sampleRoute(input: unknown, ctx: PluginContext) {
 	const raw = asRecord(input);
 	const step = asString(raw.step);
 	if (step === "state") return { ok: true, ...(await sampleState(ctx)) };
-	if (!["start", "listings", "related"].includes(step)) return fail("VALIDATION_ERROR", "Copy the Listora site kit again: its sample page sends the sample directory in steps.");
+	if (!["start", "listings", "related"].includes(step)) return fail("VALIDATION_ERROR", "Copy the Listora site kit again, then load the sample.");
 	if (!ctx.content?.create) return fail("CONTENT_UNAVAILABLE", "The listings collection is not set up on this site.");
 	const rows = list(raw.listings);
 	const seen = await ctx.kv.getVersioned(SAMPLE);

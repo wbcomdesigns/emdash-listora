@@ -9,6 +9,7 @@ const coreFields = [
 	{ slug: "phone", label: "Phone", type: "string" },
 	{ slug: "website", label: "Website", type: "url" },
 	{ slug: "email", label: "Email", type: "string" },
+	{ slug: "email_public", label: "Show email publicly", type: "boolean", defaultValue: false },
 	{ slug: "address", label: "Address", type: "string" },
 	{ slug: "city", label: "City", type: "string", indexed: true },
 	{ slug: "state", label: "State", type: "string" },

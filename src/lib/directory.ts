@@ -1,6 +1,6 @@
 import type { PluginContext } from "emdash/plugin";
 
-import { haversineKm, listingFromContent, matchesQuery, type ListingCard } from "./catalog";
+import { haversineKm, listingFromContent, matchesQuery, publicCard, type ListingCard, type PublicCard } from "./catalog";
 import { EDITABLE } from "./edits";
 import { readRating } from "./ratings";
 import { chipField, choiceOf, LISTINGS, mapsSlot, SLOTS, slotsOf, typeBySlug, type ListingType, type Slot } from "./types";
@@ -48,7 +48,7 @@ export function listingPart(item: Item, types: readonly ListingType[]): Record<s
 	const data = asRecord(item.data);
 	const edit: Record<string, unknown> = {};
 	for (const key of EDITABLE) if (data[key] !== undefined && data[key] !== null) edit[key] = data[key];
-	const { rating_avg: _avg, rating_count: _count, description: _long, ...shown } = card;
+	const { rating_avg: _avg, rating_count: _count, description: _long, ...shown } = publicCard(card);
 	return {
 		vis: item.status === "published" && card.listing_status !== "expired",
 		pub: item.status === "published",
@@ -173,8 +173,9 @@ export const overdue = (row: Record<string, unknown>, now = Date.now()) => {
 };
 
 /** The card a public route shows, with the rating copy. */
-export function cardOf(row: Record<string, unknown> & { id?: string }): ListingCard {
-	const card = asRecord(row.card) as unknown as ListingCard;
+export function cardOf(row: Record<string, unknown> & { id?: string }): PublicCard {
+	// Rows indexed before 0.8.1 hold the email with no flag: dropped here, on the way out (#115).
+	const card = publicCard(asRecord(row.card) as unknown as ListingCard);
 	return { ...card, id: asString(row.id) || card.id, rating_avg: asNumber(row.avg) ?? 0, rating_count: asNumber(row.rc) ?? 0 };
 }
 
@@ -227,7 +228,7 @@ export const fits = (row: Record<string, unknown>, where: Record<string, unknown
 /** True when a filter needs the rows read and checked one by one (no index answers it). */
 export const scanned = (f: Filters) => Boolean(f.q || f.location || f.amenity || (f.lat !== null && f.lng !== null));
 
-export function matches(card: ListingCard, f: Filters): boolean {
+export function matches(card: PublicCard, f: Filters): boolean {
 	if (f.location) {
 		const hay = [card.city, card.state, card.country, card.place].join(" ").toLowerCase();
 		if (!hay.includes(f.location)) return false;

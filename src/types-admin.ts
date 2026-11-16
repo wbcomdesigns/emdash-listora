@@ -179,6 +179,8 @@ export function fieldFromForm(values: Values, type: ListingType, base: TypeField
 
 /* ---- Screens ---- */
 
+const pager = (label: string, at: number) => ({ type: "button", label, action_id: "types_page", value: { cursor: String(at) } });
+
 async function renderList(ctx: Ctx, settings: Settings, b: Budget, offset: number, toast?: Toast, draft?: Values): Promise<Response> {
 	const types = settings.types;
 	const at = Math.min(Math.max(0, Math.floor(offset) || 0), Math.max(0, types.length - 1));
@@ -196,12 +198,11 @@ async function renderList(ctx: Ctx, settings: Settings, b: Budget, offset: numbe
 	}));
 	const custom = types.filter((type) => !type.builtin).length;
 	return page("Listing types", toast, [
-		kContext("Types group your listings and decide which extra fields the listing form asks for. Built-in types can be edited or hidden. Your own types can be deleted while no listing uses them. Choose a type's name to edit it and its fields."),
+		kContext("Types group your listings and set the extra fields the listing form asks for. Choose a type's name to edit it. Built-in types can be hidden; your own can be deleted while unused."),
 		{ type: "stats", items: [{ label: "Types", value: types.length }, { label: "Hidden", value: types.filter((type) => type.hidden).length }] },
 		{
 			type: "table",
 			page_action_id: "types_page",
-			...(at + TYPES_PAGE < types.length ? { next_cursor: String(at + TYPES_PAGE) } : {}),
 			columns: [
 				{ key: "name", label: "Type", format: "element" },
 				{ key: "listings", label: "Listings" },
@@ -212,7 +213,8 @@ async function renderList(ctx: Ctx, settings: Settings, b: Budget, offset: numbe
 			rows,
 		},
 		kContext(`${types.length} types, ${TYPES_PAGE} per page. Listings counts published listings, and listings that were published once.`),
-		...(at > 0 ? [kActions([{ type: "button", label: "Previous page", action_id: "types_page", value: { cursor: String(Math.max(0, at - TYPES_PAGE)) } }])] : []),
+		// Buttons, not the table's own "Load more": a page replaces the rows, it does not add to them (#106).
+		...[[...(at > 0 ? [pager("Previous page", Math.max(0, at - TYPES_PAGE))] : []), ...(at + TYPES_PAGE < types.length ? [pager("Next page", at + TYPES_PAGE)] : [])]].filter((row) => row.length).map(kActions),
 		kDivider,
 		kHeader("Add a type"),
 		...(custom >= MAX_CUSTOM_TYPES
@@ -267,7 +269,7 @@ async function renderType(ctx: Ctx, settings: Settings, b: Budget, slug: string,
 		...(type.builtin ? [kContext("Built-in types can be hidden, not deleted.")] : []),
 		kDivider,
 		kHeader("Fields"),
-		kContext("Extra details the listing form asks for. Removing a field keeps what listings already have, but it is no longer shown or asked for."),
+		kContext("Extra details the listing form asks for on this type."),
 		fieldRows.length
 			? {
 					type: "table",

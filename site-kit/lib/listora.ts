@@ -2,13 +2,16 @@ import { phrase, S } from "./listora-strings";
 
 import { callPluginRoute, pluginFetch } from "./wbcom-kit";
 
+/** What the plugin routes answer: `{ data }` on success, `{ error: { message } }` on failure. */
+type ApiBody = { data?: ApiResult; error?: { message?: string } } | null;
+
 export type HourRow = { day: number; open: string; close: string };
 
 /**
  * A listing type as the plugin's `types` route gives it. The owner edits types in the admin (built-ins
  * and their own), so the kit never keeps a copy: every page asks the route (loadTypes).
  */
-export type ListingTypeInfo = { slug: string; name: string; schemaType?: string; color?: string; icon?: string; hidden?: boolean; location?: boolean; fields?: TypeFieldInfo[] };
+export type ListingTypeInfo = { slug: string; name: string; schemaType?: string; color?: string; icon?: string; hidden?: boolean; location?: boolean; fields?: TypeFieldInfo[]; isDefault?: boolean };
 
 /** One of a type's own fields, as the owner set it up in the admin (Listing types). */
 export type TypeFieldInfo = { key: string; label: string; kind: "text" | "number" | "choice" | "link" | "date" | "yesno"; options?: string[]; required?: boolean; cards?: boolean; slot?: number; chip?: boolean; was?: Record<string, string> };
@@ -37,6 +40,7 @@ function fieldsOf(value: unknown): TypeFieldInfo[] {
 export async function loadTypes(locals: unknown): Promise<ListingTypeInfo[]> {
 	const answer = await callPluginRoute(locals, "listora", "types").catch(() => null);
 	const items = Array.isArray(answer?.items) ? (answer.items as Array<Record<string, unknown>>) : [];
+	const chosen = typeof answer?.default === "string" ? answer.default : "";
 	return items
 		.filter((item) => typeof item.slug === "string" && item.slug && typeof item.name === "string")
 		.map((item) => ({
@@ -48,6 +52,7 @@ export async function loadTypes(locals: unknown): Promise<ListingTypeInfo[]> {
 			hidden: item.hidden === true,
 			location: item.location !== false,
 			fields: fieldsOf(item.fields),
+			isDefault: item.slug === chosen,
 		}));
 }
 
@@ -178,12 +183,13 @@ export function matchesPlace(data: { city?: unknown; state?: unknown; country?: 
 	return placeOf(data).toLowerCase().includes(location.toLowerCase());
 }
 
-export function sortListings<T extends { data: Record<string, unknown> }>(items: T[], sort: string): T[] {
+export function sortListings<T extends { data: object }>(items: T[], sort: string): T[] {
+	const field = (x: T) => x.data as Record<string, unknown>;
 	const copy = [...items];
 	if (sort === "title") {
-		return copy.sort((a, b) => String(a.data.title ?? "").localeCompare(String(b.data.title ?? "")));
+		return copy.sort((a, b) => String(field(a).title ?? "").localeCompare(String(field(b).title ?? "")));
 	}
-	return copy.sort((a, b) => Number(b.data.is_featured) - Number(a.data.is_featured));
+	return copy.sort((a, b) => Number(field(b).is_featured) - Number(field(a).is_featured));
 }
 
 export const DAY_NAMES = S.days;
@@ -323,7 +329,8 @@ export function formatEventWhen(value: unknown, timeZone = "UTC"): string {
 const OWN_FIELD_DETAILS = new Set(["cuisine", "price_range", "event_start", "event_end"]);
 
 /** A listing's stored details, whatever form they were saved in. */
-export function storedDetails(data: Record<string, unknown>): Record<string, unknown> {
+export function storedDetails(input: object): Record<string, unknown> {
+	const data = input as Record<string, unknown>;
 	try {
 		const parsed = typeof data.type_fields === "string" ? JSON.parse(data.type_fields || "{}") : data.type_fields;
 		return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? (parsed as Record<string, unknown>) : {};
@@ -333,12 +340,14 @@ export function storedDetails(data: Record<string, unknown>): Record<string, unk
 }
 
 /** One detail: from `type_fields`, or from its own field for a listing saved before 0.8.0. */
-export function detailValue(data: Record<string, unknown>, stored: Record<string, unknown>, key: string): unknown {
+export function detailValue(input: object, stored: Record<string, unknown>, key: string): unknown {
+	const data = input as Record<string, unknown>;
 	return key in stored ? stored[key] : OWN_FIELD_DETAILS.has(key) ? data[key] : undefined;
 }
 
 /** An event's start and end as stored text, from `type_fields` (0.8.0) or the fields 0.7.x wrote. */
-export function eventDates(data: Record<string, unknown>): { start: string; end: string } {
+export function eventDates(input: object): { start: string; end: string } {
+	const data = input as Record<string, unknown>;
 	const stored = storedDetails(data);
 	return { start: String(detailValue(data, stored, "event_start") || ""), end: String(detailValue(data, stored, "event_end") || "") };
 }
@@ -376,14 +385,15 @@ export function formatSiteDate(value: unknown, pattern?: string, locale?: string
 	return (pattern?.trim() || "MMMM d, yyyy").replace(/'([^']*)'|yyyy|yy|MMMM|MMM|MM|M|dd|d|EEEE|EEE/g, (token, quoted) => (quoted !== undefined ? quoted : parts[token]()));
 }
 
-export type Fact = { label: string; value: string; href?: string; kind: TypeFieldInfo["kind"] };
+export type Fact = { key: string; label: string; value: string; href?: string; kind: TypeFieldInfo["kind"] };
 
 /**
  * The filled-in details of one listing, in its type's field order, ready to show: a choice as the
  * owner wrote it (a renamed choice in its new words), yes or no in words, a date in the site's date format, a link only when it is a full
  * http or https address. `cards` keeps only the fields the owner marked to show on cards.
  */
-export function typeFacts(data: Record<string, unknown>, type: ListingTypeInfo, options: { dateFormat?: string; timeZone?: string; cards?: boolean } = {}): Fact[] {
+export function typeFacts(input: object, type: ListingTypeInfo, options: { dateFormat?: string; timeZone?: string; cards?: boolean } = {}): Fact[] {
+	const data = input as Record<string, unknown>;
 	const stored = storedDetails(data);
 	return (type.fields ?? [])
 		.filter((field) => !options.cards || field.cards)
@@ -391,7 +401,7 @@ export function typeFacts(data: Record<string, unknown>, type: ListingTypeInfo, 
 			const raw = detailValue(data, stored, field.key);
 			if (raw === null || raw === undefined || raw === "") return [];
 			const text = String(raw).trim();
-			const base = { label: field.label, kind: field.kind };
+			const base = { key: field.key, label: field.label, kind: field.kind };
 			if (field.kind === "yesno") return raw === true || raw === "true" ? [{ ...base, value: S.common.yes }] : raw === false || raw === "false" ? [{ ...base, value: S.common.no }] : [];
 			if (field.kind === "date") return [{ ...base, value: formatSiteDate(text, options.dateFormat) }];
 			if (field.kind === "choice") return [{ ...base, value: field.options?.find((option) => option.toLowerCase() === text.toLowerCase()) ?? field.was?.[text.toLowerCase()] ?? text }];
@@ -406,7 +416,8 @@ export function typeFacts(data: Record<string, unknown>, type: ListingTypeInfo, 
 }
 
 /** The details the owner marked "on cards", as short chips: a choice reads alone ("Plugin"), the rest with their label ("Berths: 6"). */
-export function cardFacts(data: Record<string, unknown>, type: ListingTypeInfo, dateFormat?: string): string[] {
+export function cardFacts(input: object, type: ListingTypeInfo, dateFormat?: string): string[] {
+	const data = input as Record<string, unknown>;
 	return typeFacts(data, type, { dateFormat, cards: true }).map((fact) => (fact.kind === "choice" ? fact.value : `${fact.label}: ${fact.value}`));
 }
 
@@ -438,7 +449,8 @@ export type SoftwareView = {
  * What the Software card and page show, read from the listing's details. Only fields the type still
  * has are read (the owner may remove one), a choice in the owner's spelling, links only when safe.
  */
-export function softwareView(data: Record<string, unknown>, type: ListingTypeInfo): SoftwareView {
+export function softwareView(input: object, type: ListingTypeInfo): SoftwareView {
+	const data = input as Record<string, unknown>;
 	const stored = storedDetails(data);
 	const fields = new Map((type.fields ?? []).map((field) => [field.key, field]));
 	const raw = (key: string) => (fields.has(key) ? stored[key] : undefined);
@@ -554,9 +566,23 @@ export async function githubFacts(repo: string, release: boolean): Promise<Githu
 
 /**
  * Live GitHub numbers for every `[data-gh="owner/repo"]` block on the page: its `[data-gh-stars]`
- * text, and on a block with `data-gh-release` its `[data-gh-version]` text and `time[data-relative]`.
- * Text only, never markup. What could not be read keeps the stored value.
+ * text, and on a block with `data-gh-release` its `[data-gh-version]` text, `time[data-relative]`
+ * and `[data-gh-date]` text. Text only, never markup.
+ *
+ * One rule on card, header and Details alike (#106): GitHub's numbers replace the owner's only when
+ * they are ahead of them, more stars or a newer release than the stored ones (`data-gh-stars-was`,
+ * `data-gh-date-was`). A repository GitHub cannot read, or one behind the owner's values, keeps them,
+ * so "0 stars" never shows beside an owner's number.
  */
+/** Which of GitHub's facts are ahead of the owner's stored ones (liveGithub). Empty `was` values: nothing stored. */
+export function githubAhead(facts: GithubFacts, starsWas: string, dateWas: string): { stars: boolean; release: boolean } {
+	const stored = starsWas.trim() === "" ? NaN : Number(starsWas);
+	const stars = facts.stars !== undefined && facts.stars > (Number.isFinite(stored) ? stored : 0);
+	const was = Date.parse(dateWas);
+	const release = Boolean(facts.tag && facts.date) && (!Number.isFinite(was) || Date.parse(facts.date as string) > was);
+	return { stars, release };
+}
+
 export async function liveGithub(root: ParentNode = document): Promise<void> {
 	const blocks = [...root.querySelectorAll<HTMLElement>("[data-gh]")];
 	// A part with no stored value waits hidden (data-gh-wrap) until GitHub fills it.
@@ -570,11 +596,13 @@ export async function liveGithub(root: ParentNode = document): Promise<void> {
 		[...repos].map(async ([repo, nodes]) => {
 			const facts = await githubFacts(repo, nodes.some((node) => node.hasAttribute("data-gh-release")));
 			if (!facts) return;
+			const ahead = githubAhead(facts, nodes[0]?.dataset.ghStarsWas ?? "", nodes[0]?.dataset.ghDateWas ?? "");
 			for (const node of nodes) {
-				if (facts.stars !== undefined) node.querySelectorAll("[data-gh-stars]").forEach((slot) => show(slot, countLabel(facts.stars as number)));
-				if (facts.tag && facts.date && node.hasAttribute("data-gh-release")) {
+				if (ahead.stars) node.querySelectorAll("[data-gh-stars]").forEach((slot) => show(slot, countLabel(facts.stars as number)));
+				if (ahead.release && node.hasAttribute("data-gh-release")) {
 					node.querySelectorAll("[data-gh-version]").forEach((slot) => show(slot, facts.tag as string));
 					node.querySelectorAll<HTMLTimeElement>("time[data-relative]").forEach((slot) => (slot.dateTime = facts.date as string));
+					node.querySelectorAll("[data-gh-date]").forEach((slot) => show(slot, day(facts.date)));
 				}
 			}
 		}),
@@ -640,7 +668,7 @@ export type ApiResult = { ok: boolean; error?: { code?: string; message?: string
  * through. A server error (5xx) never does: its text is the runtime's ("exceeded wall-time limit..."),
  * written for a log, not for a person.
  */
-function failure(json: ApiResult | null, fallback: string, status = 400): ApiResult {
+function failure(json: { error?: { code?: string; message?: string } } | null, fallback: string, status = 400): ApiResult {
 	if (json?.error?.code === "STORAGE_INDEXES_NOT_READY") return { ok: false, error: { code: "NOT_READY", message: phrase("STORAGE_INDEXES_NOT_READY") } };
 	// `status` lets a page tell a refusal (4xx: say it) from the site not answering in time (5xx: try again).
 	return { ok: false, error: { code: "FAILED", message: (status < 500 && json?.error?.message) || fallback, status } };
@@ -663,7 +691,7 @@ export async function uploadPhoto(listingId: string, file: File): Promise<ApiRes
 		});
 		if (response.status === 401) return { ok: false, error: { code: "SIGN_IN_REQUIRED", message: phrase("SIGN_IN_REQUIRED") } };
 		if (response.status === 413) return { ok: false, error: { code: "TOO_BIG", message: phrase("TOO_BIG") } };
-		const json = await response.json().catch(() => null);
+		const json = await (response.json() as Promise<ApiBody>).catch(() => null);
 		if (!response.ok || !json) return failure(json, S.account.photoFailed, response.status);
 		return json.data ?? { ok: false };
 	} catch {
@@ -711,7 +739,7 @@ export async function api(path: string, body?: unknown, method = body ? "POST" :
 			return { ok: false, error: { code: "SIGN_IN_REQUIRED", message: phrase("SIGN_IN_REQUIRED") } };
 		}
 		if (member && response.ok) remember(false);
-		const json = await response.json().catch(() => null);
+		const json = await (response.json() as Promise<ApiBody>).catch(() => null);
 		if (!response.ok || !json) return failure(json, phrase("FAILED"), response.status);
 		return json.data ?? { ok: false };
 	} catch {
@@ -746,7 +774,7 @@ export async function savedIds(ids: string[] = []): Promise<Set<string>> {
 	return new Set(items.map((item) => String(item.data?.listingId ?? item.listingId ?? "")).filter(Boolean));
 }
 
-export type Viewer = { signedIn: boolean; known: boolean; saved: boolean; owner: "" | "you" | "other" };
+export type Viewer = { signedIn: boolean; known: boolean; saved: boolean; owner: "" | "you" | "other"; claimWaiting: boolean };
 
 /**
  * Who is looking at a listing page: a guest, a member, the member who manages it ("you"), or a
@@ -755,14 +783,15 @@ export type Viewer = { signedIn: boolean; known: boolean; saved: boolean; owner:
  * page then shows what it shows everyone).
  */
 export async function viewer(listingId: string): Promise<Viewer> {
-	if (knownGuest()) return { signedIn: false, known: true, saved: false, owner: "" };
+	if (knownGuest()) return { signedIn: false, known: true, saved: false, owner: "", claimWaiting: false };
 	const result = await api(`favorites?listingId=${encodeURIComponent(listingId)}`);
-	if (!result.ok) return { signedIn: false, known: result.error?.code === "SIGN_IN_REQUIRED", saved: false, owner: "" };
+	if (!result.ok) return { signedIn: false, known: result.error?.code === "SIGN_IN_REQUIRED", saved: false, owner: "", claimWaiting: false };
 	const items = Array.isArray(result.items) ? (result.items as Array<{ data?: { listingId?: string }; listingId?: string }>) : [];
 	// An engine before 0.7.0 answers with every saved listing and no owner.
 	const saved = typeof result.saved === "boolean" ? result.saved : items.some((item) => String(item.data?.listingId ?? item.listingId ?? "") === listingId);
 	const owner = result.owner === "you" || result.owner === "other" ? result.owner : "";
-	return { signedIn: true, known: true, saved, owner };
+	// An engine before 0.8.1 does not say: the claim form shows, as it did.
+	return { signedIn: true, known: true, saved, owner, claimWaiting: result.claim === "pending" };
 }
 
 /** Show a result next to a form: success text, the API's error, or a sign-in link for guests. */
@@ -772,7 +801,7 @@ export function notify(after: Element, result: ApiResult, success: string): void
 		box = document.createElement("p");
 		box.className = "listora-status";
 		box.setAttribute("role", "status");
-		after.after(box);
+		after.parentNode?.insertBefore(box, after.nextSibling);
 	}
 	box.hidden = false;
 	box.dataset.tone = result.ok ? "success" : "error";

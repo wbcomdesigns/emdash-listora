@@ -185,18 +185,28 @@ function listChrome(def: ListDef, listed: Listed, what: string): BlockMap[] {
 	return blocks;
 }
 
+const OWN_EDITS = "That listing has unpublished edits of your own. Publish or discard them, then approve the";
 const stats = (label: string, value: number): BlockMap => ({ type: "stats", items: [{ label, value }] });
+
+/**
+ * Next page of a list, under it. Not the table's own next_cursor: EmDash labels that "Load more", and
+ * a plugin page replaces the rows rather than adding to them, so the label would not tell the truth (#106).
+ */
+const nextPage = (def: ListDef, listed: Listed): BlockMap[] => (listed.next ? [kActions([{ type: "button", label: "Next page", action_id: `${def.key}_page`, value: { cursor: listed.next } }])] : []);
 
 /* ---- Listings queue (new listings) ---- */
 
 async function renderQueue(ctx: Ctx, settings: Settings, b: Budget, extra: Extra = {}): Promise<BlockResponse> {
 	const typeName = (slug: unknown) => typeBySlug(settings.types, slug).name;
 	// Find matches the type's name as the owner has it, not only its slug.
-	const listed = await listRows(ctx, { ...LISTS.queue, text: (r) => lowerText(r.title, r.city, typeName(r.listing_type)) }, viewFor(settings, "queue"), b);
+	const listed = await listRows(ctx, { ...LISTS.queue, text: (r) => lowerText(r.title, r.city, r.address, r.owner_email, typeName(r.listing_type)) }, viewFor(settings, "queue"), b);
 	const rows = listed.rows.map((row) => {
 		const listingId = asString(row.listingId) || row.id;
 		const title = wrappable(asString(row.title) || "Untitled listing");
-		const base = { type: typeName(row.listing_type), city: wrappable(asString(row.city)) || "-", submitted: day(ctx, row.createdAt) };
+		// Where and who, so two listings with the same title can be told apart. The account address
+		// is the admin's to see; rows from before 0.8.1, the sample and imports have none.
+		const where = [asString(row.address), asString(row.city)].filter(Boolean).join(", ");
+		const base = { type: typeName(row.listing_type), city: wrappable(where) || "-", by: wrappable(asString(row.owner_email)) || "-", submitted: day(ctx, row.createdAt) };
 		if (row.gone === true) {
 			// Telling Trash from deleted needs the content:restore permission, which Listora does not ask for.
 			return {
@@ -210,7 +220,7 @@ async function renderQueue(ctx: Ctx, settings: Settings, b: Budget, extra: Extra
 					value: `forget:${listingId}`,
 					confirm: {
 						title: "Remove this row from the queue?",
-						text: "Its listing was deleted or moved to Trash. To approve it, restore it from Trash in Content, Listings first. Removing the row does not touch the listing.",
+						text: "Its listing was deleted or is in Trash. Restore it from Trash to approve it. Removing the row does not touch the listing.",
 						confirm: "Remove",
 						deny: "Cancel",
 					},
@@ -242,17 +252,18 @@ async function renderQueue(ctx: Ctx, settings: Settings, b: Budget, extra: Extra
 			: {
 					type: "table",
 					page_action_id: "queue_page",
-					next_cursor: listed.next,
 					columns: [
 						{ key: "title", label: "Listing" },
+						{ key: "action", label: "Decision", format: "element" },
 						{ key: "type", label: "Type" },
-						{ key: "city", label: "City" },
+						{ key: "city", label: "Where" },
+						{ key: "by", label: "Sent by" },
 						{ key: "submitted", label: "Submitted" },
 						{ key: "open", label: "Edit", format: "element" },
-						{ key: "action", label: "Decision", format: "element" },
 					],
 					rows,
 				},
+		...nextPage(LISTS.queue, listed),
 	]);
 }
 
@@ -300,7 +311,7 @@ async function decideListing(ctx: Ctx, settings: Settings, b: Budget, action: st
 		await ctx.storage.submissions.updateIf(listingId, { where: { status: "approving" }, set: { status: "pending", ...(gone ? { gone: true } : {}) } });
 		return back(
 			gone
-				? { message: "That listing was deleted or moved to Trash, so it cannot be published. Restore it from Trash to approve it, or remove its row from the queue.", type: "error" }
+				? { message: "That listing was deleted or is in Trash. Restore it to approve it, or remove its row.", type: "error" }
 				: { message: "Could not publish that listing. It is waiting in the queue again. Check it in Content, Listings, then try once more.", type: "error" },
 		);
 	}
@@ -345,7 +356,7 @@ async function renderChanges(ctx: Ctx, settings: Settings, b: Budget, extra: Ext
 		stats("Waiting", listed.total),
 		...listChrome(LISTS.changes, listed, "changes"),
 		...(blocks.length
-			? [...blocks, ...(listed.next ? [kActions([{ type: "button", label: "Next page", action_id: "changes_page", value: { cursor: listed.next } }])] : [])]
+			? [...blocks, ...nextPage(LISTS.changes, listed)]
 			: [listed.find ? { type: "empty", title: "Nothing matches", description: "No waiting change is for a listing with that name." } : { type: "empty", title: "No changes waiting", description: "When an owner edits their live listing, the change waits here." }]),
 	]);
 }
@@ -393,7 +404,7 @@ async function decideChange(ctx: Ctx, settings: Settings, b: Budget, action: str
 	if (Object.keys(patch).length > 0) {
 		spend(b, 3);
 		const patched = await patchListing(ctx, listingId, patch, settings.fields, listing);
-		if (patched.state === "busy") return release({ message: "That listing has unpublished edits of your own. Publish or discard them, then approve the change.", type: "error" });
+		if (patched.state === "busy") return release({ message: `${OWN_EDITS} change.`, type: "error" });
 		if (patched.state !== "done") return release({ message: "The change could not be published. It is waiting again. Try once more.", type: "error" });
 	}
 	spend(b);
@@ -447,7 +458,7 @@ async function renderPhotos(ctx: Ctx, settings: Settings, b: Budget, extra: Extr
 		stats("Waiting", listed.total),
 		...listChrome(LISTS.photos, listed, "photos"),
 		...(blocks.length
-			? [...blocks, ...(listed.next ? [kActions([{ type: "button", label: "Next page", action_id: "photos_page", value: { cursor: listed.next } }])] : [])]
+			? [...blocks, ...nextPage(LISTS.photos, listed)]
 			: [listed.find ? { type: "empty", title: "Nothing matches", description: "No waiting photo is for a listing with that name." } : { type: "empty", title: "No photos waiting", description: "Photos owners add to their listings wait here." }]),
 	]);
 }
@@ -499,7 +510,7 @@ async function decidePhoto(ctx: Ctx, settings: Settings, b: Budget, action: stri
 		spend(b, 3);
 		// The first photo also becomes the cover when the listing has none.
 		const patched = await patchListing(ctx, listingId, { gallery: [...gallery, { image }], ...(data.featured_image ? {} : { featured_image: image }) }, settings.fields, listing);
-		if (patched.state === "busy") return release("That listing has unpublished edits of your own. Publish or discard them, then approve the photo.");
+		if (patched.state === "busy") return release(`${OWN_EDITS} photo.`);
 		if (patched.state !== "done") return release("The photo could not be added. It is waiting again. Try once more.");
 	}
 	await ctx.storage.photos.updateIf(id, { where: { status: "approving" }, set: { status: "approved" } });
@@ -515,11 +526,9 @@ async function renderReviews(ctx: Ctx, settings: Settings, b: Budget, extra: Ext
 	const named = await withTitles(ctx, [...listed.rows, ...replyRows], b);
 	const replies = named.slice(listed.rows.length);
 	const rows = named.slice(0, listed.rows.length).map((row) => ({
-		// Shown in full: what the admin reads is exactly what goes live.
-		title: [asString(row.title), asString(row.body)].filter(Boolean).join(": "),
-		listing: asString(row.listing_title) || "A listing",
-		stars: row.stars ? `${row.stars} of 5` : "-",
-		author: asString(row.author),
+		// Shown in full, so what the admin reads is exactly what goes live; wrappable so a long word
+		// cannot push the other columns off screen (#113). The decision comes second, in view on a phone.
+		title: wrappable([asString(row.title), asString(row.body)].filter(Boolean).join(": ") || "(stars only)"),
 		action: {
 			type: "menu",
 			action_id: "review_mod",
@@ -529,6 +538,9 @@ async function renderReviews(ctx: Ctx, settings: Settings, b: Budget, extra: Ext
 				{ label: "Reject", value: stamped("reject", row.id, row) },
 			],
 		},
+		listing: wrappable(asString(row.listing_title) || "A listing"),
+		stars: row.stars ? `${row.stars} of 5` : "-",
+		author: wrappable(asString(row.author)),
 	}));
 	const replyBlocks: BlockMap[] = replies.length
 		? [
@@ -559,16 +571,16 @@ async function renderReviews(ctx: Ctx, settings: Settings, b: Budget, extra: Ext
 			: {
 					type: "table",
 					page_action_id: "reviews_page",
-					next_cursor: listed.next,
 					columns: [
 						{ key: "title", label: "Review" },
+						{ key: "action", label: "Decision", format: "element" },
 						{ key: "listing", label: "Listing" },
 						{ key: "stars", label: "Stars" },
 						{ key: "author", label: "Author" },
-						{ key: "action", label: "Decision", format: "element" },
 					],
 					rows,
 				},
+		...nextPage(LISTS.reviews, listed),
 		...replyBlocks,
 	]);
 }
@@ -624,10 +636,7 @@ async function decideReply(ctx: Ctx, settings: Settings, b: Budget, action: stri
 async function renderClaims(ctx: Ctx, settings: Settings, b: Budget, extra: Extra = {}): Promise<BlockResponse> {
 	const listed = await listRows(ctx, LISTS.claims, viewFor(settings, "claims"), b, extra.total);
 	const rows = (await withTitles(ctx, listed.rows, b)).map((row) => ({
-		listing: asString(row.listing_title) || "A listing",
-		message: asString(row.message),
-		name: asString(row.name),
-		email: asString(row.email),
+		listing: wrappable(asString(row.listing_title) || "A listing"),
 		action: {
 			type: "menu",
 			action_id: "claim_mod",
@@ -637,6 +646,9 @@ async function renderClaims(ctx: Ctx, settings: Settings, b: Budget, extra: Extr
 				{ label: "Reject", value: stamped("reject", row.id, row, listed.total) },
 			],
 		},
+		name: wrappable(asString(row.name)),
+		email: wrappable(asString(row.email)),
+		message: wrappable(asString(row.message)),
 	}));
 	return page("Claims", extra, [
 		stats("Waiting", listed.total),
@@ -648,16 +660,16 @@ async function renderClaims(ctx: Ctx, settings: Settings, b: Budget, extra: Extr
 			: {
 					type: "table",
 					page_action_id: "claims_page",
-					next_cursor: listed.next,
 					columns: [
 						{ key: "listing", label: "Listing" },
+						{ key: "action", label: "Decision", format: "element" },
 						{ key: "name", label: "Name" },
 						{ key: "email", label: "Email" },
 						{ key: "message", label: "Message" },
-						{ key: "action", label: "Decision", format: "element" },
 					],
 					rows,
 				},
+		...nextPage(LISTS.claims, listed),
 	]);
 }
 
@@ -739,7 +751,8 @@ async function renderMessages(ctx: Ctx, settings: Settings, b: Budget, extra: Ex
 	const told = (row: Row) => (asNumber(asRecord(subs?.get(asString(row.listingId))).noticed) ?? 0) >= Date.parse(asString(row.createdAt));
 	const notice = (row: Row) =>
 		row.notice === "none"
-			? "Owner not notified"
+			? // The listing had no owner when the message came: a different cause from mail that failed (#106).
+				"No owner to notify"
 			: !settings.emailMessages
 				? "Email notices are off"
 				: row.notice === "sent" || (off.includes(row) && (!subs || told(row)))
@@ -750,10 +763,10 @@ async function renderMessages(ctx: Ctx, settings: Settings, b: Budget, extra: Ex
 							? "Owner not notified"
 							: "Notice goes out within the hour";
 	const table = (await withTitles(ctx, listed.rows, b)).map((row) => ({
-		listing: asString(row.listing_title) || "A listing",
-		from: [asString(row.name), asString(row.email)].filter(Boolean).join(", ") || "No name given",
-		// Shown in full. Visitors write these, so they are plain text here, never markup.
-		message: asString(row.message),
+		listing: wrappable(asString(row.listing_title) || "A listing"),
+		from: wrappable([asString(row.name), asString(row.email)].filter(Boolean).join(", ") || "No name given"),
+		// Shown in full, wrappable. Visitors write these, so they are plain text here, never markup.
+		message: wrappable(asString(row.message)),
 		received: day(ctx, row.createdAt),
 		emailed: notice(row),
 		action: {
@@ -769,7 +782,7 @@ async function renderMessages(ctx: Ctx, settings: Settings, b: Budget, extra: Ex
 	}));
 	return page("Messages", extra, [
 		...(settings.emailMessages && settings.noMail
-			? [{ type: "banner", title: "This site cannot send email", description: "Owners were not told about new messages: the site has no email provider. Set one up under Settings, Email. Waiting notices go out once it works.", variant: "alert" }]
+			? [{ type: "banner", title: "This site cannot send email", description: "Owners were not told about new messages: the site has no email provider. Waiting notices go out once one is set up under Settings, Email.", variant: "alert" }]
 			: []),
 		stats("New", listed.total),
 		...openedBlocks,
@@ -781,7 +794,6 @@ async function renderMessages(ctx: Ctx, settings: Settings, b: Budget, extra: Ex
 			: {
 					type: "table",
 					page_action_id: "messages_page",
-					next_cursor: listed.next,
 					columns: [
 						{ key: "listing", label: "Listing" },
 						{ key: "from", label: "From" },
@@ -792,6 +804,7 @@ async function renderMessages(ctx: Ctx, settings: Settings, b: Budget, extra: Ex
 					],
 					rows: table,
 				},
+		...nextPage(LISTS.messages, listed),
 	]);
 }
 
@@ -870,9 +883,9 @@ export async function renderSettings(ctx: Ctx, settings: Settings, _b: Budget, e
 					label: "Lifetime",
 					blocks: [
 						...(noStatus
-							? [{ type: "banner", title: "Expired listings stay on your listing pages", description: "Your listings type has no listing_status field, so an expired listing leaves Listora's directory routes but not pages that read the listings directly. The install guide shows how to add it.", variant: "default" }]
+							? [{ type: "banner", title: "Expired listings stay on your listing pages", description: "Your listings type has no listing_status field, so an expired listing still shows on pages that read listings directly. The install guide shows how to add it.", variant: "default" }]
 							: []),
-						kContext("0 means a listing never expires. Above 0, it leaves the directory after that many days and its owner can renew it. Listora keeps each listing's date itself."),
+						kContext("0 means a listing never expires. Above 0, it leaves the directory after that many days and its owner can renew it."),
 						{
 							type: "form",
 							block_id: "settings_lifetime",
@@ -932,7 +945,7 @@ export async function renderSettings(ctx: Ctx, settings: Settings, _b: Budget, e
 		kDivider,
 		// The version token is the press it follows, so a second press (another tab, a double click) starts nothing.
 		kActions([{ type: "button", action_id: "recat", label: "Refresh categories now", value: String(rc.at) }]),
-		kContext(`A category changed in EmDash's sidebar shows in the directory within a few hours, at once when its listing is published, or when this refresh finishes.${rc.at ? (rc.done ? ` Last finished ${when(ctx, rc.done)}.` : ` Running since ${when(ctx, rc.at)}.`) : ""}`),
+		kContext(`A category changed in the sidebar shows in the directory within a few hours, or at once after this refresh.${rc.at ? (rc.done ? ` Last finished ${when(ctx, rc.done)}.` : ` Running since ${when(ctx, rc.at)}.`) : ""}`),
 	]);
 }
 
@@ -982,7 +995,7 @@ async function saveSettings(ctx: Ctx, settings: Settings, b: Budget, actionId: s
 			await ctx.settings.set("require_moderation", asBoolean(values.require_moderation));
 			await ctx.settings.set("spam_keywords", asString(values.spam_keywords));
 			Object.assign(settings, { defaultListingType: type, requireModeration: asBoolean(values.require_moderation), spamKeywords: asString(values.spam_keywords) });
-			return saved("Submissions saved.");
+			return saved("Listing settings saved.");
 		}
 		case "save_lifetime": {
 			const days = Number(values.expiry_days);
@@ -1007,7 +1020,7 @@ async function saveSettings(ctx: Ctx, settings: Settings, b: Budget, actionId: s
 			spend(b);
 			await ctx.settings.set("email_messages", asBoolean(values.email_messages));
 			settings.emailMessages = asBoolean(values.email_messages);
-			return saved("Messages saved.");
+			return saved("Message settings saved.");
 	}
 	return refuse("Unknown form.");
 }
@@ -1075,7 +1088,7 @@ export function kitBlocks(ctx: Ctx, settings: Settings): BlockMap[] {
 		{
 			type: "banner",
 			title: "Set up visitor pages",
-			description: "Installing Listora adds this admin, not pages on your site. The visitor pages come from the Listora site kit. Until you copy it, the addresses below show your site's 404 page.",
+			description: "The visitor pages come from the Listora site kit. Until you copy it, the addresses below show your site's 404 page.",
 			variant: "default",
 		},
 		kContext(`From your site's root folder, run this command. It copies the kit for the version you have installed (${tag}) into a fresh folder only you can write to.`),
@@ -1105,7 +1118,7 @@ export function kitBlocks(ctx: Ctx, settings: Settings): BlockMap[] {
 function onboardBlocks(ctx: Ctx, hasCollection: boolean, listings: boolean, sample: SampleState): BlockMap[] {
 	const url = siteUrl(ctx, "/listings/sample/");
 	const missing = hasCollection
-		? `The listings collection is ready. Load sample data so the first visit shows cards, reviews, and a claim: 17 listings (3 Software), two waiting for your approval. It runs on the site kit page /listings/sample/ while you keep it open.${url ? "" : " Open it on your site while signed in."}`
+		? `The listings collection is ready. Load sample data: 17 listings (3 Software), two waiting for your approval. It runs on the site kit page /listings/sample/ while you keep it open.${url ? "" : " Open it on your site while signed in."}`
 		: "This site has no listings collection yet. The command above prints the step that creates it. Then load sample data here.";
 	return [
 		{ type: "banner", title: "Get a finished first look", description: missing, variant: hasCollection ? "default" : "alert" },

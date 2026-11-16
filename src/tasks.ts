@@ -35,12 +35,13 @@ const DAY = 86_400_000;
  * check is always scheduled and returns at once while expiry is off: expiry can be switched on from
  * EmDash's own settings form (drawn from the manifest), which runs no plugin code.
  */
-export async function scheduleAll(ctx: Ctx, settings: Settings | null): Promise<void> {
+/** `fresh`: a new install with nothing to bring over (markFreshInstall), so no upgrade task. */
+export async function scheduleAll(ctx: Ctx, settings: Settings | null, fresh = false): Promise<void> {
 	await ctx.cron?.schedule("notify", { schedule: NOTIFY_CRON });
 	await ctx.cron?.schedule("tidy", { schedule: "23 * * * *" });
 	await ctx.cron?.schedule("sweep", { schedule: "41 * * * *" });
 	await ctx.cron?.schedule("expire", { schedule: "0 3 * * *" });
-	if (!settings || !upgradeDone(settings)) await ctx.cron?.schedule("upgrade", { schedule: soon() });
+	if (!fresh && (!settings || !upgradeDone(settings))) await ctx.cron?.schedule("upgrade", { schedule: soon() });
 	await ctx.settings.set(KEY.tasks, TASKS);
 }
 

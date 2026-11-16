@@ -9,7 +9,7 @@ This takes a developer about ten minutes. The plugin gives you the directory eng
 - **Node:** in your site, run `npm install @emdash-cms/sandbox-workerd workerd`, then add `sandboxRunner: "@emdash-cms/sandbox-workerd/sandbox",` inside `emdash({ ... })` in `astro.config.mjs`.
 - **Cloudflare: supported on EmDash 1.4 or later.** On Cloudflare Workers EmDash gives each plugin call a fixed number of requests to the site (10 up to EmDash 1.4, 30 from 1.5). Every page, action and task of this plugin stays within 10, and it is walked on a Cloudflare site for each release. Node sites are not affected.
 - **On Cloudflare, redeploy after installing or updating.** Cloudflare runs several copies of your site at once, and EmDash refreshes the plugin list only in the copy that handled the install or update (seen on EmDash 1.5). Until you redeploy (`npm run deploy`), some requests to the plugin can answer "Plugin route not found" and its admin pages can show a plugin error. EmDash is tracking a fix in [emdash-cms/emdash#4865](https://github.com/emdash-cms/emdash/issues/4865).
-- **Messages from guests need the visitor's address.** Cloudflare passes it on. On Node behind a proxy, set `trustedProxyHeaders` in your EmDash config to a header the proxy overwrites (`["x-real-ip"]` behind nginx). Without one, the contact form tells guests to call or email the listing instead (0.7.0).
+- **Messages from guests need the visitor's address.** Cloudflare passes it on. On Node behind a proxy, set `trustedProxyHeaders` in your EmDash config to a header the proxy overwrites (`["x-real-ip"]` behind nginx). Without one, the contact form tells guests to call the listing or visit its website instead (0.7.0).
 
 Stop the dev server and start it again. **Registry** now shows in the admin menu.
 
@@ -27,7 +27,7 @@ Checked on EmDash 1.3.1 with the `blog` template on Node.
    ```bash
    kit="$(mktemp -d)" &&
      git clone --depth 1 \
-       --branch v0.8.0 \
+       --branch v0.8.1 \
        https://github.com/wbcomdesigns/emdash-listora \
        "$kit/emdash-listora" &&
      "$kit/emdash-listora/scripts/add-to-site.sh" .
@@ -59,7 +59,7 @@ Colours and fonts come from your site: the kit reads `--color-bg`, `--color-text
 
 ## A listings type made by hand
 
-If you created the `listings` type in the admin instead of with the seed command, it may lack optional fields. Listora only writes the fields your type has. Listora keeps each listing's expiry date itself, so the `expires_at` field is no longer needed (0.7.0). Without a `listing_status` field an expired listing leaves Listora's directory routes but still shows on pages that read the listings directly, and Admin, Listora, Settings, Lifetime says so. To add it, run the seed command again (it adds missing fields and skips the rest), or add a field with the slug `listing_status` in Content Types, Listings.
+If you created the `listings` type in the admin instead of with the seed command, it may lack optional fields. Listora only writes the fields your type has. Listora keeps each listing's expiry date itself, so the `expires_at` field is no longer needed (0.7.0). Without a `listing_status` field an expired listing leaves Listora's directory routes but still shows on pages that read the listings directly, and Admin, Listora, Settings, Lifetime says so. To add it, run the seed command again (it adds missing fields and skips the rest), or add a field with the slug `listing_status` in Content Types, Listings. The same goes for `email_public` (0.8.1), the yes/no field behind **Show my email publicly**: without it the box on the add form saves nothing and every listing's email stays private.
 
 ## Check four addresses
 

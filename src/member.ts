@@ -23,6 +23,14 @@ export const NO_LISTING = { ok: false, error: { code: "NOT_FOUND", message: "Tha
 export const REVIEW_TITLE_MAX = 120;
 export const REVIEW_BODY_MAX = 1000;
 
+/**
+ * Refuse text over its limit in plain words, never cut it silently (#114). The kit's boxes stop at the
+ * limit; this answers a request that skips them, or a kit one version behind.
+ */
+export function tooLong(text: unknown, max: number, what: string) {
+	return asString(text).trim().length > max ? invalid(`${what} can be up to ${max} characters.`) : null;
+}
+
 // Strict on purpose: this value becomes a mail header.
 // Plain address only: no ? & = or other characters that add recipients or text to a mailto: link.
 export const EMAIL_RE = /^[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}$/;
@@ -63,6 +71,8 @@ export function parseSubmit(input: unknown): { ok: true; data: SubmitInput } | {
 			phone: text("phone"),
 			website: webAddress(raw.website),
 			email: plainEmail(raw.email),
+			// Off unless the lister ticks it: the email then shows on the listing and in the directory (#115).
+			email_public: asBoolean(raw.email_public),
 			address: text("address"),
 			city: text("city"),
 			state: text("state"),
@@ -174,6 +184,8 @@ export async function submit(routeCtx: { user?: unknown; input: unknown }, ctx: 
 		tl: parsed.data.title.toLowerCase(),
 		listing_type: listingType,
 		city: asString(data.city),
+		// So the queue can tell two listings with the same title apart.
+		address: asString(data.address),
 		status: live ? "approving" : "pending",
 		...(live ? { claimedAt: new Date(now).toISOString() } : {}),
 		// The expiry date the listing starts with once it goes live (the content hook copies it).
@@ -210,6 +222,8 @@ export async function review(routeCtx: { user?: unknown; input: unknown }, ctx: 
 	const listingId = asString(raw.listingId || raw.listing_id);
 	const body = asString(raw.body);
 	if (!listingId || !body) return invalid("Listing and review text are required.");
+	const long = tooLong(body, REVIEW_BODY_MAX, "A review");
+	if (long) return long;
 	const listing = await publicListing(ctx, listingId);
 	if (!listing) return NO_LISTING;
 	// A rating an owner gives their own listing would not be a review.
@@ -246,21 +260,33 @@ export async function review(routeCtx: { user?: unknown; input: unknown }, ctx: 
 
 /* ---- Claims ---- */
 
-/** Five calls: the listing, its owner, rate limit (2), the claim. */
+/** A member's claim on a listing: one row per member and listing. */
+const claimId = (listingId: string, memberId: string) => `claim-${listingId}-${memberId}`;
+/** A claim still waiting for the admin ("approving": a decision under way). */
+const waitingClaim = (row: unknown) => /^(pending|approving)$/.test(asString(asRecord(row).status));
+
+/**
+ * Six calls: the listing, its owner and the member's earlier claim, rate limit (2), the claim. A claim
+ * still waiting is answered as sent and left as it is: sending again neither rewrites it under the
+ * admin nor counts against the limit.
+ */
 export async function claim(routeCtx: { user?: unknown; input: unknown }, ctx: Ctx) {
 	const user = userOf(routeCtx);
 	if (!user) return SIGN_IN;
 	const raw = asRecord(routeCtx.input);
 	const listingId = asString(raw.listingId || raw.listing_id);
 	if (!listingId) return invalid("Listing is required.");
+	const long = tooLong(raw.message, REVIEW_BODY_MAX, "The message");
+	if (long) return long;
 	const listing = await publicListing(ctx, listingId);
 	if (!listing) return NO_LISTING;
-	const { owner } = await ownerOf(ctx, listingId);
+	const id = claimId(listingId, user.id);
+	const [{ owner }, earlier] = await Promise.all([ownerOf(ctx, listingId), ctx.storage.claims.get(id)]);
 	if (owner === user.id) return fail("OWN_LISTING", "You already manage this listing. Open your account to change it.");
 	if (asBoolean(asRecord(listing.data).is_claimed) || (owner && SUBMITTER_IS_OWNER)) return fail("ALREADY_CLAIMED", "This listing already has an owner.");
+	if (waitingClaim(earlier)) return { ok: true, claim: { id, status: "pending" } };
 	const limited = await rateLimited(ctx, "claim", user.id);
 	if (limited) return limited;
-	const id = `claim-${listingId}-${user.id}`;
 	await ctx.storage.claims.put(id, {
 		listingId,
 		listing_title: titleOf(listing),
@@ -300,9 +326,10 @@ export async function favorites(routeCtx: { user?: unknown; input: unknown; requ
 		return { ok: true, favorited: false };
 	}
 	if (listingId) {
-		const [saved, owner] = await Promise.all([ctx.storage.favorites.exists(key(listingId)), ownerOf(ctx, listingId)]);
+		const [saved, owner, claimRow] = await Promise.all([ctx.storage.favorites.exists(key(listingId)), ownerOf(ctx, listingId), ctx.storage.claims.get(claimId(listingId, user.id))]);
 		const manages = owner.owner === user.id ? "you" : owner.owner && SUBMITTER_IS_OWNER ? "other" : "";
-		return { ok: true, items: saved ? [{ id: key(listingId), listingId, member_id: user.id }] : [], saved, owner: manages };
+		// A claim of theirs still waiting, so the page shows that instead of the claim form again.
+		return { ok: true, items: saved ? [{ id: key(listingId), listingId, member_id: user.id }] : [], saved, owner: manages, claim: waitingClaim(claimRow) ? "pending" : "" };
 	}
 	const ids = asString(raw.ids).split(",").map((id) => id.trim()).filter(Boolean).slice(0, 100);
 	if (ids.length) {
@@ -340,7 +367,7 @@ export async function edit(routeCtx: { user?: unknown; input: unknown; request: 
 		const mine = waiting.status === "pending" && waiting.member_id === user.id;
 		const source = mine ? { ...current, ...asRecord(waiting.fields) } : current;
 		const values: Record<string, unknown> = {};
-		for (const key of EDITABLE) values[key] = asString(source[key]);
+		for (const key of EDITABLE) values[key] = key === "email_public" ? asBoolean(source[key]) : asString(source[key]);
 		// Every stored detail; a listing saved before 0.8.0 has some in fields of their own.
 		values.type_fields = sentDetails(source);
 		return { ok: true, listingId, listing_type: asString(current.listing_type), pending: mine, values };
@@ -556,6 +583,8 @@ export async function reply(routeCtx: { user?: unknown; input: unknown }, ctx: C
 	if (!user) return SIGN_IN;
 	const raw = asRecord(routeCtx.input);
 	const listingId = asString(raw.listingId);
+	const long = tooLong(raw.text, REVIEW_BODY_MAX, "A reply");
+	if (long) return long;
 	const text = clean(raw.text, REVIEW_BODY_MAX);
 	const NOT_YOURS = fail("NOT_FOUND", "That review is not available.");
 	if (!listingId) return NOT_YOURS;

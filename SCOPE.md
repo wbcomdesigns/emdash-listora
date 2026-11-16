@@ -17,6 +17,7 @@ Free only. Generic: every item is for any EmDash directory owner, not shaped aro
 | Live GitHub data | No `network:request` capability (it makes every site re-approve the plugin). The site kit reads GitHub's public API in the visitor's browser; an outside sync may write the fields |
 | Member listings | A listing a member adds counts as theirs (0.7.0, unchanged) |
 | Internal state | Stays in `ctx.settings` (owner, 2026-11-14: "we are building plugin so site owner can use them as per their choice"). Moving it to KV adds a read to every request, puts 7 busy paths over 9 calls (submit, import, photo/change/claim approve, old-kit dashboard, 2,000-listing map), and gives owners nothing. A written deviation from the docs' "should" (#89 closed) |
+| Listing email | The lister chooses (owner, 2026-11-16, #115): a "Show my email publicly" box on the add and edit forms, off by default, and a `email_public` yes/no field the admin sees on the listing. Off, the email is in no public route and not on the page; on, it is in both. Listings from before 0.8.1 start off. An owner's change to it waits for approval like any other contact field |
 | Indexes | Composite indexes for every filter + order query (#88); unused ones removed |
 
 ## In scope

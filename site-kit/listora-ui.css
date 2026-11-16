@@ -75,6 +75,9 @@
 	background: var(--listora-bg-base);
 	isolation: isolate;
 	display: flow-root;
+	/* Member text (a review, a title, a message) may be one long unbroken word: it breaks inside
+	   its box instead of pushing the page sideways. Inherited by every part of every kit page. */
+	overflow-wrap: anywhere;
 }
 
 .listora-block *,

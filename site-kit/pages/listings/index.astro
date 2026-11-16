@@ -116,6 +116,13 @@ if (!searching) {
 	answer = await listingsRoute({ ...filters, ...(q ? { q } : {}), ...sortQuery, per_page: String(PER_PAGE + featured.length), ...(after ? { cursor: after } : {}) });
 }
 const failed = answer?.ok ? "" : answer?.error?.message || S.directory.searchDownBody;
+// A directory that could not answer (still building after an update, or down) is not a page to keep: the Worker
+// cache held "being prepared" for 12 minutes after the 0.8.0 deploy. Say so on the response, in both caches.
+if (failed) {
+	Astro.cache?.set?.(false as never);
+	Astro.response.headers.set("Cache-Control", "no-store");
+	Astro.response.headers.set("Cloudflare-CDN-Cache-Control", "no-store");
+}
 const featuredIds = new Set(featured.map((item) => item.id));
 const cards = (answer?.ok ? (answer.items ?? []) : []).filter((item) => !featuredIds.has(item.id));
 const next = answer?.ok ? (answer.cursor ?? "") : "";
@@ -457,7 +464,7 @@ function amenityList(value: unknown): string[] {
 													{badges.map((badge) => <li class="listora-chip">{badge}</li>)}
 												</ul>
 											) : null}
-											<p class="listora-software__meta" data-gh={sw.github || undefined}>
+											<p class="listora-software__meta" data-gh={sw.github || undefined} data-gh-release data-gh-stars-was={sw.stars ?? ""} data-gh-date-was={sw.lastRelease}>
 												<span data-gh-wrap hidden={sw.stars === null}>
 													<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
 													<span data-gh-stars>{sw.stars === null ? "" : countLabel(sw.stars)}</span>
@@ -731,7 +738,7 @@ function amenityList(value: unknown): string[] {
 		leaflet.id = "listora-leaflet";
 		leaflet.src = "/vendor/leaflet/leaflet.js";
 		leaflet.onload = () => drawMap();
-		document.body.append(leaflet);
+		document.body.appendChild(leaflet);
 	}
 	drawMap();
 </script>

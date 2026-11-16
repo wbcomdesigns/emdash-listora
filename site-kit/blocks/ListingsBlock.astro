@@ -1,5 +1,5 @@
 ---
-import { getEmDashCollection, getTermsForEntries } from "emdash";
+import { getEmDashCollection, getTermsForEntries, type ImageValue } from "emdash";
 import { Image } from "emdash/ui";
 import { loadTypes, matchesPlace, placeFor, placeholderHtml, sortListings, typeName, typeOf } from "../lib/listora";
 import { S } from "../lib/listora-strings";
@@ -40,7 +40,7 @@ const types = shown.length ? await loadTypes(Astro.locals) : [];
 					<article class="listora-card">
 						<div class="listora-card-media">
 							{listing.data.featured_image ? (
-								<Image image={listing.data.featured_image} alt="" />
+								<Image image={listing.data.featured_image as ImageValue} alt="" />
 							) : (
 								<Fragment set:html={placeholderHtml(typeOf(types, listing.data.listing_type))} />
 							)}
