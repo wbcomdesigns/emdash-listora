@@ -8,7 +8,7 @@ export type HourRow = { day: number; open: string; close: string };
  * A listing type as the plugin's `types` route gives it. The owner edits types in the admin (built-ins
  * and their own), so the kit never keeps a copy: every page asks the route (loadTypes).
  */
-export type ListingTypeInfo = { slug: string; name: string; schemaType?: string; color?: string; icon?: string; hidden?: boolean; location?: boolean; fields?: TypeFieldInfo[] };
+export type ListingTypeInfo = { slug: string; name: string; schemaType?: string; color?: string; icon?: string; hidden?: boolean; location?: boolean; fields?: TypeFieldInfo[]; isDefault?: boolean };
 
 /** One of a type's own fields, as the owner set it up in the admin (Listing types). */
 export type TypeFieldInfo = { key: string; label: string; kind: "text" | "number" | "choice" | "link" | "date" | "yesno"; options?: string[]; required?: boolean; cards?: boolean; slot?: number; chip?: boolean; was?: Record<string, string> };
@@ -37,6 +37,7 @@ function fieldsOf(value: unknown): TypeFieldInfo[] {
 export async function loadTypes(locals: unknown): Promise<ListingTypeInfo[]> {
 	const answer = await callPluginRoute(locals, "listora", "types").catch(() => null);
 	const items = Array.isArray(answer?.items) ? (answer.items as Array<Record<string, unknown>>) : [];
+	const chosen = typeof answer?.default === "string" ? answer.default : "";
 	return items
 		.filter((item) => typeof item.slug === "string" && item.slug && typeof item.name === "string")
 		.map((item) => ({
@@ -48,6 +49,7 @@ export async function loadTypes(locals: unknown): Promise<ListingTypeInfo[]> {
 			hidden: item.hidden === true,
 			location: item.location !== false,
 			fields: fieldsOf(item.fields),
+			isDefault: item.slug === chosen,
 		}));
 }
 
@@ -376,7 +378,7 @@ export function formatSiteDate(value: unknown, pattern?: string, locale?: string
 	return (pattern?.trim() || "MMMM d, yyyy").replace(/'([^']*)'|yyyy|yy|MMMM|MMM|MM|M|dd|d|EEEE|EEE/g, (token, quoted) => (quoted !== undefined ? quoted : parts[token]()));
 }
 
-export type Fact = { label: string; value: string; href?: string; kind: TypeFieldInfo["kind"] };
+export type Fact = { key: string; label: string; value: string; href?: string; kind: TypeFieldInfo["kind"] };
 
 /**
  * The filled-in details of one listing, in its type's field order, ready to show: a choice as the
@@ -391,7 +393,7 @@ export function typeFacts(data: Record<string, unknown>, type: ListingTypeInfo, 
 			const raw = detailValue(data, stored, field.key);
 			if (raw === null || raw === undefined || raw === "") return [];
 			const text = String(raw).trim();
-			const base = { label: field.label, kind: field.kind };
+			const base = { key: field.key, label: field.label, kind: field.kind };
 			if (field.kind === "yesno") return raw === true || raw === "true" ? [{ ...base, value: S.common.yes }] : raw === false || raw === "false" ? [{ ...base, value: S.common.no }] : [];
 			if (field.kind === "date") return [{ ...base, value: formatSiteDate(text, options.dateFormat) }];
 			if (field.kind === "choice") return [{ ...base, value: field.options?.find((option) => option.toLowerCase() === text.toLowerCase()) ?? field.was?.[text.toLowerCase()] ?? text }];
@@ -554,9 +556,23 @@ export async function githubFacts(repo: string, release: boolean): Promise<Githu
 
 /**
  * Live GitHub numbers for every `[data-gh="owner/repo"]` block on the page: its `[data-gh-stars]`
- * text, and on a block with `data-gh-release` its `[data-gh-version]` text and `time[data-relative]`.
- * Text only, never markup. What could not be read keeps the stored value.
+ * text, and on a block with `data-gh-release` its `[data-gh-version]` text, `time[data-relative]`
+ * and `[data-gh-date]` text. Text only, never markup.
+ *
+ * One rule on card, header and Details alike (#106): GitHub's numbers replace the owner's only when
+ * they are ahead of them, more stars or a newer release than the stored ones (`data-gh-stars-was`,
+ * `data-gh-date-was`). A repository GitHub cannot read, or one behind the owner's values, keeps them,
+ * so "0 stars" never shows beside an owner's number.
  */
+/** Which of GitHub's facts are ahead of the owner's stored ones (liveGithub). Empty `was` values: nothing stored. */
+export function githubAhead(facts: GithubFacts, starsWas: string, dateWas: string): { stars: boolean; release: boolean } {
+	const stored = starsWas.trim() === "" ? NaN : Number(starsWas);
+	const stars = facts.stars !== undefined && facts.stars > (Number.isFinite(stored) ? stored : 0);
+	const was = Date.parse(dateWas);
+	const release = Boolean(facts.tag && facts.date) && (!Number.isFinite(was) || Date.parse(facts.date as string) > was);
+	return { stars, release };
+}
+
 export async function liveGithub(root: ParentNode = document): Promise<void> {
 	const blocks = [...root.querySelectorAll<HTMLElement>("[data-gh]")];
 	// A part with no stored value waits hidden (data-gh-wrap) until GitHub fills it.
@@ -570,11 +586,13 @@ export async function liveGithub(root: ParentNode = document): Promise<void> {
 		[...repos].map(async ([repo, nodes]) => {
 			const facts = await githubFacts(repo, nodes.some((node) => node.hasAttribute("data-gh-release")));
 			if (!facts) return;
+			const ahead = githubAhead(facts, nodes[0]?.dataset.ghStarsWas ?? "", nodes[0]?.dataset.ghDateWas ?? "");
 			for (const node of nodes) {
-				if (facts.stars !== undefined) node.querySelectorAll("[data-gh-stars]").forEach((slot) => show(slot, countLabel(facts.stars as number)));
-				if (facts.tag && facts.date && node.hasAttribute("data-gh-release")) {
+				if (ahead.stars) node.querySelectorAll("[data-gh-stars]").forEach((slot) => show(slot, countLabel(facts.stars as number)));
+				if (ahead.release && node.hasAttribute("data-gh-release")) {
 					node.querySelectorAll("[data-gh-version]").forEach((slot) => show(slot, facts.tag as string));
 					node.querySelectorAll<HTMLTimeElement>("time[data-relative]").forEach((slot) => (slot.dateTime = facts.date as string));
+					node.querySelectorAll("[data-gh-date]").forEach((slot) => show(slot, day(facts.date)));
 				}
 			}
 		}),
@@ -746,7 +764,7 @@ export async function savedIds(ids: string[] = []): Promise<Set<string>> {
 	return new Set(items.map((item) => String(item.data?.listingId ?? item.listingId ?? "")).filter(Boolean));
 }
 
-export type Viewer = { signedIn: boolean; known: boolean; saved: boolean; owner: "" | "you" | "other" };
+export type Viewer = { signedIn: boolean; known: boolean; saved: boolean; owner: "" | "you" | "other"; claimWaiting: boolean };
 
 /**
  * Who is looking at a listing page: a guest, a member, the member who manages it ("you"), or a
@@ -755,14 +773,15 @@ export type Viewer = { signedIn: boolean; known: boolean; saved: boolean; owner:
  * page then shows what it shows everyone).
  */
 export async function viewer(listingId: string): Promise<Viewer> {
-	if (knownGuest()) return { signedIn: false, known: true, saved: false, owner: "" };
+	if (knownGuest()) return { signedIn: false, known: true, saved: false, owner: "", claimWaiting: false };
 	const result = await api(`favorites?listingId=${encodeURIComponent(listingId)}`);
-	if (!result.ok) return { signedIn: false, known: result.error?.code === "SIGN_IN_REQUIRED", saved: false, owner: "" };
+	if (!result.ok) return { signedIn: false, known: result.error?.code === "SIGN_IN_REQUIRED", saved: false, owner: "", claimWaiting: false };
 	const items = Array.isArray(result.items) ? (result.items as Array<{ data?: { listingId?: string }; listingId?: string }>) : [];
 	// An engine before 0.7.0 answers with every saved listing and no owner.
 	const saved = typeof result.saved === "boolean" ? result.saved : items.some((item) => String(item.data?.listingId ?? item.listingId ?? "") === listingId);
 	const owner = result.owner === "you" || result.owner === "other" ? result.owner : "";
-	return { signedIn: true, known: true, saved, owner };
+	// An engine before 0.8.1 does not say: the claim form shows, as it did.
+	return { signedIn: true, known: true, saved, owner, claimWaiting: result.claim === "pending" };
 }
 
 /** Show a result next to a form: success text, the API's error, or a sign-in link for guests. */

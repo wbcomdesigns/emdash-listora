@@ -75,6 +75,9 @@
 	background: var(--listora-bg-base);
 	isolation: isolate;
 	display: flow-root;
+	/* Member text (a review, a title, a message) may be one long unbroken word: it breaks inside
+	   its box instead of pushing the page sideways. Inherited by every part of every kit page. */
+	overflow-wrap: anywhere;
 }
 
 .listora-block *,
@@ -1226,11 +1229,6 @@ ul.listora-chips {
 .listora-detail__contact-icon--phone {
 	background: color-mix(in srgb, var(--listora-success) 12%, transparent);
 	color: var(--listora-success);
-}
-
-.listora-detail__contact-icon--email {
-	background: color-mix(in srgb, var(--listora-primary) 12%, transparent);
-	color: var(--listora-primary-text);
 }
 
 .listora-detail__contact-icon--web {

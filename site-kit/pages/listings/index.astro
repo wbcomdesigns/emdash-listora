@@ -457,7 +457,7 @@ function amenityList(value: unknown): string[] {
 													{badges.map((badge) => <li class="listora-chip">{badge}</li>)}
 												</ul>
 											) : null}
-											<p class="listora-software__meta" data-gh={sw.github || undefined}>
+											<p class="listora-software__meta" data-gh={sw.github || undefined} data-gh-release data-gh-stars-was={sw.stars ?? ""} data-gh-date-was={sw.lastRelease}>
 												<span data-gh-wrap hidden={sw.stars === null}>
 													<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
 													<span data-gh-stars>{sw.stars === null ? "" : countLabel(sw.stars)}</span>

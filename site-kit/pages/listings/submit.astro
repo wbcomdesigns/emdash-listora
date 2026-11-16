@@ -13,7 +13,8 @@ const categories = await getTaxonomyTerms("listing_category").catch(() => []);
 // The types as the owner has set them up in the admin. Hidden ones are not offered for a new listing,
 // but an owner editing a listing of a hidden type still sees its card and its fields.
 const types = user ? await loadTypes(Astro.locals) : [];
-const firstShown = types.find((item) => !item.hidden)?.slug;
+// The owner's default type (Settings, Listings) starts chosen; an engine before 0.8.1 does not say, so the first shown.
+const firstShown = (types.find((item) => item.isDefault && !item.hidden) ?? types.find((item) => !item.hidden))?.slug;
 // What the form needs to draw each type's own fields and to know whether it has a place.
 const typeData = types.map((item) => ({ slug: item.slug, location: item.location !== false, fields: item.fields ?? [] }));
 const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.pathname)}`;
@@ -130,7 +131,8 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 					</div>
 					<div class="listora-field">
 						<label class="listora-label" for="email">{S.submit.email}</label>
-						<input id="email" class="listora-input" name="email" type="email" autocomplete="email" />
+						<input id="email" class="listora-input" name="email" type="email" autocomplete="email" maxlength="120" aria-describedby="email-help" />
+						<p class="listora-helper" id="email-help">{S.submit.emailHelp}</p>
 					</div>
 				</div>
 				<div class="listora-field">

@@ -98,6 +98,8 @@ const facts = typeFacts(data, listingType, { dateFormat: site?.dateFormat, timeZ
 const factRel = claimed ? "nofollow ugc" : undefined;
 // Software gets its own sections: version and badges, Repository and Docs, an Install box, Maintained by.
 const sw = isSoftware(listingType) ? softwareView(data, listingType) : null;
+// The Details rows GitHub's live numbers may replace, by field key.
+const GH_DETAIL: Record<string, string> = { stars: "data-gh-stars", version: "data-gh-version", last_release: "data-gh-date" };
 const swBadges = sw ? [sw.kind, sw.worksWith, sw.license, sw.price, sw.openSource ? S.software.openSource : ""].filter(Boolean) : [];
 // WB Polls' slot, when that kit is on the site too: nothing when it is not, or no poll is attached.
 const PollSlot = (Object.values(import.meta.glob("../../components/PollSlot.astro", { eager: true }))[0] as { default?: unknown } | undefined)?.default as
@@ -105,7 +107,8 @@ const PollSlot = (Object.values(import.meta.glob("../../components/PollSlot.astr
 	| undefined;
 const isEvent = data.listing_type === "event";
 const details = storedDetails(data);
-const hasContact = Boolean(data.phone || website || data.email);
+// The listing's email is never shown: visitors write through Contact, and only the owner and the admin see the address (#115).
+const hasContact = Boolean(data.phone || website);
 // The share image is the listing's own photo, or none. Never a stock picture.
 const photoPath = imageUrl(data.featured_image, Astro.locals.emdash?.getPublicMediaUrl);
 // Share cards and search engines need a full address.
@@ -250,7 +253,7 @@ const schema = {
 											{swBadges.map((badge) => <li class="listora-chip">{badge}</li>)}
 										</ul>
 									) : null}
-									<p class="listora-software__meta" data-gh={sw.github || undefined} data-gh-release>
+									<p class="listora-software__meta" data-gh={sw.github || undefined} data-gh-release data-gh-stars-was={sw.stars ?? ""} data-gh-date-was={sw.lastRelease}>
 										<span data-gh-wrap hidden={sw.stars === null}>
 											<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
 											<span data-gh-stars>{sw.stars === null ? "" : countLabel(sw.stars)}</span>
@@ -361,11 +364,15 @@ const schema = {
 							facts.length ? (
 								<section class="listora-panel" aria-labelledby="listora-details-heading">
 									<h2 id="listora-details-heading">{S.listing.details}</h2>
-									<dl class="listora-facts listora-facts--details">
+									<dl
+										class="listora-facts listora-facts--details"
+										{...(sw?.github ? { "data-gh": sw.github, "data-gh-release": "", "data-gh-stars-was": sw.stars ?? "", "data-gh-date-was": sw.lastRelease } : {})}
+									>
 										{facts.map((fact) => (
 											<div>
 												<dt>{fact.label}</dt>
-												<dd>{fact.href ? <a href={fact.href} rel={factRel}>{fact.value}</a> : fact.value}</dd>
+												{/* GitHub's numbers, when ahead of the owner's, show here as in the header (#106). */}
+												<dd {...(sw?.github && GH_DETAIL[fact.key] ? { [GH_DETAIL[fact.key]]: "" } : {})}>{fact.href ? <a href={fact.href} rel={factRel}>{fact.value}</a> : fact.value}</dd>
 											</div>
 										))}
 									</dl>
@@ -434,14 +441,14 @@ const schema = {
 						</div>
 						<div class="listora-field">
 							<label class="listora-label" for="rev-title">{S.listing.reviewTitle}</label>
-							<input id="rev-title" class="listora-input" name="title" aria-describedby="rev-title-help" />
+							<input id="rev-title" class="listora-input" name="title" maxlength="120" aria-describedby="rev-title-help" />
 							<p class="listora-helper" id="rev-title-help">{S.listing.reviewTitleHelp}</p>
 						</div>
 						<div class="listora-field">
 							<label class="listora-label" for="rev-body">
 								{S.listing.review} <span class="listora-req">{S.common.required}</span>
 							</label>
-							<textarea id="rev-body" class="listora-input" name="body" required aria-required="true" aria-describedby="rev-body-help rev-body-error"></textarea>
+							<textarea id="rev-body" class="listora-input" name="body" maxlength="1000" required aria-required="true" aria-describedby="rev-body-help rev-body-error"></textarea>
 							<p class="listora-helper" id="rev-body-help">{S.listing.reviewHelp}</p>
 							<p class="listora-field-error" id="rev-body-error" hidden>{S.listing.reviewError}</p>
 						</div>
@@ -461,18 +468,18 @@ const schema = {
 							<div class="listora-form-grid">
 								<div class="listora-field">
 									<label class="listora-label" for="c-name">{S.listing.name}</label>
-									<input id="c-name" class="listora-input" name="name" autocomplete="name" />
+									<input id="c-name" class="listora-input" name="name" maxlength="80" autocomplete="name" />
 								</div>
 								<div class="listora-field">
 									<label class="listora-label" for="c-email">{S.listing.email}</label>
-									<input id="c-email" class="listora-input" name="email" type="email" autocomplete="email" />
+									<input id="c-email" class="listora-input" name="email" maxlength="120" type="email" autocomplete="email" />
 								</div>
 							</div>
 							<div class="listora-field">
 								<label class="listora-label" for="c-message">
 									{S.listing.message} <span class="listora-req">{S.common.required}</span>
 								</label>
-								<textarea id="c-message" class="listora-input" name="message" required aria-required="true" aria-describedby="c-message-help c-message-error"></textarea>
+								<textarea id="c-message" class="listora-input" name="message" maxlength="1000" required aria-required="true" aria-describedby="c-message-help c-message-error"></textarea>
 								<p class="listora-helper" id="c-message-help">{S.listing.messageHelp}</p>
 								<p class="listora-field-error" id="c-message-error" hidden>{S.listing.messageError}</p>
 							</div>
@@ -518,17 +525,6 @@ const schema = {
 											</svg>
 										</span>
 										{website.replace(/^https?:\/\//, "")}
-									</a>
-								) : null}
-								{data.email ? (
-									<a class="listora-detail__contact-item" href={`mailto:${data.email}`}>
-										<span class="listora-detail__contact-icon listora-detail__contact-icon--email" aria-hidden="true">
-											<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
-												<rect width="20" height="16" x="2" y="4" rx="2"></rect>
-												<path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"></path>
-											</svg>
-										</span>
-										{data.email}
 									</a>
 								) : null}
 							</div>
@@ -602,6 +598,7 @@ const schema = {
 									<a class="listora-btn listora-btn--secondary" href="/account/?tab=listings">{S.listing.openAccount}</a>
 								</div>
 								<p class="listora-detail__claimed-badge" id="claim-taken" hidden>{S.listing.claimedByOwner}</p>
+								<p class="listora-status" data-tone="success" id="claim-waiting" role="status" hidden>{S.listing.claimWaiting}</p>
 								<div id="claim-signin" hidden>
 									<h2>{sw ? S.software.claimTitle : S.listing.claimTitle}</h2>
 									<p class="listora-helper">{S.listing.claimHelp}</p>
@@ -614,21 +611,21 @@ const schema = {
 										<label class="listora-label" for="claim-name">
 											{S.listing.name} <span class="listora-req">{S.common.required}</span>
 										</label>
-										<input id="claim-name" class="listora-input" name="name" required aria-required="true" autocomplete="name" aria-describedby="claim-name-error" />
+										<input id="claim-name" class="listora-input" name="name" maxlength="120" required aria-required="true" autocomplete="name" aria-describedby="claim-name-error" />
 										<p class="listora-field-error" id="claim-name-error" hidden>{S.listing.nameError}</p>
 									</div>
 									<div class="listora-field">
 										<label class="listora-label" for="claim-email">
 											{S.listing.email} <span class="listora-req">{S.common.required}</span>
 										</label>
-										<input id="claim-email" class="listora-input" name="email" type="email" required aria-required="true" autocomplete="email" aria-describedby="claim-email-error" />
+										<input id="claim-email" class="listora-input" name="email" maxlength="120" type="email" required aria-required="true" autocomplete="email" aria-describedby="claim-email-error" />
 										<p class="listora-field-error" id="claim-email-error" hidden>{S.listing.emailError}</p>
 									</div>
 									<div class="listora-field">
 										<label class="listora-label" for="claim-message">
 											{S.listing.proof} <span class="listora-req">{S.common.required}</span>
 										</label>
-										<textarea id="claim-message" class="listora-input" name="message" required aria-required="true" aria-describedby="claim-help claim-message-error"></textarea>
+										<textarea id="claim-message" class="listora-input" name="message" maxlength="1000" required aria-required="true" aria-describedby="claim-help claim-message-error"></textarea>
 										<p class="listora-helper" id="claim-help">{S.listing.proofHelp}</p>
 										<p class="listora-field-error" id="claim-message-error" hidden>{S.listing.proofError}</p>
 									</div>
@@ -853,10 +850,12 @@ const schema = {
 			const guest = who.known && !who.signedIn;
 			const mine = who.owner === "you";
 			if (reviewForm) reviewForm.hidden = guest || mine;
-			if (claimForm) claimForm.hidden = guest || mine || who.owner === "other";
+			const claimTaken = who.owner === "other";
+			if (claimForm) claimForm.hidden = guest || mine || claimTaken || who.claimWaiting;
 			show("listora-review-signin", guest);
 			show("claim-signin", guest);
-			show("claim-taken", who.owner === "other");
+			show("claim-taken", claimTaken);
+			show("claim-waiting", who.claimWaiting && !mine && !claimTaken);
 			document.querySelectorAll<HTMLElement>("[data-owner-note]").forEach((node) => (node.hidden = !mine));
 			if (favBtn && who.signedIn) showSaved(who.saved);
 		});
@@ -902,11 +901,9 @@ const schema = {
 			notify(form, result, "");
 			return;
 		}
-		const done = document.createElement("p");
-		done.className = "listora-status";
-		done.dataset.tone = "success";
-		done.textContent = S.listing.claimSent;
-		form.replaceWith(done);
+		form.hidden = true;
+		const waiting = document.getElementById("claim-waiting");
+		if (waiting) waiting.hidden = false;
 	});
 
 	loadReviews();
