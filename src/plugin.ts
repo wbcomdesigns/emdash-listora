@@ -4,6 +4,7 @@ import { handleAdmin } from "./admin";
 import { catsOf, hideListing, indexListing, onSite } from "./lib/directory";
 import { readRating } from "./lib/ratings";
 import { loadSettings } from "./lib/settings";
+import { markFreshInstall } from "./lib/upgrade";
 import { webAddress } from "./lib/edits";
 import { LISTINGS, typeBySlug } from "./lib/types";
 import { asNumber, asRecord, asString, nil, none } from "./lib/util";
@@ -59,7 +60,7 @@ async function indexFromHook(ctx: PluginContext, content: unknown): Promise<void
  */
 async function setUp(ctx: PluginContext, activate: boolean): Promise<void> {
 	try {
-		await scheduleAll(ctx, activate ? await loadSettings(ctx) : null);
+		await scheduleAll(ctx, activate ? await loadSettings(ctx) : null, !activate && (await markFreshInstall(ctx)));
 	} catch (error) {
 		ctx.log.error("Listora could not schedule its tasks. Deactivate and activate it again.", {
 			error: error instanceof Error ? error.message : String(error),
@@ -166,7 +167,15 @@ const plugin: SandboxedPlugin = {
 		},
 		// Every type with its fields, hidden ones included (their listings still show the name): the kit
 		// offers only the ones not hidden. One call (the settings, where the owner's types live).
-		types: { public: true, cacheControl: CACHE, handler: async (_routeCtx, ctx) => ({ ok: true, items: (await loadSettings(ctx)).types }) },
+		types: {
+			public: true,
+			cacheControl: CACHE,
+			handler: async (_routeCtx, ctx) => {
+				const settings = await loadSettings(ctx);
+				// `default`: the type the owner chose for new listings, so the add form starts on it.
+				return { ok: true, items: settings.types, default: settings.defaultListingType };
+			},
+		},
 		listings: { public: true, cacheControl: CACHE, handler: async (routeCtx, ctx) => listings(routeCtx.input, ctx) },
 		search: {
 			public: true,

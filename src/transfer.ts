@@ -69,7 +69,7 @@ export async function exportCsv(input: unknown, ctx: Ctx) {
 	} catch {
 		return text(503, "The listings could not be read just now. Try again in a moment.");
 	}
-	if (more && !parts) return text(409, "This directory has more listings than one download holds. Copy the Listora site kit again: its import page downloads them all.");
+	if (more && !parts) return text(409, "Copy the Listora site kit again: its import page downloads every listing.");
 	const csv = toCsv(rows, detailColumns(settings.types));
 	return pluginResponse({
 		headers: {
