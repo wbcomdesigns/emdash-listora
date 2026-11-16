@@ -370,7 +370,7 @@ const loginUrl = `/_emdash/admin/login?redirect=${encodeURIComponent(Astro.url.p
 		setFieldError("title", "title-error", false);
 		// A field the browser can check (an email, a web address) is checked on its own step,
 		// with the browser's own message next to it, not at the very end.
-		const wrong = [...form.querySelectorAll<HTMLInputElement | HTMLSelectElement>(`[data-panel="${step}"] input, [data-panel="${step}"] select`)].find((input) => !input.checkValidity());
+		const wrong = [...(form.querySelectorAll(`[data-panel="${step}"] input, [data-panel="${step}"] select`) as unknown as Iterable<HTMLInputElement | HTMLSelectElement>)].find((input) => !input.checkValidity());
 		if (wrong) {
 			wrong.reportValidity();
 			return;

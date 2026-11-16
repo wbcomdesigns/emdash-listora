@@ -11,6 +11,7 @@ kit="$(mktemp -d)" &&
   "$kit/emdash-listora/scripts/add-to-site.sh" .
 ```
 
+- New: a Plain page schema option for types that point elsewhere.
 - Improve: listers choose to show their email; off by default, so existing listings start hidden. Run the printed seed command.
 - Improve: the add form starts on your Default listing type.
 - Improve: the queue shows where each listing is and who sent it; a waiting claim shows as waiting.
@@ -18,12 +19,11 @@ kit="$(mktemp -d)" &&
 - Fix: text over its limit is refused, never cut; the forms show the limit.
 - Fix: no upgrade note on a new install; "Listing settings saved."
 - Fix: admin lists page with Next page; GitHub numbers show only when ahead of yours.
+- Fix: a failed directory page is never cached; the kit type-checks on Worker sites.
 
 ## 0.8.0
 
 Listing types you can edit, custom fields and a Software type. No new permissions. Copy the kit again after you update.
-
-After the update the site shows "finishing an update" for a short time while new indexes build. The data then catches up by itself in the background within hours; no admin visit needed.
 
 - New: a Listing types admin page; add types, rename, recolour or hide built-ins.
 - New: custom fields per type on the forms, listing page, cards and CSV.

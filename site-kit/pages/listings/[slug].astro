@@ -966,6 +966,6 @@ const schema = {
 			popup.textContent = mapEl.dataset.title ?? "";
 			L.marker([mapLat, mapLng]).addTo(map).bindPopup(popup);
 		};
-		document.body.append(leaflet);
+		document.body.appendChild(leaflet);
 	}
 </script>

@@ -6,10 +6,13 @@ Versions match `package.json`, the git tag, and the EmDash registry release. New
 
 Fixes from the 0.8.0 QA pass. No new permissions. Copy the kit again after you update, with the new tag, and run the seed command it prints: it adds the Show email publicly field.
 
+- New      - A Plain page option in the Listing types schema list, for a type whose listings point to a job or a course elsewhere and so should not claim a JobPosting or a school.
+- Improve  - The site kit type-checks cleanly on a Cloudflare Worker site: typed API answers, DOM calls the Worker types accept, and image values typed.
 - Improve  - The lister chooses whether a listing's email is public, with a Show my email publicly box on the add and edit forms, off by default; existing listings start hidden until their lister opts in.
 - Improve  - The add form starts on the Default listing type chosen in Settings.
 - Improve  - The Listings queue shows where each listing is and who sent it, so two listings with the same title can be told apart.
 - Improve  - A member who sent a claim sees that it is waiting instead of the claim form, and sending again changes nothing.
+- Fix      - The kit's directory page is never cached when the directory cannot answer, so "being prepared" cannot outlast the update.
 - Fix      - A long unbroken word in a review, title or message wraps instead of pushing the page sideways.
 - Fix      - Admin tables keep long member text wrapping and the decision column in view.
 - Fix      - Text over its limit is refused in plain words instead of being cut, and the forms show the limit.

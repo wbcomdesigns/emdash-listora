@@ -255,6 +255,7 @@ export const SCHEMA_TYPES: ReadonlyArray<readonly [string, string]> = [
 	["ProfessionalService", "Professional service"],
 	["Organization", "Organization"],
 	["SoftwareApplication", "Software"],
+	["WebPage", "Plain page (a pointer to something elsewhere)"],
 	["Thing", "Something else"],
 ];
 

@@ -116,6 +116,13 @@ if (!searching) {
 	answer = await listingsRoute({ ...filters, ...(q ? { q } : {}), ...sortQuery, per_page: String(PER_PAGE + featured.length), ...(after ? { cursor: after } : {}) });
 }
 const failed = answer?.ok ? "" : answer?.error?.message || S.directory.searchDownBody;
+// A directory that could not answer (still building after an update, or down) is not a page to keep: the Worker
+// cache held "being prepared" for 12 minutes after the 0.8.0 deploy. Say so on the response, in both caches.
+if (failed) {
+	Astro.cache?.set?.(false as never);
+	Astro.response.headers.set("Cache-Control", "no-store");
+	Astro.response.headers.set("Cloudflare-CDN-Cache-Control", "no-store");
+}
 const featuredIds = new Set(featured.map((item) => item.id));
 const cards = (answer?.ok ? (answer.items ?? []) : []).filter((item) => !featuredIds.has(item.id));
 const next = answer?.ok ? (answer.cursor ?? "") : "";
@@ -731,7 +738,7 @@ function amenityList(value: unknown): string[] {
 		leaflet.id = "listora-leaflet";
 		leaflet.src = "/vendor/leaflet/leaflet.js";
 		leaflet.onload = () => drawMap();
-		document.body.append(leaflet);
+		document.body.appendChild(leaflet);
 	}
 	drawMap();
 </script>
