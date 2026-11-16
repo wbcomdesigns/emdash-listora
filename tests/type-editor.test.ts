@@ -63,7 +63,9 @@ describe("Types admin page", () => {
 		const name = (row: Record<string, unknown>) => (row.name as { label: string }).label;
 		expect(rows.map(name)).toEqual(BUILTIN_TYPES.slice(0, 5).map((type) => type.name));
 		expect(rows.find((row) => name(row) === "Restaurant")).toMatchObject({ made: "Built in", listings: "1", location: "Yes", shown: "Shown" });
-		expect(table.next_cursor).toBe("5");
+		// Paged with buttons that say what they do; the table's own control reads "Load more" (#106).
+		expect(table.next_cursor).toBeUndefined();
+		expect(elements(first).find((element) => element.action_id === "types_page")).toMatchObject({ label: "Next page", value: { cursor: "5" } });
 		// Names, never slugs or colour codes, in what the owner reads (the button's value is the slug).
 		expect(JSON.stringify(rows.map(({ name: shown, ...row }) => ({ ...row, name: (shown as { label: string }).label })))).not.toMatch(/#[0-9A-F]{6}|real-estate/);
 		const last = await types(host, { type: "block_action", action_id: "types_page", value: { cursor: "10" } });

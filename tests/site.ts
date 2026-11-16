@@ -9,6 +9,10 @@ const live = new Set<PluginRuntimeTestHost>();
 /** EmDash's test host, remembered while it is open. Tests create hosts through this. */
 export async function createPluginRuntimeTestHost(...args: Parameters<typeof createHost>): Promise<PluginRuntimeTestHost> {
 	const rt = await createHost(...args);
+	// The test host installs the plugin on an empty site, which 0.8.1 marks as needing no upgrade
+	// (markFreshInstall). Tests add their data afterwards and model a site updating from an earlier
+	// version, so the mark is cleared; tests of the install itself call the hook again.
+	await rt.fixtures.plugin.setting("upgrade_0_7", {});
 	live.add(rt);
 	const dispose = rt.dispose.bind(rt);
 	rt.dispose = async () => {
