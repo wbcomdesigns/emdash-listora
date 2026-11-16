@@ -8,7 +8,7 @@ The form is at `/listings/submit/`. A visitor who is not signed in sees **Sign i
 
 1. **Type.** Pick one type. The extra fields on Details follow that choice. The form offers every type you have not hidden on [Listing types](listing-types.md): the built-ins (Business, Restaurant, Real estate, Hotel, Event, Job, Healthcare, Education, Place, Classified and Software) and your own.
 2. **Basics.** **Listing title** is required. **Short summary**, **Description**, **City**, and **Street address** are optional. A type without a place has no city or address fields, and none are stored for it. The summary is what cards show.
-3. **Details.** Phone, email, website, and the fields for the type you picked. Event asks for **Starts** and **Ends**.
+3. **Details.** Phone, email, website, and the fields for the type you picked. The email is not shown on the listing page or in the directory: only the listing owner and the admin see it, and visitors use **Contact**. Event asks for **Starts** and **Ends**.
 4. **Categories.** Pick a category if the site has any. You can leave it as **No category**. Country and state are on this step, for a type with a place.
 5. **Preview.** Read the card, tick **I confirm this listing is accurate.**, then **Submit for review**.
 

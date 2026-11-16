@@ -1,15 +1,27 @@
-## 0.8.0
+## 0.8.1
 
-Listing types you can edit, custom fields and a Software type. No new permissions. Copy the kit again after you update, from your site's root folder:
+Fixes from the QA pass. No new permissions. Copy the kit again after you update, from your site's root folder:
 
 ```bash
 kit="$(mktemp -d)" &&
   git clone --depth 1 \
-    --branch v0.8.0 \
+    --branch v0.8.1 \
     https://github.com/wbcomdesigns/emdash-listora \
     "$kit/emdash-listora" &&
   "$kit/emdash-listora/scripts/add-to-site.sh" .
 ```
+
+- Improve: a listing's email stays private, out of public routes and the listing page.
+- Improve: the add form starts on your Default listing type.
+- Improve: the queue shows where each listing is and who sent it; a waiting claim shows as waiting.
+- Fix: long words wrap on the listing page and in admin tables.
+- Fix: text over its limit is refused, never cut; the forms show the limit.
+- Fix: no "Bringing your data over" note on a new install; "Listing settings saved."
+- Fix: admin lists page with Next page; GitHub numbers show only when ahead of yours.
+
+## 0.8.0
+
+Listing types you can edit, custom fields and a Software type. No new permissions. Copy the kit again after you update.
 
 After the update the site shows "finishing an update" for a short time while new indexes build. The data then catches up by itself in the background within hours; no admin visit needed.
 
@@ -21,18 +33,3 @@ After the update the site shows "finishing an update" for a short time while new
 - Improve: the directory pages through the index; keywords use EmDash search; listings show under every category, and admin category changes follow within a few hours, or at once with Refresh categories now on the Settings page.
 - Fix: Calendar only for events; sample load no longer duplicates; required yes or no takes No.
 - Compat: needs EmDash 1.2.0 or later.
-
-## 0.7.1
-
-- Fix: the first visitor after an update starts the data upgrade.
-- Fix: import on a slow site goes on where it stopped.
-- Fix: Messages says when the site cannot send email.
-
-## 0.7.0
-
-Fits Cloudflare's 10 requests per plugin call.
-
-- New: Listing changes and Listing photos admin pages.
-- Improve: a stored directory index and exact ratings.
-
-Older versions: https://github.com/wbcomdesigns/emdash-listora/blob/main/CHANGELOG.md

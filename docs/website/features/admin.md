@@ -7,7 +7,7 @@ Open them from the admin menu, under Listora.
 | Page | Where | Job |
 | --- | --- | --- |
 | Get started | Admin, Listora, Get started | The command that adds the visitor pages, for the installed version, then setup status while something is missing. Once the directory has listings, this page is the queue |
-| Listings queue | Admin, Listora, Listings queue | Approve or reject new listings. 25 at a time, with Find, Next and Previous |
+| Listings queue | Admin, Listora, Listings queue | Approve or reject new listings. Each row shows where the listing is and who sent it. 25 at a time, with Find, **Next page** and **Previous page** |
 | Listing changes | Admin, Listora, Listing changes | Approve or reject the changes owners send for their live listings, each field shown as it is now and after approval |
 | Listing photos | Admin, Listora, Listing photos | Approve or reject the photos owners add, with the picture |
 | Listing reviews | Admin, Listora, Listing reviews | Moderate reviews, and owners' replies to reviews |

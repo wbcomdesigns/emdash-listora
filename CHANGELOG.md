@@ -2,6 +2,23 @@
 
 Versions match `package.json`, the git tag, and the EmDash registry release. Newest first. Never publish a version that is not on `origin/main`.
 
+## [0.8.1] - 2026-11-16
+
+Fixes from the 0.8.0 QA pass. No new permissions. Copy the kit again after you update, with the new tag.
+
+- Improve  - A listing's email stays private: it is left out of the public directory routes and the listing page, and the add form says so.
+- Improve  - The add form starts on the Default listing type chosen in Settings.
+- Improve  - The Listings queue shows where each listing is and who sent it, so two listings with the same title can be told apart.
+- Improve  - A member who sent a claim sees that it is waiting instead of the claim form, and sending again changes nothing.
+- Fix      - A long unbroken word in a review, title or message wraps instead of pushing the page sideways.
+- Fix      - Admin tables keep long member text wrapping and the decision column in view.
+- Fix      - Text over its limit is refused in plain words instead of being cut, and the forms show the limit.
+- Fix      - A new install no longer shows "Bringing your data over" on every admin page.
+- Fix      - Saving Settings says "Listing settings saved." instead of "Submissions saved."
+- Fix      - Admin lists page with Next page and Previous page buttons instead of a "Load more" that replaced the rows.
+- Fix      - Live GitHub numbers replace the owner's values only when they are ahead, the same on the card, header and Details.
+- Fix      - A message on a listing nobody manages reads "No owner to notify".
+
 ## [0.8.0] - 2026-11-14
 
 Listing types you can edit, custom fields and a built-in Software type. No new permissions. Copy the kit again after you update, with the new tag.
